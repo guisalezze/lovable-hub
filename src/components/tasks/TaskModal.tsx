@@ -124,10 +124,10 @@ export function TaskModal({ open, onOpenChange, task }: Props) {
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Responsável</label>
-              <Select value={assignedTo} onValueChange={setAssignedTo}>
+              <Select value={assignedTo || "none"} onValueChange={(v) => setAssignedTo(v === "none" ? "" : v)}>
                 <SelectTrigger><SelectValue placeholder="Ninguém" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Ninguém</SelectItem>
+                  <SelectItem value="none">Ninguém</SelectItem>
                   {members?.map((m) => <SelectItem key={m.id} value={m.id}>{m.full_name || m.email}</SelectItem>)}
                 </SelectContent>
               </Select>
