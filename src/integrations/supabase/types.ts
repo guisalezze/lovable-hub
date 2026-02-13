@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value?: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       calls: {
         Row: {
           created_at: string
@@ -216,6 +234,88 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          read_at: string | null
+          task_id: string | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          read_at?: string | null
+          task_id?: string | null
+          type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          read_at?: string | null
+          task_id?: string | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pending_webhooks: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json
+          response_json: Json | null
+          sent_at: string | null
+          status: string
+          task_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json
+          response_json?: Json | null
+          sent_at?: string | null
+          status?: string
+          task_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          response_json?: Json | null
+          sent_at?: string | null
+          status?: string
+          task_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_webhooks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -223,7 +323,11 @@ export type Database = {
           email: string
           full_name: string
           id: string
+          phone_e164: string | null
+          quiet_hours_end: string | null
+          quiet_hours_start: string | null
           updated_at: string
+          whatsapp_notifications_enabled: boolean
         }
         Insert: {
           avatar_url?: string | null
@@ -231,7 +335,11 @@ export type Database = {
           email: string
           full_name?: string
           id: string
+          phone_e164?: string | null
+          quiet_hours_end?: string | null
+          quiet_hours_start?: string | null
           updated_at?: string
+          whatsapp_notifications_enabled?: boolean
         }
         Update: {
           avatar_url?: string | null
@@ -239,7 +347,11 @@ export type Database = {
           email?: string
           full_name?: string
           id?: string
+          phone_e164?: string | null
+          quiet_hours_end?: string | null
+          quiet_hours_start?: string | null
           updated_at?: string
+          whatsapp_notifications_enabled?: boolean
         }
         Relationships: []
       }
@@ -311,37 +423,90 @@ export type Database = {
           },
         ]
       }
-      tasks: {
+      task_comments: {
         Row: {
           created_at: string
+          id: string
+          mentions: Json | null
+          message: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mentions?: Json | null
+          message: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mentions?: Json | null
+          message?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          assigned_to: string | null
+          checklist: Json | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
           description: string | null
           due_date: string | null
           id: string
           lead_email: string | null
           owner_user_id: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
           status: Database["public"]["Enums"]["task_status"]
+          tags: string[] | null
           title: string
           updated_at: string
         }
         Insert: {
+          assigned_to?: string | null
+          checklist?: Json | null
+          completed_at?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           due_date?: string | null
           id?: string
           lead_email?: string | null
           owner_user_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
           status?: Database["public"]["Enums"]["task_status"]
+          tags?: string[] | null
           title: string
           updated_at?: string
         }
         Update: {
+          assigned_to?: string | null
+          checklist?: Json | null
+          completed_at?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           due_date?: string | null
           id?: string
           lead_email?: string | null
           owner_user_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
           status?: Database["public"]["Enums"]["task_status"]
+          tags?: string[] | null
           title?: string
           updated_at?: string
         }
@@ -425,7 +590,8 @@ export type Database = {
         | "canceled"
         | "blocked"
         | "complete"
-      task_status: "backlog" | "em_andamento" | "concluido"
+      task_priority: "baixa" | "media" | "alta" | "urgente"
+      task_status: "backlog" | "em_andamento" | "bloqueado" | "concluido"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -565,7 +731,8 @@ export const Constants = {
         "blocked",
         "complete",
       ],
-      task_status: ["backlog", "em_andamento", "concluido"],
+      task_priority: ["baixa", "media", "alta", "urgente"],
+      task_status: ["backlog", "em_andamento", "bloqueado", "concluido"],
     },
   },
 } as const
