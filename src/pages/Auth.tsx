@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,17 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) navigate("/", { replace: true });
+    });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) navigate("/", { replace: true });
+    });
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,31 +56,14 @@ export default function AuthPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="glass-card p-6 space-y-4">
-          <Input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="bg-secondary border-border"
-          />
-          <Input
-            type="password"
-            placeholder="Senha"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="bg-secondary border-border"
-          />
+          <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-secondary border-border" />
+          <Input type="password" placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} required className="bg-secondary border-border" />
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Carregando..." : isLogin ? "Entrar" : "Criar conta"}
           </Button>
         </form>
 
-        <button
-          onClick={() => setIsLogin(!isLogin)}
-          className="text-sm text-muted-foreground hover:text-foreground mt-4 block mx-auto transition-colors"
-        >
+        <button onClick={() => setIsLogin(!isLogin)} className="text-sm text-muted-foreground hover:text-foreground mt-4 block mx-auto transition-colors">
           {isLogin ? "Não tem conta? Criar" : "Já tem conta? Entrar"}
         </button>
       </div>
