@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   DollarSign,
   TrendingUp,
@@ -8,17 +9,42 @@ import {
   Target,
   Wallet,
 } from "lucide-react";
+import { format, subDays } from "date-fns";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { SalesChart } from "@/components/dashboard/SalesChart";
 import { RecentLeads } from "@/components/dashboard/RecentLeads";
+import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
+import { InvestmentChart } from "@/components/dashboard/InvestmentChart";
+import { CampaignTable } from "@/components/dashboard/CampaignTable";
+import { useMetaSpend } from "@/hooks/useMetaSpend";
+import { useMetaCampaigns } from "@/hooks/useMetaCampaigns";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const Dashboard = () => {
+  const [since, setSince] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
+  const [until, setUntil] = useState(format(new Date(), "yyyy-MM-dd"));
+
+  const { data: spendData, isLoading: spendLoading, error: spendError } = useMetaSpend({ since, until });
+  const { data: campaignData, isLoading: campaignLoading, error: campaignError } = useMetaCampaigns({ since, until });
+
+  const handlePeriodChange = (newSince: string, newUntil: string) => {
+    setSince(newSince);
+    setUntil(newUntil);
+  };
+
+  const investmentValue = spendData
+    ? `R$ ${spendData.total_spend.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+    : undefined;
+
   return (
     <div className="space-y-6 max-w-7xl">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">Visão geral da operação</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">Visão geral da operação</p>
+        </div>
+        <PeriodSelector since={since} until={until} onChange={handlePeriodChange} />
       </div>
 
       {/* KPI Cards */}
@@ -44,13 +70,23 @@ const Dashboard = () => {
           changeType="positive"
           icon={Target}
         />
-        <KpiCard
-          label="Investimento"
-          value="R$ 22.100"
-          change="Meta Ads + Google"
-          changeType="neutral"
-          icon={Wallet}
-        />
+        {spendLoading ? (
+          <div className="glass-card p-5 animate-fade-in">
+            <div className="flex items-center justify-between mb-3">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-8 w-8 rounded-md" />
+            </div>
+            <Skeleton className="h-7 w-28" />
+          </div>
+        ) : (
+          <KpiCard
+            label="Investimento (Meta Ads)"
+            value={investmentValue || "–"}
+            change={`${since} → ${until}`}
+            changeType="neutral"
+            icon={Wallet}
+          />
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -58,6 +94,20 @@ const Dashboard = () => {
         <KpiCard label="Pendentes" value="28" icon={Clock} />
         <KpiCard label="Refunds" value="7" change="-2 vs semana passada" changeType="positive" icon={RotateCcw} />
         <KpiCard label="Chargebacks" value="2" icon={AlertTriangle} />
+      </div>
+
+      {/* Investment section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <InvestmentChart
+          daily={spendData?.daily}
+          isLoading={spendLoading}
+          error={spendError}
+        />
+        <CampaignTable
+          campaigns={campaignData?.campaigns}
+          isLoading={campaignLoading}
+          error={campaignError}
+        />
       </div>
 
       {/* Charts */}

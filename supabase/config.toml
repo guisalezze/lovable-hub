@@ -2,3 +2,9 @@ project_id = "lqrlvefeznfaauwgvubl"
 
 [functions.perfectpay-webhook]
 verify_jwt = false
+
+[functions.meta-spend]
+verify_jwt = false
+
+[functions.meta-campaigns]
+verify_jwt = false
