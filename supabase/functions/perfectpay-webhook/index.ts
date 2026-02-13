@@ -6,6 +6,56 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+// Perfect Pay sale_status_enum mapping (numeric codes from docs)
+const SALE_STATUS_MAP: Record<number, string> = {
+  0: "none",
+  1: "pending",
+  2: "approved",
+  3: "in_process",
+  4: "in_mediation",
+  5: "rejected",
+  6: "cancelled",
+  7: "refunded",
+  9: "charged_back",
+  11: "checkout_error",
+  12: "abandono",
+  13: "expired",
+  16: "in_review",
+  17: "pre_chargeback",
+  18: "pre_refunded",
+};
+
+// payment_type_enum mapping
+const PAYMENT_TYPE_MAP: Record<number, string> = {
+  0: "none",
+  1: "credit_card",
+  2: "ticket",
+  3: "paypal",
+  4: "credit_card_recurrent",
+  5: "free_price",
+  6: "credit_card_upsell",
+  7: "pix",
+};
+
+// payment_method_enum mapping
+const PAYMENT_METHOD_MAP: Record<number, string> = {
+  0: "none",
+  1: "visa",
+  2: "bolbradesco",
+  3: "amex",
+  4: "elo",
+  5: "hipercard",
+  6: "master",
+  7: "melicard",
+  8: "free_price",
+  9: "pix",
+  10: "discover",
+  11: "diners_club",
+  12: "jcb",
+  13: "sorocred",
+  14: "fort_brasil",
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -29,7 +79,7 @@ Deno.serve(async (req) => {
     const plan = payload.plan || {};
     const metadata = payload.metadata || {};
 
-    const email = customer.email?.toLowerCase()?.trim();
+    const email = (customer.email || "")?.toLowerCase()?.trim();
     if (!email) {
       return new Response(JSON.stringify({ error: "No email in payload" }), {
         status: 400,
@@ -37,22 +87,59 @@ Deno.serve(async (req) => {
       });
     }
 
-    const saleCode = payload.sale_code || payload.code || `${Date.now()}`;
+    const saleCode = payload.code || `PP-${Date.now()}`;
     const saleAmount = parseFloat(payload.sale_amount || "0");
-    const saleStatus = payload.sale_status_enum || "pending";
 
-    // Upsert lead
-    const leadData = {
+    // Convert numeric enums to readable strings
+    const rawStatus = typeof payload.sale_status_enum === "number"
+      ? payload.sale_status_enum
+      : parseInt(payload.sale_status_enum || "0", 10);
+    const saleStatus = SALE_STATUS_MAP[rawStatus] || String(payload.sale_status_enum);
+
+    const rawPaymentType = typeof payload.payment_type_enum === "number"
+      ? payload.payment_type_enum
+      : parseInt(payload.payment_type_enum || "0", 10);
+    const paymentType = PAYMENT_TYPE_MAP[rawPaymentType] || String(payload.payment_type_enum);
+
+    const rawPaymentMethod = typeof payload.payment_method_enum === "number"
+      ? payload.payment_method_enum
+      : parseInt(payload.payment_method_enum || "0", 10);
+    const paymentMethod = PAYMENT_METHOD_MAP[rawPaymentMethod] || String(payload.payment_method_enum);
+
+    const checkoutType = payload.checkout_type_enum || "default";
+
+    // Determine lead status based on sale status
+    let leadStatus = "novo";
+    if (saleStatus === "approved") {
+      leadStatus = "comprou";
+    } else if (saleStatus === "pending" || saleStatus === "in_process" || saleStatus === "in_review") {
+      leadStatus = "quase_comprou";
+    } else if (
+      saleStatus === "refunded" ||
+      saleStatus === "charged_back" ||
+      saleStatus === "cancelled" ||
+      saleStatus === "rejected" ||
+      saleStatus === "pre_chargeback" ||
+      saleStatus === "pre_refunded"
+    ) {
+      leadStatus = "perdido";
+    }
+
+    // Build lead data from customer fields per Perfect Pay docs
+    const leadData: Record<string, unknown> = {
       email,
       full_name: customer.full_name || null,
-      phone_e164: customer.phone_formated_ddi || customer.phone_e164 || null,
-      phone_formatted: customer.phone_formated_ddi || customer.phone_formatted || null,
+      phone_e164: customer.phone_formated_ddi || null,
+      phone_formatted: customer.phone_formated || customer.phone_formated_ddi || null,
+      city: customer.city || null,
+      state: customer.state || null,
+      country: customer.country || null,
       last_sale_status_enum: saleStatus,
       last_sale_amount: saleAmount,
       last_product: product.name || null,
       last_date_created: payload.date_created || new Date().toISOString(),
       last_date_approved: payload.date_approved || null,
-      last_payment_type: payload.payment_type_enum || null,
+      last_payment_type: paymentType,
       last_billet_url: payload.billet_url || null,
       utm_source: metadata.utm_source || null,
       utm_medium: metadata.utm_medium || null,
@@ -60,18 +147,10 @@ Deno.serve(async (req) => {
       utm_content: metadata.utm_content || null,
       utm_term: metadata.utm_term || null,
       src: metadata.src || null,
+      status: leadStatus,
     };
 
-    // Determine lead status
-    let leadStatus = "novo";
-    if (saleStatus === "approved" || saleStatus === "complete") {
-      leadStatus = "comprou";
-    } else if (saleStatus === "pending") {
-      leadStatus = "quase_comprou";
-    } else if (saleStatus === "refunded" || saleStatus === "chargeback" || saleStatus === "canceled") {
-      leadStatus = "perdido";
-    }
-
+    // Upsert lead
     const { data: existingLead } = await supabase
       .from("leads")
       .select("id")
@@ -79,14 +158,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (existingLead) {
-      await supabase
-        .from("leads")
-        .update({ ...leadData, status: leadStatus })
-        .eq("email", email);
+      await supabase.from("leads").update(leadData).eq("email", email);
     } else {
-      await supabase
-        .from("leads")
-        .insert({ ...leadData, status: leadStatus });
+      await supabase.from("leads").insert(leadData);
     }
 
     // Upsert sale (idempotent by code)
@@ -101,9 +175,9 @@ Deno.serve(async (req) => {
         product_name: product.name || null,
         plan_code: plan.code || null,
         plan_name: plan.name || null,
-        payment_type_enum: payload.payment_type_enum || null,
-        payment_method_enum: payload.payment_method_enum || null,
-        checkout_type_enum: payload.checkout_type_enum || null,
+        payment_type_enum: paymentType,
+        payment_method_enum: paymentMethod,
+        checkout_type_enum: checkoutType,
         billet_url: payload.billet_url || null,
         date_created: payload.date_created || null,
         date_approved: payload.date_approved || null,
@@ -116,10 +190,7 @@ Deno.serve(async (req) => {
     }
 
     // Update lead_products if approved
-    if (
-      (saleStatus === "approved" || saleStatus === "complete") &&
-      product.code
-    ) {
+    if (saleStatus === "approved" && product.code) {
       const { data: existingProduct } = await supabase
         .from("lead_products")
         .select("*")
@@ -132,10 +203,11 @@ Deno.serve(async (req) => {
           .from("lead_products")
           .update({
             total_purchases_count: existingProduct.total_purchases_count + 1,
-            total_paid_amount:
-              Number(existingProduct.total_paid_amount) + saleAmount,
+            total_paid_amount: Number(existingProduct.total_paid_amount) + saleAmount,
             last_purchase_at: new Date().toISOString(),
             last_status_enum: saleStatus,
+            product_name: product.name || existingProduct.product_name,
+            plan_code: plan.code || existingProduct.plan_code,
           })
           .eq("id", existingProduct.id);
       } else {
@@ -152,13 +224,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update webhook log as processed
+    // If refund/chargeback, update lead_products status
+    if ((saleStatus === "refunded" || saleStatus === "charged_back") && product.code) {
+      await supabase
+        .from("lead_products")
+        .update({ last_status_enum: saleStatus })
+        .eq("lead_email", email)
+        .eq("product_code", product.code);
+    }
+
+    // Mark webhook as processed
     await supabase
       .from("webhook_logs")
       .update({ processed: true })
-      .eq("payload->>sale_code", saleCode);
+      .eq("payload->>code", saleCode);
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, status: saleStatus }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
