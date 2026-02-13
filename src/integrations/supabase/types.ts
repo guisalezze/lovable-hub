@@ -14,16 +14,418 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      calls: {
+        Row: {
+          created_at: string
+          end_at: string | null
+          google_event_id: string | null
+          id: string
+          lead_email: string | null
+          meet_link: string | null
+          notes: string | null
+          owner_user_id: string | null
+          start_at: string
+          status: Database["public"]["Enums"]["call_status"]
+        }
+        Insert: {
+          created_at?: string
+          end_at?: string | null
+          google_event_id?: string | null
+          id?: string
+          lead_email?: string | null
+          meet_link?: string | null
+          notes?: string | null
+          owner_user_id?: string | null
+          start_at: string
+          status?: Database["public"]["Enums"]["call_status"]
+        }
+        Update: {
+          created_at?: string
+          end_at?: string | null
+          google_event_id?: string | null
+          id?: string
+          lead_email?: string | null
+          meet_link?: string | null
+          notes?: string | null
+          owner_user_id?: string | null
+          start_at?: string
+          status?: Database["public"]["Enums"]["call_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calls_lead_email_fkey"
+            columns: ["lead_email"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["email"]
+          },
+        ]
+      }
+      investments: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          date: string
+          description: string | null
+          id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          description?: string | null
+          id?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          description?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      lead_products: {
+        Row: {
+          id: string
+          last_purchase_at: string | null
+          last_status_enum: string | null
+          lead_email: string
+          plan_code: string | null
+          product_code: string
+          product_name: string | null
+          total_paid_amount: number
+          total_purchases_count: number
+        }
+        Insert: {
+          id?: string
+          last_purchase_at?: string | null
+          last_status_enum?: string | null
+          lead_email: string
+          plan_code?: string | null
+          product_code: string
+          product_name?: string | null
+          total_paid_amount?: number
+          total_purchases_count?: number
+        }
+        Update: {
+          id?: string
+          last_purchase_at?: string | null
+          last_status_enum?: string | null
+          lead_email?: string
+          plan_code?: string | null
+          product_code?: string
+          product_name?: string | null
+          total_paid_amount?: number
+          total_purchases_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_products_lead_email_fkey"
+            columns: ["lead_email"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["email"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          city: string | null
+          country: string | null
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          last_billet_url: string | null
+          last_date_approved: string | null
+          last_date_created: string | null
+          last_payment_type: string | null
+          last_product: string | null
+          last_sale_amount: number | null
+          last_sale_status_enum: string | null
+          owner_user_id: string | null
+          phone_e164: string | null
+          phone_formatted: string | null
+          src: string | null
+          state: string | null
+          status: Database["public"]["Enums"]["lead_status"]
+          updated_at: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+        }
+        Insert: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id?: string
+          last_billet_url?: string | null
+          last_date_approved?: string | null
+          last_date_created?: string | null
+          last_payment_type?: string | null
+          last_product?: string | null
+          last_sale_amount?: number | null
+          last_sale_status_enum?: string | null
+          owner_user_id?: string | null
+          phone_e164?: string | null
+          phone_formatted?: string | null
+          src?: string | null
+          state?: string | null
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Update: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          last_billet_url?: string | null
+          last_date_approved?: string | null
+          last_date_created?: string | null
+          last_payment_type?: string | null
+          last_product?: string | null
+          last_sale_amount?: number | null
+          last_sale_status_enum?: string | null
+          owner_user_id?: string | null
+          phone_e164?: string | null
+          phone_formatted?: string | null
+          src?: string | null
+          state?: string | null
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email: string
+          full_name?: string
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sales: {
+        Row: {
+          billet_url: string | null
+          checkout_type_enum: string | null
+          code: string
+          created_at: string
+          date_approved: string | null
+          date_created: string | null
+          id: string
+          lead_email: string
+          payment_method_enum: string | null
+          payment_type_enum: string | null
+          plan_code: string | null
+          plan_name: string | null
+          product_code: string | null
+          product_name: string | null
+          sale_amount: number | null
+          sale_status_detail: string | null
+          sale_status_enum: string | null
+        }
+        Insert: {
+          billet_url?: string | null
+          checkout_type_enum?: string | null
+          code: string
+          created_at?: string
+          date_approved?: string | null
+          date_created?: string | null
+          id?: string
+          lead_email: string
+          payment_method_enum?: string | null
+          payment_type_enum?: string | null
+          plan_code?: string | null
+          plan_name?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          sale_amount?: number | null
+          sale_status_detail?: string | null
+          sale_status_enum?: string | null
+        }
+        Update: {
+          billet_url?: string | null
+          checkout_type_enum?: string | null
+          code?: string
+          created_at?: string
+          date_approved?: string | null
+          date_created?: string | null
+          id?: string
+          lead_email?: string
+          payment_method_enum?: string | null
+          payment_type_enum?: string | null
+          plan_code?: string | null
+          plan_name?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          sale_amount?: number | null
+          sale_status_detail?: string | null
+          sale_status_enum?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_lead_email_fkey"
+            columns: ["lead_email"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["email"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          lead_email: string | null
+          owner_user_id: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          lead_email?: string | null
+          owner_user_id?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          lead_email?: string | null
+          owner_user_id?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_lead_email_fkey"
+            columns: ["lead_email"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["email"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      webhook_logs: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          payload: Json
+          processed: boolean
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload: Json
+          processed?: boolean
+          source?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json
+          processed?: boolean
+          source?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "team"
+      call_status: "scheduled" | "completed" | "canceled" | "no_show"
+      lead_status: "novo" | "quase_comprou" | "comprou" | "perdido"
+      sale_status:
+        | "approved"
+        | "pending"
+        | "refunded"
+        | "chargeback"
+        | "canceled"
+        | "blocked"
+        | "complete"
+      task_status: "backlog" | "em_andamento" | "concluido"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +552,20 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "team"],
+      call_status: ["scheduled", "completed", "canceled", "no_show"],
+      lead_status: ["novo", "quase_comprou", "comprou", "perdido"],
+      sale_status: [
+        "approved",
+        "pending",
+        "refunded",
+        "chargeback",
+        "canceled",
+        "blocked",
+        "complete",
+      ],
+      task_status: ["backlog", "em_andamento", "concluido"],
+    },
   },
 } as const
