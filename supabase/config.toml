@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.meta-campaigns]
 verify_jwt = false
+
+[functions.run-reminders]
+verify_jwt = false
