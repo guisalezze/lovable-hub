@@ -17,6 +17,7 @@ import { RecentLeads } from "@/components/dashboard/RecentLeads";
 import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { InvestmentChart } from "@/components/dashboard/InvestmentChart";
 import { CampaignTable } from "@/components/dashboard/CampaignTable";
+import { OperationCards } from "@/components/dashboard/OperationCards";
 import { useMetaSpend } from "@/hooks/useMetaSpend";
 import { useMetaCampaigns } from "@/hooks/useMetaCampaigns";
 import { useDashboardKpis, useDailyRevenue, useSalesByProduct } from "@/hooks/useDashboardData";
@@ -69,6 +70,12 @@ const Dashboard = () => {
           <p className="text-sm text-muted-foreground mt-1">Visão geral da operação</p>
         </div>
         <PeriodSelector since={since} until={until} onChange={handlePeriodChange} />
+      </div>
+
+      {/* Operação do Dia */}
+      <div>
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Operação do Dia</h2>
+        <OperationCards />
       </div>
 
       {/* KPI Cards */}

@@ -13,6 +13,7 @@ import Produtos from "./pages/Produtos";
 import Financeiro from "./pages/Financeiro";
 import Calls from "./pages/Calls";
 import Tarefas from "./pages/Tarefas";
+import Inbox from "./pages/Inbox";
 import Integracoes from "./pages/Integracoes";
 import Configuracoes from "./pages/Configuracoes";
 import Auth from "./pages/Auth";
@@ -71,6 +72,7 @@ const App = () => (
             <Route path="/financeiro" element={<Financeiro />} />
             <Route path="/calls" element={<Calls />} />
             <Route path="/tarefas" element={<Tarefas />} />
+            <Route path="/inbox" element={<Inbox />} />
             <Route path="/integracoes" element={<Integracoes />} />
             <Route path="/configuracoes" element={<Configuracoes />} />
           </Route>
