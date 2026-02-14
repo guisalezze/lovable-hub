@@ -46,15 +46,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    let accessToken = Deno.env.get("META_ADS_ACCESS_TOKEN");
-    let accountId = Deno.env.get("META_ADS_ACCOUNT_ID");
+    // Priority: env secrets > app_settings fallback
+    let accessToken = Deno.env.get("META_ADS_ACCESS_TOKEN") || "";
+    let accountId = Deno.env.get("META_ADS_ACCOUNT_ID") || "";
 
-    // Fallback: read from app_settings if env vars are empty
+    // Fallback: read from app_settings only for missing values
+    const serviceClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
     if (!accessToken || !accountId) {
-      const serviceClient = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-      );
       const { data: settings } = await serviceClient
         .from("app_settings")
         .select("key, value")
@@ -63,8 +65,8 @@ Deno.serve(async (req) => {
       for (const s of settings || []) {
         const val = typeof s.value === "string" ? s.value : JSON.stringify(s.value);
         const clean = val.replace(/^"|"$/g, "");
-        if (s.key === "meta_ads_access_token" && clean) accessToken = clean;
-        if (s.key === "meta_ads_account_id" && clean) accountId = clean;
+        if (!accessToken && s.key === "meta_ads_access_token" && clean) accessToken = clean;
+        if (!accountId && s.key === "meta_ads_account_id" && clean) accountId = clean;
       }
     }
 
@@ -74,6 +76,10 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Ensure we always use the correct account ID
+    accountId = accountId.replace(/^act_/, "");
+    console.log(`Fetching insights for act_${accountId} from ${since} to ${until}`);
 
     // Fetch daily spend from Meta Marketing API
     const metaUrl = `https://graph.facebook.com/v21.0/act_${accountId}/insights?` +
@@ -104,8 +110,15 @@ Deno.serve(async (req) => {
 
     const totalSpend = daily.reduce((sum: number, d: any) => sum + parseFloat(d.spend), 0);
 
+    console.log(`act_${accountId}: total_spend=${totalSpend}, days=${daily.length}`);
+
+    // Update last sync timestamp
+    await serviceClient
+      .from("app_settings")
+      .upsert({ key: "meta_ads_last_sync", value: JSON.stringify(new Date().toISOString()) });
+
     return new Response(
-      JSON.stringify({ total_spend: totalSpend, daily }),
+      JSON.stringify({ total_spend: totalSpend, daily, account_id: accountId }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
