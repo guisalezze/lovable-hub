@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTasks, useCreateTask, type Task } from "@/hooks/useTasks";
+import { useGoogleAuth } from "@/hooks/useGoogleAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -92,6 +93,7 @@ export default function AgendaPage() {
   const { data: calls = [], isLoading: loadingCalls } = useCalls();
   const { data: tasks = [], isLoading: loadingTasks } = useTasks();
   const { data: leads = [] } = useLeads();
+  const googleAuth = useGoogleAuth();
 
   const days = useMemo(() => {
     const start = startOfMonth(currentMonth);
@@ -344,6 +346,7 @@ export default function AgendaPage() {
         onOpenChange={setShowCallDialog}
         leads={leads}
         defaultDate={selectedDay || new Date()}
+        googleAuth={googleAuth}
       />
 
       {/* New Task Dialog */}
@@ -352,6 +355,7 @@ export default function AgendaPage() {
         onOpenChange={setShowTaskDialog}
         leads={leads}
         defaultDate={selectedDay || new Date()}
+        googleAuth={googleAuth}
       />
     </div>
   );
@@ -363,11 +367,13 @@ function NewCallDialog({
   onOpenChange,
   leads,
   defaultDate,
+  googleAuth,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   leads: Lead[];
   defaultDate: Date;
+  googleAuth: ReturnType<typeof useGoogleAuth>;
 }) {
   const qc = useQueryClient();
   const [leadSearch, setLeadSearch] = useState("");
@@ -387,14 +393,34 @@ function NewCallDialog({
     mutationFn: async () => {
       const startAt = new Date(`${date}T${time}:00`);
       const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from("calls").insert({
+      const { data: callData, error } = await supabase.from("calls").insert({
         lead_email: selectedLead || null,
         start_at: startAt.toISOString(),
         meet_link: meetLink || null,
         notes: notes || null,
         owner_user_id: user?.id || null,
-      });
+      }).select().single();
       if (error) throw error;
+
+      // Google Calendar integration
+      if (googleAuth.isConnected && callData) {
+        try {
+          const leadName = selectedLead ? selectedLead.split("@")[0] : "Call";
+          const result = await googleAuth.createCalendarEvent({
+            title: `Call com ${leadName}`,
+            start: startAt.toISOString(),
+            type: "call",
+          });
+          if (result?.meetLink || result?.eventId) {
+            await supabase.from("calls").update({
+              meet_link: result.meetLink || callData.meet_link,
+              google_event_id: result.eventId,
+            }).eq("id", callData.id);
+          }
+        } catch (e) {
+          console.error("Google Calendar sync failed:", e);
+        }
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["calls"] });
@@ -540,11 +566,13 @@ function NewTaskDialog({
   onOpenChange,
   leads,
   defaultDate,
+  googleAuth,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   leads: Lead[];
   defaultDate: Date;
+  googleAuth: ReturnType<typeof useGoogleAuth>;
 }) {
   const createTask = useCreateTask();
   const [title, setTitle] = useState("");
@@ -573,7 +601,19 @@ function NewTaskDialog({
         priority: priority as any,
       },
       {
-        onSuccess: () => {
+        onSuccess: async () => {
+          // Google Calendar integration for tasks with due date
+          if (googleAuth.isConnected && dueDate) {
+            try {
+              await googleAuth.createCalendarEvent({
+                title,
+                start: `${dueDate}T00:00:00`,
+                type: "task",
+              });
+            } catch (e) {
+              console.error("Google Calendar sync failed:", e);
+            }
+          }
           toast.success("Tarefa criada!");
           onOpenChange(false);
           setTitle("");

@@ -11,3 +11,12 @@ verify_jwt = false
 
 [functions.run-reminders]
 verify_jwt = false
+
+[functions.google-auth-start]
+verify_jwt = false
+
+[functions.google-auth-callback]
+verify_jwt = false
+
+[functions.google-calendar-event]
+verify_jwt = false
