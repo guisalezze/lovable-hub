@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plug, CheckCircle, Copy, LogOut, Calendar, TrendingUp, Loader2, Save, Eye, EyeOff } from "lucide-react";
+import { Plug, CheckCircle, Copy, LogOut, Calendar as CalendarIcon, TrendingUp, Loader2, Save, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { useGoogleAuth } from "@/hooks/useGoogleAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useMetaSpend } from "@/hooks/useMetaSpend";
 import { format, subDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 export default function IntegracoesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -24,12 +28,16 @@ export default function IntegracoesPage() {
   const [metaSaving, setMetaSaving] = useState(false);
   const [metaLoading, setMetaLoading] = useState(true);
 
-  const today = format(new Date(), "yyyy-MM-dd");
-  const sevenDaysAgo = format(subDays(new Date(), 7), "yyyy-MM-dd");
+  // Date range for initial extraction
+  const [dateFrom, setDateFrom] = useState<Date>(subDays(new Date(), 7));
+  const [dateTo, setDateTo] = useState<Date>(new Date());
+
+  const since = format(dateFrom, "yyyy-MM-dd");
+  const until = format(dateTo, "yyyy-MM-dd");
 
   const { data: spendData, error: spendError, isLoading: spendLoading } = useMetaSpend({
-    since: metaConfigured ? sevenDaysAgo : "",
-    until: metaConfigured ? today : "",
+    since: metaConfigured ? since : "",
+    until: metaConfigured ? until : "",
   });
 
   useEffect(() => {
@@ -165,7 +173,7 @@ export default function IntegracoesPage() {
       <div className="glass-card p-5">
         <div className="flex items-center gap-4">
           <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Calendar className="h-6 w-6 text-primary" />
+            <CalendarIcon className="h-6 w-6 text-primary" />
           </div>
           <div className="flex-1">
             <h3 className="text-sm font-semibold text-foreground">Google Calendar + Meet</h3>
@@ -198,7 +206,7 @@ export default function IntegracoesPage() {
             </div>
           ) : (
             <Button onClick={connect} disabled={isLoading}>
-              <Calendar className="h-4 w-4 mr-2" />
+              <CalendarIcon className="h-4 w-4 mr-2" />
               Conectar com Google
             </Button>
           )}
@@ -250,13 +258,13 @@ export default function IntegracoesPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="meta-token" className="text-xs">
-                Token de Acesso
+                Token de Acesso (Usuário de Sistema)
               </Label>
               <div className="relative">
                 <Input
                   id="meta-token"
                   type={showToken ? "text" : "password"}
-                  placeholder={metaConfigured ? "••••••••••••••••" : "Cole seu token de acesso aqui"}
+                  placeholder={metaConfigured ? "••••••••••••••••" : "Cole o token do usuário de sistema"}
                   value={metaAccessToken}
                   onChange={(e) => setMetaAccessToken(e.target.value)}
                   className="text-sm pr-10"
@@ -272,7 +280,66 @@ export default function IntegracoesPage() {
                 </Button>
               </div>
               <p className="text-[10px] text-muted-foreground">
-                Gere em developers.facebook.com → Ferramentas → Explorador da Graph API
+                Gere em Business Manager → Configurações → Usuários do sistema → Gerar token
+              </p>
+            </div>
+
+            {/* Date range for extraction */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Período para extração de insights</Label>
+              <div className="flex items-center gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "flex-1 justify-start text-left font-normal text-sm",
+                        !dateFrom && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="h-3.5 w-3.5 mr-2" />
+                      {format(dateFrom, "dd/MM/yyyy", { locale: ptBR })}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dateFrom}
+                      onSelect={(d) => d && setDateFrom(d)}
+                      disabled={(date) => date > new Date()}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <span className="text-xs text-muted-foreground">até</span>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "flex-1 justify-start text-left font-normal text-sm",
+                        !dateTo && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="h-3.5 w-3.5 mr-2" />
+                      {format(dateTo, "dd/MM/yyyy", { locale: ptBR })}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dateTo}
+                      onSelect={(d) => d && setDateTo(d)}
+                      disabled={(date) => date > new Date()}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Selecione o período desejado para extrair os insights de gastos
               </p>
             </div>
 
@@ -305,7 +372,7 @@ export default function IntegracoesPage() {
               ) : spendData ? (
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-muted-foreground">
-                    Gasto últimos 7 dias:
+                    Gasto de {format(dateFrom, "dd/MM", { locale: ptBR })} a {format(dateTo, "dd/MM", { locale: ptBR })}:
                   </p>
                   <span className="text-sm font-semibold text-foreground">
                     R$ {spendData.total_spend.toFixed(2)}
