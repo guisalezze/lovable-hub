@@ -9,13 +9,12 @@ import {
   Plug,
   Settings,
   Zap,
-  Inbox,
+  Users2,
 } from "lucide-react";
-import { useUnreadCount } from "@/hooks/useNotifications";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/" },
-  { label: "Inbox", icon: Inbox, to: "/inbox", badge: true },
+  { label: "Equipe", icon: Users2, to: "/equipe" },
   { label: "Leads", icon: Users, to: "/leads" },
   { label: "Produtos", icon: Package, to: "/produtos" },
   { label: "Financeiro", icon: DollarSign, to: "/financeiro" },
@@ -31,7 +30,6 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ open }: AppSidebarProps) {
-  const { data: unreadCount } = useUnreadCount();
 
   return (
     <aside
@@ -64,11 +62,6 @@ export function AppSidebar({ open }: AppSidebarProps) {
           >
             <item.icon className="h-4 w-4 shrink-0" />
             <span className="flex-1">{item.label}</span>
-            {item.badge && (unreadCount || 0) > 0 && (
-              <span className="h-5 min-w-[20px] rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center font-bold px-1">
-                {unreadCount! > 99 ? "99+" : unreadCount}
-              </span>
-            )}
           </NavLink>
         ))}
       </nav>
