@@ -94,8 +94,14 @@ Deno.serve(async (req) => {
         .from("app_settings")
         .upsert({ key: "meta_ads_last_sync", value: JSON.stringify(new Date().toISOString()) });
 
-      // Test the token by making a simple API call
-      const testUrl = `https://graph.facebook.com/v21.0/act_${account_id}?access_token=${access_token}&fields=name`;
+      // Test the token using Marketing API (works with system user tokens)
+      const testUrl = `https://graph.facebook.com/v21.0/act_${account_id}/insights?` +
+        new URLSearchParams({
+          access_token: access_token,
+          fields: "spend,account_name",
+          date_preset: "today",
+          limit: "1",
+        }).toString();
       const testRes = await fetch(testUrl);
       const testData = await testRes.json();
 
@@ -106,6 +112,13 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Also fetch account name separately
+      const nameRes = await fetch(
+        `https://graph.facebook.com/v21.0/act_${account_id}?access_token=${access_token}&fields=name`
+      );
+      const nameData = await nameRes.json();
+      const accountName = nameData.name || `act_${account_id}`;
+
       // Store secrets using Supabase Management API is not possible from edge functions,
       // so we store the token encrypted in app_settings via service role
       // The edge functions meta-spend and meta-campaigns will read from app_settings as fallback
@@ -113,7 +126,7 @@ Deno.serve(async (req) => {
         .from("app_settings")
         .upsert({ key: "meta_ads_access_token", value: JSON.stringify(access_token) });
 
-      return new Response(JSON.stringify({ success: true, account_name: testData.name }), {
+      return new Response(JSON.stringify({ success: true, account_name: accountName }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
