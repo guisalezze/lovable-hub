@@ -15,8 +15,9 @@ export function useMetaSpend({ since, until }: { since: string; until: string })
   return useQuery<MetaSpendResponse>({
     queryKey: ["meta-spend", since, until],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not authenticated");
+      // Refresh session to avoid expired JWT
+      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+      if (sessionError || !session) throw new Error("Not authenticated");
 
       const res = await fetch(
         `https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/meta-spend?since=${since}&until=${until}`,
