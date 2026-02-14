@@ -1,126 +1,119 @@
 
-# Plano: Integracao Google Calendar/Meet + Pagina de Integracoes Melhorada
+# Plano: Substituir Inbox por Modulo de Performance de Equipe
 
 ## Resumo
 
-Salvar os secrets do Google OAuth, criar a infraestrutura de banco + edge functions para autenticacao e sincronizacao com Google Calendar/Meet, redesenhar a pagina de integracoes, e conectar a Agenda para criar eventos automaticamente.
+Remover o modulo Inbox e substituir por um dashboard de Performance de Equipe. O modulo tera duas visoes: "Minha Performance" (acessivel por todos) e "Minha Equipe" (acessivel apenas por admins). Todos os dados serao derivados da tabela `tasks` existente -- nenhuma nova tabela e necessaria.
 
 ---
 
-## 1. Salvar Secrets
+## 1. Logica de Dados (sem alteracao de banco)
 
-Adicionar dois secrets no projeto:
-- `GOOGLE_CLIENT_ID`: `47011130046-jo3obfeo401duoqfpki4b04btbp4reag.apps.googleusercontent.com`
-- `GOOGLE_CLIENT_SECRET`: `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`
+Todos os KPIs serao calculados a partir da tabela `tasks` ja existente, usando os campos `assigned_to`, `status`, `completed_at`, `created_at` e `due_date`:
+
+- **Taxa de Conclusao (%)**: tarefas com status `concluido` / total de tarefas atribuidas ao usuario
+- **Produtividade Media**: media de tarefas concluidas por dia nos ultimos 30 dias
+- **Tarefas Ativas**: total de tarefas atribuidas com status diferente de `concluido`
+- **Tarefas em Andamento**: tarefas com status `em_andamento`
+- **Performance Individual**: score composto (conclusao no prazo, velocidade, volume) exibido como barra de progresso
+- **Grafico 7 dias**: contagem de tarefas concluidas por dia (`completed_at`) nos ultimos 7 dias
 
 ---
 
-## 2. Migracao: Tabela `google_tokens`
+## 2. Arquivos a Criar
 
-```sql
-CREATE TABLE public.google_tokens (
-  user_id uuid PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
-  access_token text NOT NULL,
-  refresh_token text NOT NULL,
-  expires_at timestamptz NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
+### `src/hooks/useTeamPerformance.ts`
+Hook que busca:
+- Tarefas do usuario logado (para "Minha Performance")
+- Tarefas de todos os membros (para admins, visao "Minha Equipe")
+- Lista de membros da equipe via `profiles` + `user_roles`
+- Verifica se o usuario e admin usando a query em `user_roles`
 
-ALTER TABLE public.google_tokens ENABLE ROW LEVEL SECURITY;
+Retorna KPIs calculados no frontend a partir dos dados brutos.
 
-CREATE POLICY "Users can read own tokens"
-  ON public.google_tokens FOR SELECT
-  USING (auth.uid() = user_id);
+### `src/pages/Equipe.tsx`
+Pagina principal com duas abas (Tabs):
+- **Minha Performance**: dashboard pessoal (todos veem)
+- **Minha Equipe**: grid de cards com cada membro (somente admins)
 
-CREATE POLICY "Users can insert own tokens"
-  ON public.google_tokens FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+A aba "Minha Equipe" so aparece para admins.
 
-CREATE POLICY "Users can update own tokens"
-  ON public.google_tokens FOR UPDATE
-  USING (auth.uid() = user_id);
+### `src/components/equipe/PerformanceDashboard.tsx`
+Componente reutilizavel que renderiza o dashboard de um usuario (usado tanto na visao pessoal quanto ao clicar em um membro da equipe). Contem:
+- 4 KPI cards (Taxa de Conclusao com barra de progresso, Produtividade Media, Tarefas Ativas, Tarefas em Andamento)
+- Secao "Performance Individual" com metricas detalhadas e barras de progresso
+- Grafico de tendencia de 7 dias (recharts AreaChart)
 
-CREATE POLICY "Users can delete own tokens"
-  ON public.google_tokens FOR DELETE
-  USING (auth.uid() = user_id);
+### `src/components/equipe/TeamMemberCard.tsx`
+Card para a visao "Minha Equipe" mostrando nome, avatar, taxa de conclusao resumida. Ao clicar, abre o `PerformanceDashboard` daquele membro.
+
+---
+
+## 3. Arquivos a Modificar
+
+### `src/App.tsx`
+- Remover import de `Inbox`
+- Adicionar import de `Equipe`
+- Trocar rota `/inbox` por `/equipe`
+
+### `src/components/layout/AppSidebar.tsx`
+- Remover item "Inbox" com badge
+- Adicionar item "Equipe" com icone `Users2` (ou `BarChart3`)
+- Remover import de `useUnreadCount` (nao sera mais usado)
+
+---
+
+## 4. Detalhes dos KPI Cards
+
+| Card | Calculo | Visual |
+|---|---|---|
+| Taxa de Conclusao | `(concluidas / total) * 100` | Porcentagem + barra de progresso (Progress component) |
+| Produtividade Media | `concluidas_30d / 30` formatado como "X.X tarefas/dia" | Numero com texto descritivo |
+| Tarefas Ativas | `count(status != concluido)` | Numero grande |
+| Em Andamento | `count(status == em_andamento)` | Numero grande |
+
+### Performance Individual (secao expandida)
+- **Conclusao no Prazo**: % de tarefas concluidas antes da `due_date` -- barra de progresso
+- **Velocidade Media**: dias entre `created_at` e `completed_at` -- barra de progresso (invertida, menos = melhor)
+- **Volume Semanal**: tarefas concluidas na ultima semana vs meta (ex: 10) -- barra de progresso
+
+---
+
+## 5. Grafico de Tendencia (7 dias)
+
+Usando recharts `AreaChart` com:
+- Eixo X: dias da semana (Seg, Ter, Qua...)
+- Eixo Y: numero de tarefas concluidas
+- Dados: agrupamento de `completed_at` por dia nos ultimos 7 dias
+- Visual: area com gradiente usando as cores do tema
+
+---
+
+## 6. Controle de Acesso
+
+- **Todos os usuarios**: veem apenas "Minha Performance" (seus proprios dados)
+- **Admins**: veem as duas abas. Na aba "Minha Equipe", podem clicar em qualquer membro para ver o dashboard completo dele
+- A verificacao de admin sera feita consultando `user_roles` onde `role = 'admin'`
+
+---
+
+## 7. Fluxo de Navegacao
+
+```text
+/equipe
+  |-- Aba "Minha Performance" (padrao para todos)
+  |     |-- KPI Cards pessoais
+  |     |-- Performance Individual com barras
+  |     |-- Grafico 7 dias
+  |
+  |-- Aba "Minha Equipe" (somente admin)
+        |-- Grid de cards com cada membro
+        |-- Clicar no card -> abre dashboard do membro (mesmo layout)
+        |-- Botao "Voltar" para retornar a lista
 ```
 
 ---
 
-## 3. Edge Functions
+## 8. Impacto no Inbox/Notificacoes
 
-### `google-auth-start`
-- Recebe o JWT do usuario para identificar quem esta conectando
-- Gera a URL de autorizacao OAuth do Google com escopos de Calendar
-- Inclui `state` com o user_id para rastrear no callback
-- Retorna a URL para o frontend redirecionar
-
-### `google-auth-callback`
-- Recebe o `code` e `state` do Google
-- Troca o code por access_token + refresh_token
-- Salva na tabela `google_tokens` usando service role
-- Redireciona o navegador para `/integracoes?google=connected`
-
-### `google-calendar-event`
-- Recebe: titulo, data/hora inicio, data/hora fim (opcional), tipo (call ou tarefa)
-- Busca os tokens do usuario na tabela
-- Se token expirado, faz refresh automatico
-- Cria evento no Google Calendar via API
-- Para calls: inclui `conferenceDataVersion=1` para gerar link do Google Meet
-- Retorna o `eventId` e `meetLink` (se call)
-
-### Configuracao em `supabase/config.toml`
-Adicionar as 3 novas functions com `verify_jwt = false`.
-
----
-
-## 4. Pagina de Integracoes Redesenhada
-
-Substituir o conteudo estatico atual por cards interativos:
-
-**Perfect Pay** - Mostra endpoint do webhook com botao de copiar (mantem como esta, apenas melhora UI)
-
-**Google Calendar + Meet** - Botao "Conectar com Google" que chama `google-auth-start`. Apos conectado, mostra status verde "Conectado" com opcao de desconectar. Verifica status consultando a tabela `google_tokens`.
-
-**Meta Ads** - Campos para Access Token e Account ID. Botao salvar que atualiza os secrets via interface (informativo por enquanto, pois os secrets ja estao configurados).
-
----
-
-## 5. Integracao na Agenda
-
-### Ao criar uma Call:
-1. Salva no banco (como ja faz)
-2. Verifica se o usuario tem Google conectado (consulta `google_tokens`)
-3. Se sim, chama `google-calendar-event` com tipo "call"
-4. Recebe de volta o `meet_link` e `google_event_id`
-5. Atualiza a call no banco com esses dados
-6. Remove o campo manual de "Link do Meet" (sera gerado automaticamente)
-
-### Ao criar uma Tarefa com data:
-1. Salva no banco (como ja faz)
-2. Verifica se o usuario tem Google conectado
-3. Se sim, chama `google-calendar-event` com tipo "tarefa" (evento de dia inteiro, sem Meet)
-
----
-
-## 6. Hook `useGoogleAuth`
-
-Novo hook que:
-- Consulta `google_tokens` para verificar se o usuario esta conectado
-- Expoe `isConnected`, `connect()` (redireciona para OAuth), `disconnect()` (deleta token)
-- Usado tanto na pagina de Integracoes quanto na Agenda
-
----
-
-## Arquivos a criar/modificar
-
-| Arquivo | Acao |
-|---|---|
-| Migracao SQL | Criar tabela `google_tokens` |
-| `supabase/functions/google-auth-start/index.ts` | Criar |
-| `supabase/functions/google-auth-callback/index.ts` | Criar |
-| `supabase/functions/google-calendar-event/index.ts` | Criar |
-| `supabase/config.toml` | Adicionar 3 functions |
-| `src/hooks/useGoogleAuth.ts` | Criar |
-| `src/pages/Integracoes.tsx` | Redesign completo |
-| `src/pages/Agenda.tsx` | Integrar com Google Calendar apos criar call/tarefa |
+O modulo de notificacoes (`useNotifications`, `useUnreadCount`) continuara existindo no banco e nos hooks, mas nao tera mais uma pagina dedicada. Se no futuro quiser reativar, basta adicionar a rota novamente. O badge de notificacoes sera removido do sidebar.
