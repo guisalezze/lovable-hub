@@ -103,14 +103,30 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Fetch USD→BRL exchange rate
+    let usdToBrl = 5.0; // fallback
+    try {
+      const fxRes = await fetch("https://open.er-api.com/v6/latest/USD");
+      const fxData = await fxRes.json();
+      if (fxData.rates?.BRL) {
+        usdToBrl = fxData.rates.BRL;
+      }
+    } catch (e) {
+      console.error("Exchange rate fetch failed, using fallback:", e);
+    }
+
+    console.log(`USD→BRL rate: ${usdToBrl}`);
+
     const daily = (metaData.data || []).map((d: any) => ({
       date_start: d.date_start,
-      spend: d.spend || "0",
+      spend_usd: d.spend || "0",
+      spend_brl: (parseFloat(d.spend || "0") * usdToBrl).toFixed(2),
     }));
 
-    const totalSpend = daily.reduce((sum: number, d: any) => sum + parseFloat(d.spend), 0);
+    const totalSpendUsd = daily.reduce((sum: number, d: any) => sum + parseFloat(d.spend_usd), 0);
+    const totalSpendBrl = totalSpendUsd * usdToBrl;
 
-    console.log(`act_${accountId}: total_spend=${totalSpend}, days=${daily.length}`);
+    console.log(`act_${accountId}: total_spend_usd=${totalSpendUsd}, total_spend_brl=${totalSpendBrl.toFixed(2)}, days=${daily.length}`);
 
     // Update last sync timestamp
     await serviceClient
@@ -118,7 +134,14 @@ Deno.serve(async (req) => {
       .upsert({ key: "meta_ads_last_sync", value: JSON.stringify(new Date().toISOString()) });
 
     return new Response(
-      JSON.stringify({ total_spend: totalSpend, daily, account_id: accountId }),
+      JSON.stringify({
+        total_spend: totalSpendBrl,
+        total_spend_usd: totalSpendUsd,
+        exchange_rate: usdToBrl,
+        currency: "BRL",
+        daily,
+        account_id: accountId,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
