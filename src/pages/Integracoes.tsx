@@ -1,14 +1,36 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plug, CheckCircle, ExternalLink, Copy, LogOut, Calendar } from "lucide-react";
+import { Plug, CheckCircle, Copy, LogOut, Calendar, TrendingUp, Loader2, Save, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useGoogleAuth } from "@/hooks/useGoogleAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { useMetaSpend } from "@/hooks/useMetaSpend";
+import { format, subDays } from "date-fns";
 
 export default function IntegracoesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { isConnected, isLoading, connect, disconnect } = useGoogleAuth();
+
+  // Meta Ads state
+  const [metaAccountId, setMetaAccountId] = useState("");
+  const [metaAccessToken, setMetaAccessToken] = useState("");
+  const [showToken, setShowToken] = useState(false);
+  const [metaConfigured, setMetaConfigured] = useState(false);
+  const [metaLastSync, setMetaLastSync] = useState<string | null>(null);
+  const [metaSaving, setMetaSaving] = useState(false);
+  const [metaLoading, setMetaLoading] = useState(true);
+
+  const today = format(new Date(), "yyyy-MM-dd");
+  const sevenDaysAgo = format(subDays(new Date(), 7), "yyyy-MM-dd");
+
+  const { data: spendData, error: spendError, isLoading: spendLoading } = useMetaSpend({
+    since: metaConfigured ? sevenDaysAgo : "",
+    until: metaConfigured ? today : "",
+  });
 
   useEffect(() => {
     if (searchParams.get("google") === "connected") {
@@ -17,11 +39,93 @@ export default function IntegracoesPage() {
     }
   }, [searchParams, setSearchParams]);
 
+  // Load Meta Ads config
+  useEffect(() => {
+    async function loadConfig() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const res = await fetch(
+          "https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/meta-ads-config",
+          {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        if (res.ok) {
+          const config = await res.json();
+          const acctId = typeof config.meta_ads_account_id === "string"
+            ? config.meta_ads_account_id.replace(/^"|"$/g, "")
+            : "";
+          if (acctId) setMetaAccountId(acctId);
+          if (config.meta_ads_last_sync && config.meta_ads_last_sync !== "null") {
+            const syncVal = typeof config.meta_ads_last_sync === "string"
+              ? config.meta_ads_last_sync.replace(/^"|"$/g, "")
+              : "";
+            setMetaLastSync(syncVal);
+          }
+          setMetaConfigured(!!acctId && (config.has_token === true));
+        }
+      } catch (e) {
+        console.error("Failed to load meta config", e);
+      } finally {
+        setMetaLoading(false);
+      }
+    }
+    loadConfig();
+  }, []);
+
   const webhookUrl = "https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/perfectpay-webhook";
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success("Copiado!");
+  };
+
+  const handleSaveMeta = async () => {
+    if (!metaAccountId.trim() || !metaAccessToken.trim()) {
+      toast.error("Preencha o Account ID e o Token de Acesso");
+      return;
+    }
+
+    setMetaSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const res = await fetch(
+        "https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/meta-ads-config",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            account_id: metaAccountId.trim(),
+            access_token: metaAccessToken.trim(),
+          }),
+        }
+      );
+
+      const result = await res.json();
+      if (!res.ok) {
+        toast.error(result.error || "Erro ao salvar credenciais");
+        return;
+      }
+
+      toast.success(`Meta Ads conectado! Conta: ${result.account_name}`);
+      setMetaConfigured(true);
+      setMetaLastSync(new Date().toISOString());
+      setMetaAccessToken("");
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao salvar");
+    } finally {
+      setMetaSaving(false);
+    }
   };
 
   return (
@@ -84,12 +188,8 @@ export default function IntegracoesPage() {
           {isConnected ? (
             <div className="flex items-center justify-between p-3 rounded-md bg-secondary/50">
               <div>
-                <p className="text-xs text-muted-foreground">
-                  ✓ Calls → Evento no Calendar + link do Meet
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  ✓ Tarefas com data → Evento de dia inteiro
-                </p>
+                <p className="text-xs text-muted-foreground">✓ Calls → Evento no Calendar + link do Meet</p>
+                <p className="text-xs text-muted-foreground">✓ Tarefas com data → Evento de dia inteiro</p>
               </div>
               <Button size="sm" variant="ghost" className="text-destructive" onClick={disconnect}>
                 <LogOut className="h-3.5 w-3.5 mr-1" />
@@ -106,16 +206,117 @@ export default function IntegracoesPage() {
       </div>
 
       {/* Meta Ads */}
-      <div className="glass-card p-5 opacity-60">
+      <div className="glass-card p-5">
         <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-lg bg-secondary flex items-center justify-center">
-            <ExternalLink className="h-6 w-6 text-muted-foreground" />
+          <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+            <TrendingUp className="h-6 w-6 text-primary" />
           </div>
           <div className="flex-1">
             <h3 className="text-sm font-semibold text-foreground">Meta Ads</h3>
-            <p className="text-xs text-muted-foreground">Em breve — tráfego e UTMs automáticos</p>
+            <p className="text-xs text-muted-foreground">
+              {metaConfigured
+                ? "Insights de investimento sincronizados automaticamente"
+                : "Configure para extrair gastos e insights de campanhas"}
+            </p>
           </div>
-          <span className="text-xs text-muted-foreground">Em breve</span>
+          {metaLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          ) : metaConfigured ? (
+            <Badge variant="outline" className="text-success border-success/30 bg-success/10">
+              <CheckCircle className="h-3 w-3 mr-1" />
+              Conectado
+            </Badge>
+          ) : null}
+        </div>
+
+        <div className="mt-4 space-y-4">
+          {/* Config form */}
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="meta-account-id" className="text-xs">
+                Account ID (act_)
+              </Label>
+              <Input
+                id="meta-account-id"
+                placeholder="Ex: 123456789"
+                value={metaAccountId}
+                onChange={(e) => setMetaAccountId(e.target.value)}
+                className="text-sm"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                ID da conta de anúncios sem o prefixo "act_"
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="meta-token" className="text-xs">
+                Token de Acesso
+              </Label>
+              <div className="relative">
+                <Input
+                  id="meta-token"
+                  type={showToken ? "text" : "password"}
+                  placeholder={metaConfigured ? "••••••••••••••••" : "Cole seu token de acesso aqui"}
+                  value={metaAccessToken}
+                  onChange={(e) => setMetaAccessToken(e.target.value)}
+                  className="text-sm pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-full"
+                  onClick={() => setShowToken(!showToken)}
+                >
+                  {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Gere em developers.facebook.com → Ferramentas → Explorador da Graph API
+              </p>
+            </div>
+
+            <Button onClick={handleSaveMeta} disabled={metaSaving} className="w-full">
+              {metaSaving ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              {metaConfigured ? "Atualizar Credenciais" : "Conectar Meta Ads"}
+            </Button>
+          </div>
+
+          {/* Sync info + spend summary */}
+          {metaConfigured && (
+            <div className="p-3 rounded-md bg-secondary/50 space-y-2">
+              {metaLastSync && (
+                <p className="text-xs text-muted-foreground">
+                  Última sincronização:{" "}
+                  {format(new Date(metaLastSync), "dd/MM/yyyy HH:mm")}
+                </p>
+              )}
+              {spendLoading ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Carregando insights...
+                </div>
+              ) : spendError ? (
+                <p className="text-xs text-destructive">{spendError.message}</p>
+              ) : spendData ? (
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    Gasto últimos 7 dias:
+                  </p>
+                  <span className="text-sm font-semibold text-foreground">
+                    R$ {spendData.total_spend.toFixed(2)}
+                  </span>
+                </div>
+              ) : null}
+              <p className="text-[10px] text-muted-foreground">
+                ✓ Insights atualizam automaticamente a cada 5 minutos
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

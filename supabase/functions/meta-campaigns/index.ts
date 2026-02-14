@@ -46,8 +46,27 @@ Deno.serve(async (req) => {
       });
     }
 
-    const accessToken = Deno.env.get("META_ADS_ACCESS_TOKEN");
-    const accountId = Deno.env.get("META_ADS_ACCOUNT_ID");
+    let accessToken = Deno.env.get("META_ADS_ACCESS_TOKEN");
+    let accountId = Deno.env.get("META_ADS_ACCOUNT_ID");
+
+    // Fallback: read from app_settings if env vars are empty
+    if (!accessToken || !accountId) {
+      const serviceClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      const { data: settings } = await serviceClient
+        .from("app_settings")
+        .select("key, value")
+        .in("key", ["meta_ads_access_token", "meta_ads_account_id"]);
+
+      for (const s of settings || []) {
+        const val = typeof s.value === "string" ? s.value : JSON.stringify(s.value);
+        const clean = val.replace(/^"|"$/g, "");
+        if (s.key === "meta_ads_access_token" && clean) accessToken = clean;
+        if (s.key === "meta_ads_account_id" && clean) accountId = clean;
+      }
+    }
 
     if (!accessToken || !accountId) {
       return new Response(JSON.stringify({ error: "Meta credentials not configured" }), {
