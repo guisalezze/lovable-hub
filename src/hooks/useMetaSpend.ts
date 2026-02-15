@@ -3,7 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface DailySpend {
   date_start: string;
-  spend: string;
+  spend_brl: string;
+  spend_usd: string;
 }
 
 interface MetaSpendResponse {

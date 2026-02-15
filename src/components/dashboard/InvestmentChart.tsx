@@ -4,7 +4,8 @@ import { AlertTriangle } from "lucide-react";
 
 interface DailySpend {
   date_start: string;
-  spend: string;
+  spend_brl: string;
+  spend_usd: string;
 }
 
 interface InvestmentChartProps {
@@ -16,7 +17,7 @@ interface InvestmentChartProps {
 export function InvestmentChart({ daily, isLoading, error }: InvestmentChartProps) {
   const chartData = (daily || []).map((d) => ({
     date: d.date_start.slice(5), // MM-DD
-    spend: parseFloat(d.spend),
+    spend: parseFloat(d.spend_brl || d.spend_usd || "0"),
   }));
 
   return (
