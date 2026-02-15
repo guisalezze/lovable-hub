@@ -96,16 +96,27 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Fetch USD→BRL exchange rate
+    let usdToBrl = 5.0;
+    try {
+      const fxRes = await fetch("https://open.er-api.com/v6/latest/USD");
+      const fxData = await fxRes.json();
+      if (fxData.rates?.BRL) usdToBrl = fxData.rates.BRL;
+    } catch (e) {
+      console.error("Exchange rate fetch failed, using fallback:", e);
+    }
+
     const campaigns = (metaData.data || []).map((c: any) => ({
       campaign_id: c.campaign_id,
       campaign_name: c.campaign_name,
-      spend: c.spend || "0",
+      spend: (parseFloat(c.spend || "0") * usdToBrl).toFixed(2),
+      spend_usd: c.spend || "0",
       clicks: c.clicks || "0",
       impressions: c.impressions || "0",
     }));
 
     return new Response(
-      JSON.stringify({ campaigns }),
+      JSON.stringify({ campaigns, exchange_rate: usdToBrl, currency: "BRL" }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
