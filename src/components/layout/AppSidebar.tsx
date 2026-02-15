@@ -35,7 +35,7 @@ export function AppSidebar({ open }: AppSidebarProps) {
     <aside
       className={`${
         open ? "w-60" : "w-0 -ml-px"
-      } shrink-0 border-r border-sidebar-border bg-sidebar transition-all duration-300 overflow-hidden flex flex-col`}
+      } shrink-0 border-r border-sidebar-border bg-sidebar transition-all duration-300 overflow-hidden flex flex-col h-screen sticky top-0`}
     >
       {/* Logo */}
       <div className="h-14 flex items-center px-5 border-b border-sidebar-border shrink-0">
