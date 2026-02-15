@@ -3,11 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon } from "lucide-react";
-import { format, subDays } from "date-fns";
+import { format, subDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 
-type Preset = "last_7d" | "last_30d" | "last_90d" | "custom";
+type Preset = "today" | "yesterday" | "last_7d" | "custom";
 
 interface PeriodSelectorProps {
   since: string;
@@ -15,20 +15,38 @@ interface PeriodSelectorProps {
   onChange: (since: string, until: string) => void;
 }
 
-const presets: { key: Preset; label: string; days: number }[] = [
-  { key: "last_7d", label: "7 dias", days: 7 },
-  { key: "last_30d", label: "30 dias", days: 30 },
-  { key: "last_90d", label: "90 dias", days: 90 },
+const presets: { key: Preset; label: string }[] = [
+  { key: "today", label: "Hoje" },
+  { key: "yesterday", label: "Ontem" },
+  { key: "last_7d", label: "7 dias" },
 ];
 
 export function PeriodSelector({ since, until, onChange }: PeriodSelectorProps) {
   const [active, setActive] = useState<Preset>("last_7d");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
-  const handlePreset = (preset: (typeof presets)[number]) => {
-    setActive(preset.key);
-    const end = new Date();
-    const start = subDays(end, preset.days);
+  const handlePreset = (key: Preset) => {
+    setActive(key);
+    const today = startOfDay(new Date());
+    let start: Date;
+    let end: Date;
+
+    switch (key) {
+      case "today":
+        start = today;
+        end = today;
+        break;
+      case "yesterday":
+        start = subDays(today, 1);
+        end = subDays(today, 1);
+        break;
+      case "last_7d":
+      default:
+        start = subDays(today, 7);
+        end = today;
+        break;
+    }
+
     onChange(format(start, "yyyy-MM-dd"), format(end, "yyyy-MM-dd"));
   };
 
@@ -47,7 +65,7 @@ export function PeriodSelector({ since, until, onChange }: PeriodSelectorProps) 
           key={p.key}
           variant={active === p.key ? "default" : "outline"}
           size="sm"
-          onClick={() => handlePreset(p)}
+          onClick={() => handlePreset(p.key)}
           className="text-xs"
         >
           {p.label}
