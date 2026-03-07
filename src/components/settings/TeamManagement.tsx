@@ -258,6 +258,7 @@ export function TeamManagement() {
                 <TableRow key={m.user_id}>
                   <TableCell className="text-sm font-medium">{m.full_name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{m.email}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{m.phone_e164 || "—"}</TableCell>
                   <TableCell>
                     <Badge variant={m.role === "admin" ? "default" : "secondary"} className="text-xs">
                       <Shield className="h-3 w-3 mr-1" />
