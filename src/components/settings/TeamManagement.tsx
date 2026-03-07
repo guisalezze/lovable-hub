@@ -75,6 +75,7 @@ export function TeamManagement() {
           role: r.role as "admin" | "team",
           email: profile?.email || "—",
           full_name: profile?.full_name || "—",
+          phone_e164: profile?.phone_e164 || "",
         };
       });
 
