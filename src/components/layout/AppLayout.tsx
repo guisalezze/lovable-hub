@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
-import { Menu, Search, Bell } from "lucide-react";
+import { Menu, Search, Bell, Moon, Sun } from "lucide-react";
 import { CommandPalette } from "@/components/CommandPalette";
 import { useUnreadCount } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
