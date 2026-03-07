@@ -9,9 +9,10 @@ import { ptBR } from "date-fns/locale";
 interface Props {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
+  isOverdue?: (task: Task) => boolean;
 }
 
-export function TaskCalendarView({ tasks, onTaskClick }: Props) {
+export function TaskCalendarView({ tasks, onTaskClick, isOverdue }: Props) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const days = useMemo(() => {
@@ -63,16 +64,19 @@ export function TaskCalendarView({ tasks, onTaskClick }: Props) {
                 {format(day, "d")}
               </p>
               <div className="space-y-0.5 mt-0.5">
-                {dayTasks.slice(0, 3).map((t) => (
-                  <div
-                    key={t.id}
-                    onClick={() => onTaskClick(t)}
-                    className="text-[9px] px-1 py-0.5 rounded bg-secondary/50 text-foreground truncate cursor-pointer hover:bg-secondary flex items-center gap-1"
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[t.priority]}`} />
-                    {t.title}
-                  </div>
-                ))}
+                {dayTasks.slice(0, 3).map((t) => {
+                  const overdue = isOverdue?.(t) ?? false;
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => onTaskClick(t)}
+                      className={`text-[9px] px-1 py-0.5 rounded text-foreground truncate cursor-pointer hover:bg-secondary flex items-center gap-1 ${overdue ? "bg-destructive/15 border border-destructive/30" : "bg-secondary/50"}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[t.priority]}`} />
+                      {t.title}
+                    </div>
+                  );
+                })}
                 {dayTasks.length > 3 && (
                   <p className="text-[9px] text-muted-foreground px-1">+{dayTasks.length - 3} mais</p>
                 )}
