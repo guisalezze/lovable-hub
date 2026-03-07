@@ -1,119 +1,146 @@
 
-# Plano: Substituir Inbox por Modulo de Performance de Equipe
 
-## Resumo
+## Plano: Atualizar Design Theme + Inventario Completo do Projeto
 
-Remover o modulo Inbox e substituir por um dashboard de Performance de Equipe. O modulo tera duas visoes: "Minha Performance" (acessivel por todos) e "Minha Equipe" (acessivel apenas por admins). Todos os dados serao derivados da tabela `tasks` existente -- nenhuma nova tabela e necessaria.
+### 1. Alteracao de Design
 
----
+O tema fornecido usa sintaxe Tailwind v4 com valores `oklch()`. Como o projeto usa **Tailwind v3 com variáveis HSL**, preciso converter todos os valores oklch para HSL equivalentes.
 
-## 1. Logica de Dados (sem alteracao de banco)
+**Mudanca principal de identidade visual:** De laranja/teal para **verde-limao (lime green)** como cor primária, com tons azul-escuro no foreground.
 
-Todos os KPIs serao calculados a partir da tabela `tasks` ja existente, usando os campos `assigned_to`, `status`, `completed_at`, `created_at` e `due_date`:
+**Arquivos a editar:**
 
-- **Taxa de Conclusao (%)**: tarefas com status `concluido` / total de tarefas atribuidas ao usuario
-- **Produtividade Media**: media de tarefas concluidas por dia nos ultimos 30 dias
-- **Tarefas Ativas**: total de tarefas atribuidas com status diferente de `concluido`
-- **Tarefas em Andamento**: tarefas com status `em_andamento`
-- **Performance Individual**: score composto (conclusao no prazo, velocidade, volume) exibido como barra de progresso
-- **Grafico 7 dias**: contagem de tarefas concluidas por dia (`completed_at`) nos ultimos 7 dias
+1. **`src/index.css`** -- Substituir todas as variáveis CSS (`:root` e `.dark`) com os valores convertidos. Atualizar fonts para Inter. Atualizar radius para `1rem`. Atualizar shadows com os novos valores. Atualizar scrollbar para combinar com o novo tema.
 
----
+2. **`tailwind.config.ts`** -- Atualizar fontFamily para usar Inter como sans-serif principal.
 
-## 2. Arquivos a Criar
+3. **`src/components/layout/AppSidebar.tsx`** -- A sidebar agora usa fundo branco (light) / fundo escuro (dark) ao invés do dark fixo. Pode precisar de pequenos ajustes de classe.
 
-### `src/hooks/useTeamPerformance.ts`
-Hook que busca:
-- Tarefas do usuario logado (para "Minha Performance")
-- Tarefas de todos os membros (para admins, visao "Minha Equipe")
-- Lista de membros da equipe via `profiles` + `user_roles`
-- Verifica se o usuario e admin usando a query em `user_roles`
+Conversoes oklch -> HSL aproximadas (light mode):
+- primary: `100 76% 49%` (verde-limao vibrante)
+- background: `90 20% 97%`
+- foreground: `245 35% 15%`
+- card: `0 0% 100%`
+- secondary: `240 18% 27%`
+- muted: `230 12% 95%`
+- muted-foreground: `240 14% 45%`
+- accent: `155 30% 96%`
+- accent-foreground: `151 45% 32%`
+- destructive: `15 70% 50%`
+- border/input: `240 15% 90%`
+- sidebar: `0 0% 100%` (branco no light)
 
-Retorna KPIs calculados no frontend a partir dos dados brutos.
-
-### `src/pages/Equipe.tsx`
-Pagina principal com duas abas (Tabs):
-- **Minha Performance**: dashboard pessoal (todos veem)
-- **Minha Equipe**: grid de cards com cada membro (somente admins)
-
-A aba "Minha Equipe" so aparece para admins.
-
-### `src/components/equipe/PerformanceDashboard.tsx`
-Componente reutilizavel que renderiza o dashboard de um usuario (usado tanto na visao pessoal quanto ao clicar em um membro da equipe). Contem:
-- 4 KPI cards (Taxa de Conclusao com barra de progresso, Produtividade Media, Tarefas Ativas, Tarefas em Andamento)
-- Secao "Performance Individual" com metricas detalhadas e barras de progresso
-- Grafico de tendencia de 7 dias (recharts AreaChart)
-
-### `src/components/equipe/TeamMemberCard.tsx`
-Card para a visao "Minha Equipe" mostrando nome, avatar, taxa de conclusao resumida. Ao clicar, abre o `PerformanceDashboard` daquele membro.
+Dark mode:
+- background: `250 45% 8%`
+- foreground: `240 8% 97%`
+- card: `245 35% 15%`
+- primary: `105 80% 55%`
+- secondary/muted: `248 22% 20%`
+- accent: `152 38% 28%`
+- sidebar: `250 45% 8%`
 
 ---
 
-## 3. Arquivos a Modificar
+### 2. Inventario Completo do Projeto
 
-### `src/App.tsx`
-- Remover import de `Inbox`
-- Adicionar import de `Equipe`
-- Trocar rota `/inbox` por `/equipe`
+#### Stack Tecnologica
+- **Frontend:** React 18 + TypeScript + Vite
+- **Estilizacao:** Tailwind CSS v3 + tailwindcss-animate
+- **UI Components:** shadcn/ui (Radix primitives)
+- **Roteamento:** React Router DOM v6
+- **State/Data fetching:** TanStack React Query v5
+- **Charts:** Recharts
+- **Backend:** Supabase (hosted: lqrlvefeznfaauwgvubl.supabase.co)
 
-### `src/components/layout/AppSidebar.tsx`
-- Remover item "Inbox" com badge
-- Adicionar item "Equipe" com icone `Users2` (ou `BarChart3`)
-- Remover import de `useUnreadCount` (nao sera mais usado)
+#### Paginas (9 + Auth + 404)
+| Rota | Arquivo | Descricao |
+|------|---------|-----------|
+| `/auth` | Auth.tsx | Login/cadastro |
+| `/` | Index.tsx | Dashboard principal com KPIs, graficos, campanhas |
+| `/equipe` | Equipe.tsx | Performance da equipe |
+| `/leads` | Leads.tsx | Gestao de leads |
+| `/produtos` | Produtos.tsx | Catalogo de produtos |
+| `/financeiro` | Financeiro.tsx | Painel financeiro |
+| `/agenda` | Agenda.tsx | Calendario/agenda |
+| `/tarefas` | Tarefas.tsx | Kanban/lista/calendario de tarefas |
+| `/integracoes` | Integracoes.tsx | Config Google Calendar + Meta Ads |
+| `/configuracoes` | Configuracoes.tsx | Settings + gestao de equipe (admin) |
+| `/inbox` | Inbox.tsx | Central de notificacoes |
 
----
+#### Tabelas no Supabase (12)
+1. **app_settings** -- Configuracoes globais (key/value JSON)
+2. **calls** -- Chamadas/reunioes (status, Google Meet link, notas)
+3. **google_tokens** -- Tokens OAuth do Google Calendar por usuario
+4. **investments** -- Registros de investimentos/gastos
+5. **lead_products** -- Produtos associados a cada lead
+6. **leads** -- Base de leads (email, telefone, UTMs, status, localizacao)
+7. **notifications** -- Notificacoes in-app (tipo, mensagem, read_at)
+8. **pending_webhooks** -- Fila de webhooks pendentes (para WhatsApp futuro)
+9. **profiles** -- Perfis de usuario (nome, email, telefone, config WhatsApp)
+10. **sales** -- Vendas (valor, status, produto, metodo pagamento, boleto)
+11. **task_comments** -- Comentarios em tarefas com mencoes
+12. **tasks** -- Tarefas (titulo, status, prioridade, checklist, tags, due_date)
+13. **user_roles** -- Papeis de usuario (admin/team)
+14. **webhook_logs** -- Logs de webhooks recebidos
 
-## 4. Detalhes dos KPI Cards
+#### Enums do Banco
+- **app_role:** admin, team
+- **call_status:** scheduled, completed, canceled, no_show
+- **lead_status:** novo, quase_comprou, comprou, perdido
+- **sale_status:** approved, pending, refunded, chargeback, canceled, blocked, complete
+- **task_priority:** baixa, media, alta, urgente
+- **task_status:** backlog, em_andamento, bloqueado, concluido
 
-| Card | Calculo | Visual |
-|---|---|---|
-| Taxa de Conclusao | `(concluidas / total) * 100` | Porcentagem + barra de progresso (Progress component) |
-| Produtividade Media | `concluidas_30d / 30` formatado como "X.X tarefas/dia" | Numero com texto descritivo |
-| Tarefas Ativas | `count(status != concluido)` | Numero grande |
-| Em Andamento | `count(status == em_andamento)` | Numero grande |
+#### Functions (RPC)
+- **has_role(_user_id, _role)** -- Verifica role do usuario (SECURITY DEFINER)
 
-### Performance Individual (secao expandida)
-- **Conclusao no Prazo**: % de tarefas concluidas antes da `due_date` -- barra de progresso
-- **Velocidade Media**: dias entre `created_at` e `completed_at` -- barra de progresso (invertida, menos = melhor)
-- **Volume Semanal**: tarefas concluidas na ultima semana vs meta (ex: 10) -- barra de progresso
+#### Edge Functions (9)
+1. **google-auth-start** -- Inicia fluxo OAuth do Google Calendar
+2. **google-auth-callback** -- Callback OAuth Google, salva tokens
+3. **google-calendar-event** -- Cria eventos no Google Calendar com Meet link
+4. **manage-team** -- Criar/remover membros da equipe (admin only, usa Service Role)
+5. **meta-ads-config** -- Salvar/carregar config do Meta Ads (account_id, token)
+6. **meta-campaigns** -- Busca campanhas do Meta Ads com conversao USD->BRL
+7. **meta-spend** -- Busca gasto total do Meta Ads por periodo
+8. **perfectpay-webhook** -- Recebe webhooks da PerfectPay (vendas, leads, status)
+9. **run-reminders** -- Processa lembretes de tarefas, cria notificacoes + enfileira webhooks WhatsApp
 
----
+#### Integracoes Configuradas
+1. **Google Calendar** -- OAuth completo (start -> callback -> create events)
+2. **Meta Ads** -- Token + Account ID salvos em app_settings, busca campanhas e gastos
+3. **PerfectPay** -- Webhook endpoint para receber vendas/transacoes automaticamente
+4. **WhatsApp (parcial)** -- Arquitetura de fila (pending_webhooks) pronta, falta conectar API de envio
 
-## 5. Grafico de Tendencia (7 dias)
+#### Hooks Customizados
+- `useDashboardData` -- KPIs, receita diaria, vendas por produto
+- `useGoogleAuth` -- Status/connect/disconnect Google
+- `useMetaCampaigns` -- Lista campanhas Meta Ads
+- `useMetaSpend` -- Gasto total Meta Ads por periodo
+- `useNotifications` -- Notificacoes + contagem nao lidas
+- `useTasks` -- CRUD de tarefas
+- `useTeamPerformance` -- Metricas de performance da equipe
 
-Usando recharts `AreaChart` com:
-- Eixo X: dias da semana (Seg, Ter, Qua...)
-- Eixo Y: numero de tarefas concluidas
-- Dados: agrupamento de `completed_at` por dia nos ultimos 7 dias
-- Visual: area com gradiente usando as cores do tema
+#### Componentes Principais
+- **Layout:** AppLayout, AppSidebar, CommandPalette (Cmd+K)
+- **Dashboard:** KpiCard, RevenueChart, SalesChart, InvestmentChart, CampaignTable, OperationCards, PeriodSelector, RecentLeads
+- **Tarefas:** TaskKanban, TaskListView, TaskCalendarView, TaskModal
+- **Equipe:** TeamMemberCard, PerformanceDashboard
+- **Settings:** TeamManagement (admin)
 
----
+#### Atalhos de Teclado
+- `Cmd/Ctrl + K` -- Busca global (Command Palette)
+- `N` -- Navega para Tarefas
+- `L` -- Navega para Leads
+- `C` -- Navega para Calls
 
-## 6. Controle de Acesso
+#### Conexoes Externas (Workspace)
+- Nenhuma conexao configurada no workspace Lovable atualmente.
 
-- **Todos os usuarios**: veem apenas "Minha Performance" (seus proprios dados)
-- **Admins**: veem as duas abas. Na aba "Minha Equipe", podem clicar em qualquer membro para ver o dashboard completo dele
-- A verificacao de admin sera feita consultando `user_roles` onde `role = 'admin'`
+#### Variaveis de Ambiente
+- `VITE_SUPABASE_PROJECT_ID`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_SUPABASE_URL`
+- (Edge Functions usam `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` automaticamente)
+- (Meta Ads: `META_ACCESS_TOKEN` e `META_ACCOUNT_ID` salvos em app_settings no banco)
+- (Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` como secrets das Edge Functions)
 
----
-
-## 7. Fluxo de Navegacao
-
-```text
-/equipe
-  |-- Aba "Minha Performance" (padrao para todos)
-  |     |-- KPI Cards pessoais
-  |     |-- Performance Individual com barras
-  |     |-- Grafico 7 dias
-  |
-  |-- Aba "Minha Equipe" (somente admin)
-        |-- Grid de cards com cada membro
-        |-- Clicar no card -> abre dashboard do membro (mesmo layout)
-        |-- Botao "Voltar" para retornar a lista
-```
-
----
-
-## 8. Impacto no Inbox/Notificacoes
-
-O modulo de notificacoes (`useNotifications`, `useUnreadCount`) continuara existindo no banco e nos hooks, mas nao tera mais uma pagina dedicada. Se no futuro quiser reativar, basta adicionar a rota novamente. O badge de notificacoes sera removido do sidebar.
