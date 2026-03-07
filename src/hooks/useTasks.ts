@@ -82,6 +82,16 @@ export function useUpdateTask() {
     mutationFn: async ({ id, ...updates }: Partial<Task> & { id: string }) => {
       const { error } = await supabase.from("tasks").update(updates).eq("id", id);
       if (error) throw error;
+
+      // If assigned_to changed, trigger WhatsApp notification
+      if (updates.assigned_to) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && updates.assigned_to !== user.id) {
+          supabase.functions.invoke("task-notify-assignment", {
+            body: { task_id: id, assigned_to: updates.assigned_to },
+          }).catch(() => {});
+        }
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
   });
