@@ -9,8 +9,21 @@ import { Button } from "@/components/ui/button";
 export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [dark, setDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("theme");
+      if (stored) return stored === "dark";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+    return false;
+  });
   const navigate = useNavigate();
   const { data: unreadCount } = useUnreadCount();
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("theme", dark ? "dark" : "light");
+  }, [dark]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Cmd/Ctrl + K = global search
