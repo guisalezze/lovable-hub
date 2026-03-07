@@ -1,16 +1,7 @@
 import { useState } from "react";
-import {
-  DollarSign,
-  TrendingUp,
-  ShoppingCart,
-  Clock,
-  RotateCcw,
-  AlertTriangle,
-  Target,
-  Wallet,
-} from "lucide-react";
 import { format, subDays } from "date-fns";
-import { KpiCard } from "@/components/dashboard/KpiCard";
+import { HeroMetrics } from "@/components/dashboard/HeroMetrics";
+import { OperationalCards } from "@/components/dashboard/OperationalCards";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { SalesChart } from "@/components/dashboard/SalesChart";
 import { RecentLeads } from "@/components/dashboard/RecentLeads";
@@ -20,11 +11,7 @@ import { CampaignTable } from "@/components/dashboard/CampaignTable";
 import { OperationCards } from "@/components/dashboard/OperationCards";
 import { useMetaSpend } from "@/hooks/useMetaSpend";
 import { useMetaCampaigns } from "@/hooks/useMetaCampaigns";
-import { useDashboardKpis, useDailyRevenue, useSalesByProduct } from "@/hooks/useDashboardData";
-import { Skeleton } from "@/components/ui/skeleton";
-
-const fmtBRL = (v: number) =>
-  `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import { useDashboardKpis, useDailyRevenue, useSalesByProduct, usePreviousPeriodKpis } from "@/hooks/useDashboardData";
 
 const Dashboard = () => {
   const [since, setSince] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
@@ -35,32 +22,19 @@ const Dashboard = () => {
   const { data: kpis, isLoading: kpisLoading } = useDashboardKpis({ since, until });
   const { data: dailyRevenue, isLoading: revenueLoading } = useDailyRevenue({ since, until });
   const { data: salesByProduct, isLoading: productsLoading } = useSalesByProduct({ since, until });
+  const { data: prevKpis } = usePreviousPeriodKpis({ since, until });
 
   const handlePeriodChange = (newSince: string, newUntil: string) => {
     setSince(newSince);
     setUntil(newUntil);
   };
 
-  const investmentValue = spendData
-    ? fmtBRL(spendData.total_spend)
-    : undefined;
-
   const revenue = kpis?.revenue || 0;
   const investment = spendData?.total_spend || 0;
   const profit = revenue - investment;
   const roas = investment > 0 ? (revenue / investment).toFixed(1) : "–";
 
-  const KpiSkeleton = () => (
-    <div className="glass-card p-5 animate-fade-in">
-      <div className="flex items-center justify-between mb-3">
-        <Skeleton className="h-3 w-20" />
-        <Skeleton className="h-8 w-8 rounded-md" />
-      </div>
-      <Skeleton className="h-7 w-28" />
-    </div>
-  );
-
-  const isMainLoading = kpisLoading || spendLoading;
+  const isHeroLoading = kpisLoading || spendLoading;
 
   return (
     <div className="space-y-6 max-w-7xl">
@@ -72,91 +46,44 @@ const Dashboard = () => {
         <PeriodSelector since={since} until={until} onChange={handlePeriodChange} />
       </div>
 
-      {/* Operação do Dia */}
+      {/* Zona 1 — Hero Metrics */}
+      <HeroMetrics
+        revenue={revenue}
+        profit={profit}
+        roas={roas}
+        previousRevenue={prevKpis?.previousRevenue}
+        investment={investment}
+        isLoading={isHeroLoading}
+      />
+
+      {/* Zona 2 — Operacional */}
+      <OperationalCards
+        investment={investment}
+        investmentLabel={`${since} → ${until}`}
+        approvedCount={kpis?.approvedCount || 0}
+        pendingCount={kpis?.pendingCount || 0}
+        refundCount={kpis?.refundCount || 0}
+        chargebackCount={kpis?.chargebackCount || 0}
+        isLoading={kpisLoading}
+      />
+
+      {/* Zona 3 — Atividades do Dia */}
       <div>
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Operação do Dia</h2>
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Atividades do Dia</h2>
         <OperationCards />
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {isMainLoading ? (
-          <>
-            <KpiSkeleton />
-            <KpiSkeleton />
-            <KpiSkeleton />
-            <KpiSkeleton />
-          </>
-        ) : (
-          <>
-            <KpiCard
-              label="Receita Total"
-              value={fmtBRL(revenue)}
-              changeType="neutral"
-              icon={DollarSign}
-            />
-            <KpiCard
-              label="Lucro"
-              value={fmtBRL(profit)}
-              changeType={profit >= 0 ? "positive" : "negative"}
-              icon={TrendingUp}
-            />
-            <KpiCard
-              label="ROAS"
-              value={roas !== "–" ? `${roas}x` : "–"}
-              changeType="neutral"
-              icon={Target}
-            />
-            <KpiCard
-              label="Investimento (Meta Ads)"
-              value={investmentValue || "–"}
-              change={`${since} → ${until}`}
-              changeType="neutral"
-              icon={Wallet}
-            />
-          </>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpisLoading ? (
-          <>
-            <KpiSkeleton />
-            <KpiSkeleton />
-            <KpiSkeleton />
-            <KpiSkeleton />
-          </>
-        ) : (
-          <>
-            <KpiCard label="Vendas Aprovadas" value={String(kpis?.approvedCount || 0)} icon={ShoppingCart} />
-            <KpiCard label="Pendentes" value={String(kpis?.pendingCount || 0)} icon={Clock} />
-            <KpiCard label="Refunds" value={String(kpis?.refundCount || 0)} icon={RotateCcw} />
-            <KpiCard label="Chargebacks" value={String(kpis?.chargebackCount || 0)} icon={AlertTriangle} />
-          </>
-        )}
-      </div>
-
-      {/* Investment section */}
+      {/* Gráficos (inalterados) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <InvestmentChart
-          daily={spendData?.daily}
-          isLoading={spendLoading}
-          error={spendError}
-        />
-        <CampaignTable
-          campaigns={campaignData?.campaigns}
-          isLoading={campaignLoading}
-          error={campaignError}
-        />
+        <InvestmentChart daily={spendData?.daily} isLoading={spendLoading} error={spendError} />
+        <CampaignTable campaigns={campaignData?.campaigns} isLoading={campaignLoading} error={campaignError} />
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <RevenueChart data={dailyRevenue} isLoading={revenueLoading} />
         <SalesChart data={salesByProduct} isLoading={productsLoading} />
       </div>
 
-      {/* Bottom section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <RecentLeads />
         <div className="glass-card p-5 animate-fade-in">

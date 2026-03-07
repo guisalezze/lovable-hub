@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format, subDays, parseISO, formatDistanceToNow } from "date-fns";
+import { format, subDays, parseISO, formatDistanceToNow, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface DashboardFilters {
@@ -90,6 +90,31 @@ export function useSalesByProduct({ since, until }: DashboardFilters) {
       return Object.entries(byProduct)
         .map(([produto, vendas]) => ({ produto, vendas }))
         .sort((a, b) => b.vendas - a.vendas);
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function usePreviousPeriodKpis({ since, until }: DashboardFilters) {
+  return useQuery({
+    queryKey: ["previous-period-kpis", since, until],
+    queryFn: async () => {
+      const days = differenceInDays(parseISO(until), parseISO(since)) + 1;
+      const prevUntil = format(subDays(parseISO(since), 1), "yyyy-MM-dd");
+      const prevSince = format(subDays(parseISO(since), days), "yyyy-MM-dd");
+
+      const { data: sales, error } = await supabase
+        .from("sales")
+        .select("sale_amount, sale_status_enum, date_created")
+        .gte("date_created", `${prevSince}T00:00:00`)
+        .lte("date_created", `${prevUntil}T23:59:59`);
+
+      if (error) throw error;
+
+      const approved = sales?.filter((s) => s.sale_status_enum === "approved") || [];
+      const revenue = approved.reduce((sum, s) => sum + Number(s.sale_amount || 0), 0);
+
+      return { previousRevenue: revenue };
     },
     staleTime: 5 * 60 * 1000,
   });

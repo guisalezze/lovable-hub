@@ -3,9 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { CheckSquare, AlertTriangle, Phone, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
+import { useNavigate } from "react-router-dom";
 
 export function OperationCards() {
   const today = format(new Date(), "yyyy-MM-dd");
+  const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
     queryKey: ["operation-cards", today],
@@ -32,8 +34,8 @@ export function OperationCards() {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[140px]" />)}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[100px]" />)}
       </div>
     );
   }
@@ -46,22 +48,25 @@ export function OperationCards() {
       items: data?.myTasks.map((t: any) => t.title) || [],
       color: "text-primary",
       bg: "bg-primary/10",
+      onClick: () => navigate("/tarefas"),
     },
     {
       icon: AlertTriangle,
       label: "Atrasadas",
       count: data?.overdue.length || 0,
-      items: data?.overdue.map((t: any) => `${t.title} (${t.due_date})`) || [],
+      items: data?.overdue.map((t: any) => t.title) || [],
       color: "text-destructive",
       bg: "bg-destructive/10",
+      onClick: () => navigate("/tarefas?filter=overdue"),
     },
     {
       icon: Phone,
-      label: "Calls de Hoje",
+      label: "Calls Hoje",
       count: data?.todayCalls.length || 0,
       items: data?.todayCalls.map((c: any) => `${format(new Date(c.start_at), "HH:mm")} - ${c.lead_email || "Sem lead"}`) || [],
       color: "text-chart-2",
       bg: "bg-chart-2/10",
+      onClick: () => navigate("/agenda"),
     },
     {
       icon: Users,
@@ -70,32 +75,34 @@ export function OperationCards() {
       items: data?.pendingLeads.map((l: any) => l.full_name || l.email) || [],
       color: "text-warning",
       bg: "bg-warning/10",
+      onClick: () => navigate("/leads?status=novo"),
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {cards.map((card) => (
-        <div key={card.label} className="glass-card p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-muted-foreground">{card.label}</span>
-            <div className={`h-8 w-8 rounded-md ${card.bg} flex items-center justify-center`}>
-              <card.icon className={`h-4 w-4 ${card.color}`} />
+        <div
+          key={card.label}
+          className="glass-card p-3 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={card.onClick}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-semibold text-muted-foreground">{card.label}</span>
+            <div className={`h-6 w-6 rounded-md ${card.bg} flex items-center justify-center`}>
+              <card.icon className={`h-3 w-3 ${card.color}`} />
             </div>
           </div>
-          <p className={`text-2xl font-bold ${card.color}`}>{card.count}</p>
+          <p className={`text-lg font-bold ${card.color}`}>{card.count}</p>
           {card.items.length > 0 && (
-            <ul className="mt-2 space-y-0.5">
-              {card.items.slice(0, 3).map((item, i) => (
-                <li key={i} className="text-[11px] text-muted-foreground truncate">• {item}</li>
+            <ul className="mt-1 space-y-0">
+              {card.items.slice(0, 2).map((item, i) => (
+                <li key={i} className="text-[10px] text-muted-foreground truncate">• {item}</li>
               ))}
-              {card.items.length > 3 && (
-                <li className="text-[10px] text-muted-foreground/60">+{card.items.length - 3} mais</li>
+              {card.items.length > 2 && (
+                <li className="text-[9px] text-muted-foreground/60">+{card.items.length - 2} mais</li>
               )}
             </ul>
-          )}
-          {card.items.length === 0 && (
-            <p className="text-[11px] text-muted-foreground/50 mt-2">Nenhum item</p>
           )}
         </div>
       ))}
