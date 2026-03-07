@@ -565,6 +565,53 @@ export type Database = {
           },
         ]
       }
+      task_whatsapp_notifications: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          message_type: string
+          recipient_phone: string
+          recipient_user_id: string
+          sent_at: string | null
+          status: string
+          task_id: string
+          whatsapp_message_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          message_type: string
+          recipient_phone: string
+          recipient_user_id: string
+          sent_at?: string | null
+          status?: string
+          task_id: string
+          whatsapp_message_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          message_type?: string
+          recipient_phone?: string
+          recipient_user_id?: string
+          sent_at?: string | null
+          status?: string
+          task_id?: string
+          whatsapp_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_whatsapp_notifications_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           assigned_to: string | null

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TeamManagement } from "@/components/settings/TeamManagement";
+import { WhatsAppConfig } from "@/components/settings/WhatsAppConfig";
 
 export default function ConfiguracoesPage() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -37,7 +38,10 @@ export default function ConfiguracoesPage() {
           <p className="text-muted-foreground text-sm">Carregando...</p>
         </div>
       ) : isAdmin ? (
-        <TeamManagement />
+        <div className="space-y-6">
+          <TeamManagement />
+          <WhatsAppConfig />
+        </div>
       ) : (
         <div className="glass-card p-12 text-center">
           <Settings className="h-10 w-10 text-muted-foreground mx-auto mb-3" />

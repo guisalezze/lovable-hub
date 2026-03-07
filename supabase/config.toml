@@ -23,3 +23,12 @@ verify_jwt = false
 
 [functions.google-calendar-event]
 verify_jwt = false
+
+[functions.whatsapp-send-message]
+verify_jwt = false
+
+[functions.task-notify-assignment]
+verify_jwt = false
+
+[functions.task-reminders-cron]
+verify_jwt = false

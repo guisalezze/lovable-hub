@@ -50,7 +50,7 @@ export function useCreateTask() {
   return useMutation({
     mutationFn: async (task: Partial<Task> & { title: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from("tasks").insert({
+      const { data: inserted, error } = await supabase.from("tasks").insert({
         title: task.title,
         description: task.description || null,
         status: task.status || "backlog",
@@ -62,8 +62,15 @@ export function useCreateTask() {
         checklist: task.checklist || [],
         created_by: user?.id || null,
         owner_user_id: user?.id || null,
-      });
+      }).select("id").single();
       if (error) throw error;
+
+      // Trigger WhatsApp notification if assigned to someone else
+      if (task.assigned_to && user && task.assigned_to !== user.id && inserted) {
+        supabase.functions.invoke("task-notify-assignment", {
+          body: { task_id: inserted.id, assigned_to: task.assigned_to },
+        }).catch(() => {});
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
   });
@@ -75,6 +82,16 @@ export function useUpdateTask() {
     mutationFn: async ({ id, ...updates }: Partial<Task> & { id: string }) => {
       const { error } = await supabase.from("tasks").update(updates).eq("id", id);
       if (error) throw error;
+
+      // If assigned_to changed, trigger WhatsApp notification
+      if (updates.assigned_to) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && updates.assigned_to !== user.id) {
+          supabase.functions.invoke("task-notify-assignment", {
+            body: { task_id: id, assigned_to: updates.assigned_to },
+          }).catch(() => {});
+        }
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
   });

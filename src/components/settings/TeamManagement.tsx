@@ -38,6 +38,7 @@ interface TeamMember {
   role: "admin" | "team";
   email: string;
   full_name: string;
+  phone_e164: string;
 }
 
 export function TeamManagement() {
@@ -46,6 +47,7 @@ export function TeamManagement() {
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
   const [newRole, setNewRole] = useState<"admin" | "team">("team");
   const [adding, setAdding] = useState(false);
 
@@ -62,7 +64,7 @@ export function TeamManagement() {
       // Get all profiles
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, email, full_name");
+        .select("id, email, full_name, phone_e164");
 
       if (profilesError) throw profilesError;
 
@@ -73,6 +75,7 @@ export function TeamManagement() {
           role: r.role as "admin" | "team",
           email: profile?.email || "—",
           full_name: profile?.full_name || "—",
+          phone_e164: profile?.phone_e164 || "",
         };
       });
 
@@ -218,6 +221,15 @@ export function TeamManagement() {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Telefone (WhatsApp)</Label>
+            <Input
+              placeholder="5527999999999"
+              value={newPhone}
+              onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, ""))}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Código do país + DDD + número</p>
+          </div>
         </div>
         <Button onClick={handleAddMember} disabled={adding} className="w-full sm:w-auto">
           <UserPlus className="h-4 w-4 mr-2" />
@@ -237,6 +249,7 @@ export function TeamManagement() {
               <TableRow>
                 <TableHead className="text-xs">Nome</TableHead>
                 <TableHead className="text-xs">Email</TableHead>
+                <TableHead className="text-xs">Telefone</TableHead>
                 <TableHead className="text-xs">Função</TableHead>
                 <TableHead className="text-xs text-right">Ações</TableHead>
               </TableRow>
@@ -246,6 +259,7 @@ export function TeamManagement() {
                 <TableRow key={m.user_id}>
                   <TableCell className="text-sm font-medium">{m.full_name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{m.email}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{m.phone_e164 || "—"}</TableCell>
                   <TableCell>
                     <Badge variant={m.role === "admin" ? "default" : "secondary"} className="text-xs">
                       <Shield className="h-3 w-3 mr-1" />
