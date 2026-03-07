@@ -248,6 +248,7 @@ export function TeamManagement() {
               <TableRow>
                 <TableHead className="text-xs">Nome</TableHead>
                 <TableHead className="text-xs">Email</TableHead>
+                <TableHead className="text-xs">Telefone</TableHead>
                 <TableHead className="text-xs">Função</TableHead>
                 <TableHead className="text-xs text-right">Ações</TableHead>
               </TableRow>
