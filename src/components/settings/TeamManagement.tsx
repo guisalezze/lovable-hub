@@ -221,7 +221,15 @@ export function TeamManagement() {
               </SelectContent>
             </Select>
           </div>
-        </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Telefone (WhatsApp)</Label>
+            <Input
+              placeholder="5527999999999"
+              value={newPhone}
+              onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, ""))}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Código do país + DDD + número</p>
+          </div>
         <Button onClick={handleAddMember} disabled={adding} className="w-full sm:w-auto">
           <UserPlus className="h-4 w-4 mr-2" />
           {adding ? "Adicionando..." : "Adicionar"}
