@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
-import { Menu, Search, Bell } from "lucide-react";
+import { Menu, Search, Bell, Moon, Sun } from "lucide-react";
 import { CommandPalette } from "@/components/CommandPalette";
 import { useUnreadCount } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,21 @@ import { Button } from "@/components/ui/button";
 export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [dark, setDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("theme");
+      if (stored) return stored === "dark";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+    return false;
+  });
   const navigate = useNavigate();
   const { data: unreadCount } = useUnreadCount();
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("theme", dark ? "dark" : "light");
+  }, [dark]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Cmd/Ctrl + K = global search
@@ -59,6 +72,14 @@ export function AppLayout() {
           </button>
 
           <div className="ml-auto flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="p-2"
+              onClick={() => setDark((d) => !d)}
+            >
+              {dark ? <Sun className="h-4 w-4 text-muted-foreground" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
+            </Button>
             <Button
               variant="ghost"
               size="sm"
