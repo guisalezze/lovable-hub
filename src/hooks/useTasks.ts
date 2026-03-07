@@ -64,6 +64,13 @@ export function useCreateTask() {
         owner_user_id: user?.id || null,
       });
       if (error) throw error;
+
+      // Trigger WhatsApp notification if assigned to someone else
+      if (task.assigned_to && user && task.assigned_to !== user.id) {
+        supabase.functions.invoke("task-notify-assignment", {
+          body: { task_id: undefined, assigned_to: task.assigned_to },
+        }).catch(() => {}); // fire-and-forget
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
   });
