@@ -1,6 +1,8 @@
-import { useState, useMemo } from "react";
-import { Plus, LayoutList, Kanban, CalendarDays, User, Filter } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Plus, LayoutList, Kanban, CalendarDays, Filter, Search, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTasks, useTeamMembers, type Task, type TaskStatus, type TaskPriority } from "@/hooks/useTasks";
@@ -9,14 +11,16 @@ import { TaskKanban } from "@/components/tasks/TaskKanban";
 import { TaskListView } from "@/components/tasks/TaskListView";
 import { TaskCalendarView } from "@/components/tasks/TaskCalendarView";
 import { Skeleton } from "@/components/ui/skeleton";
+import { supabase } from "@/integrations/supabase/client";
+import { isAfter, startOfDay, parseISO } from "date-fns";
 
-type ViewMode = "list" | "kanban" | "calendar" | "my";
+type ViewMode = "list" | "kanban" | "calendar";
+type QuickFilter = "all" | "mine" | "overdue";
 
-const savedFilters = [
-  { label: "Todas", filter: {} },
-  { label: "Minhas Tarefas", filter: { assignedToMe: true } },
-  { label: "Atrasadas", filter: { overdue: true } },
-];
+export function isTaskOverdue(task: Task): boolean {
+  if (!task.due_date || task.status === "concluido") return false;
+  return isAfter(startOfDay(new Date()), startOfDay(parseISO(task.due_date)));
+}
 
 export default function TarefasPage() {
   const [view, setView] = useState<ViewMode>("kanban");
@@ -24,18 +28,37 @@ export default function TarefasPage() {
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
-  const [savedFilter, setSavedFilter] = useState(0);
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
+  const [search, setSearch] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  const queryFilter = savedFilters[savedFilter]?.filter || {};
-  const { data: tasks = [], isLoading } = useTasks(queryFilter as any);
+  const { data: tasks = [], isLoading } = useTasks();
   const { data: members } = useTeamMembers();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setCurrentUserId(user.id);
+    });
+  }, []);
 
   const filteredTasks = useMemo(() => {
     let result = tasks;
-    if (statusFilter !== "all") result = result.filter((t) => t.status === statusFilter);
-    if (priorityFilter !== "all") result = result.filter((t) => t.priority === priorityFilter);
+    if (quickFilter === "mine") result = result.filter(t => t.assigned_to === currentUserId);
+    if (quickFilter === "overdue") result = result.filter(isTaskOverdue);
+    if (statusFilter !== "all") result = result.filter(t => t.status === statusFilter);
+    if (priorityFilter !== "all") result = result.filter(t => t.priority === priorityFilter);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(t =>
+        t.title?.toLowerCase().includes(q) ||
+        t.description?.toLowerCase().includes(q)
+      );
+    }
     return result;
-  }, [tasks, statusFilter, priorityFilter]);
+  }, [tasks, quickFilter, statusFilter, priorityFilter, search, currentUserId]);
+
+  const mineCount = useMemo(() => tasks.filter(t => t.assigned_to === currentUserId).length, [tasks, currentUserId]);
+  const overdueCount = useMemo(() => tasks.filter(isTaskOverdue).length, [tasks]);
 
   const handleTaskClick = (task: Task) => {
     setEditTask(task);
@@ -61,7 +84,6 @@ export default function TarefasPage() {
               <TabsTrigger value="list" className="text-xs px-2"><LayoutList className="h-3.5 w-3.5 mr-1" />Lista</TabsTrigger>
               <TabsTrigger value="kanban" className="text-xs px-2"><Kanban className="h-3.5 w-3.5 mr-1" />Kanban</TabsTrigger>
               <TabsTrigger value="calendar" className="text-xs px-2"><CalendarDays className="h-3.5 w-3.5 mr-1" />Calendário</TabsTrigger>
-              <TabsTrigger value="my" className="text-xs px-2"><User className="h-3.5 w-3.5 mr-1" />Minhas</TabsTrigger>
             </TabsList>
           </Tabs>
           <Button size="sm" onClick={handleNew} className="gap-1.5">
@@ -72,19 +94,30 @@ export default function TarefasPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
+        {/* Quick Filters */}
         <div className="flex gap-1">
-          {savedFilters.map((f, i) => (
-            <Button
-              key={f.label}
-              size="sm"
-              variant={savedFilter === i ? "default" : "ghost"}
-              className="text-xs h-7"
-              onClick={() => setSavedFilter(i)}
-            >
-              {f.label}
-            </Button>
-          ))}
+          <Button size="sm" variant={quickFilter === "all" ? "default" : "ghost"} className="text-xs h-7" onClick={() => setQuickFilter("all")}>
+            Todas <Badge variant="secondary" className="ml-1 text-[10px] px-1">{tasks.length}</Badge>
+          </Button>
+          <Button size="sm" variant={quickFilter === "mine" ? "default" : "ghost"} className="text-xs h-7" onClick={() => setQuickFilter("mine")}>
+            Minhas <Badge variant="secondary" className="ml-1 text-[10px] px-1">{mineCount}</Badge>
+          </Button>
+          <Button size="sm" variant={quickFilter === "overdue" ? "default" : "ghost"} className="text-xs h-7" onClick={() => setQuickFilter("overdue")}>
+            Atrasadas <Badge variant="destructive" className="ml-1 text-[10px] px-1">{overdueCount}</Badge>
+          </Button>
         </div>
+
+        {/* Search */}
+        <div className="relative w-full sm:w-56">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Buscar tarefa..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8 h-7 text-xs"
+          />
+        </div>
+
         <div className="flex items-center gap-2 ml-auto">
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
           <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -110,6 +143,14 @@ export default function TarefasPage() {
         </div>
       </div>
 
+      {/* Overdue Alert Banner */}
+      {quickFilter === "overdue" && overdueCount > 0 && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-destructive/10 border border-destructive/20">
+          <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+          <p className="text-sm text-destructive font-medium">{overdueCount} tarefa(s) com prazo vencido.</p>
+        </div>
+      )}
+
       {/* Content */}
       {isLoading ? (
         <div className="space-y-2">
@@ -117,14 +158,14 @@ export default function TarefasPage() {
         </div>
       ) : (
         <>
-          {(view === "list" || view === "my") && (
-            <TaskListView tasks={filteredTasks} onTaskClick={handleTaskClick} members={members} />
+          {view === "list" && (
+            <TaskListView tasks={filteredTasks} onTaskClick={handleTaskClick} members={members} isOverdue={isTaskOverdue} />
           )}
           {view === "kanban" && (
-            <TaskKanban tasks={filteredTasks} onTaskClick={handleTaskClick} members={members} />
+            <TaskKanban tasks={filteredTasks} onTaskClick={handleTaskClick} members={members} isOverdue={isTaskOverdue} />
           )}
           {view === "calendar" && (
-            <TaskCalendarView tasks={filteredTasks} onTaskClick={handleTaskClick} />
+            <TaskCalendarView tasks={filteredTasks} onTaskClick={handleTaskClick} isOverdue={isTaskOverdue} />
           )}
         </>
       )}

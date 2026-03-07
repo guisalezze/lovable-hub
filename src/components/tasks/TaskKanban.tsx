@@ -1,6 +1,6 @@
 import { type Task, type TaskStatus, useUpdateTask } from "@/hooks/useTasks";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, User } from "lucide-react";
+import { Calendar, User, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const columns: { status: TaskStatus; label: string; color: string }[] = [
@@ -21,9 +21,10 @@ interface Props {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
   members?: { id: string; full_name: string; email: string }[];
+  isOverdue?: (task: Task) => boolean;
 }
 
-export function TaskKanban({ tasks, onTaskClick, members }: Props) {
+export function TaskKanban({ tasks, onTaskClick, members, isOverdue }: Props) {
   const updateTask = useUpdateTask();
 
   const moveTask = async (id: string, status: TaskStatus) => {
@@ -48,48 +49,54 @@ export function TaskKanban({ tasks, onTaskClick, members }: Props) {
           <div key={col.status} className="min-h-[200px]">
             <div className="flex items-center gap-2 mb-3">
               <span className={`text-xs font-semibold px-2 py-1 rounded-full ${col.color}`}>{col.label}</span>
-              <span className="text-xs text-muted-foreground">{colTasks.length}</span>
+              <Badge variant="secondary" className="text-[10px] px-1.5">{colTasks.length}</Badge>
             </div>
             <div className="space-y-2">
-              {colTasks.map((task) => (
-                <div
-                  key={task.id}
-                  onClick={() => onTaskClick(task)}
-                  className={`glass-card p-3 cursor-pointer border-l-2 ${priorityColor[task.priority]} hover:border-primary/30 transition-colors group`}
-                >
-                  <p className="text-sm font-medium text-foreground">{task.title}</p>
-                  {task.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{task.description}</p>}
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    {task.due_date && (
-                      <span className={`text-[10px] flex items-center gap-0.5 ${new Date(task.due_date) < new Date() && task.status !== "concluido" ? "text-destructive" : "text-muted-foreground"}`}>
-                        <Calendar className="h-3 w-3" />
-                        {task.due_date}
-                      </span>
-                    )}
-                    {task.assigned_to && (
-                      <span className="text-[10px] flex items-center gap-0.5 text-muted-foreground">
-                        <User className="h-3 w-3" />
-                        {getMemberName(task.assigned_to)?.split(" ")[0] || "..."}
-                      </span>
-                    )}
-                    {task.tags?.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-[9px] px-1 py-0">{tag}</Badge>
-                    ))}
+              {colTasks.map((task) => {
+                const overdue = isOverdue?.(task) ?? false;
+                return (
+                  <div
+                    key={task.id}
+                    onClick={() => onTaskClick(task)}
+                    className={`glass-card p-3 cursor-pointer border-l-2 ${priorityColor[task.priority]} hover:border-primary/30 transition-colors group ${overdue ? "border-destructive/50 bg-destructive/5" : ""}`}
+                  >
+                    <div className="flex items-start gap-1.5">
+                      {overdue && <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0 mt-0.5" />}
+                      <p className="text-sm font-medium text-foreground">{task.title}</p>
+                    </div>
+                    {task.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{task.description}</p>}
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {task.due_date && (
+                        <span className={`text-[10px] flex items-center gap-0.5 ${overdue ? "text-destructive" : "text-muted-foreground"}`}>
+                          <Calendar className="h-3 w-3" />
+                          {task.due_date}
+                        </span>
+                      )}
+                      {task.assigned_to && (
+                        <span className="text-[10px] flex items-center gap-0.5 text-muted-foreground">
+                          <User className="h-3 w-3" />
+                          {getMemberName(task.assigned_to)?.split(" ")[0] || "..."}
+                        </span>
+                      )}
+                      {task.tags?.map((tag) => (
+                        <Badge key={tag} variant="secondary" className="text-[9px] px-1 py-0">{tag}</Badge>
+                      ))}
+                    </div>
+                    {/* Quick move buttons */}
+                    <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {columns.filter((c) => c.status !== task.status).map((c) => (
+                        <button
+                          key={c.status}
+                          onClick={(e) => { e.stopPropagation(); moveTask(task.id, c.status); }}
+                          className={`text-[9px] px-1.5 py-0.5 rounded ${c.color}`}
+                        >
+                          {c.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  {/* Quick move buttons */}
-                  <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {columns.filter((c) => c.status !== task.status).map((c) => (
-                      <button
-                        key={c.status}
-                        onClick={(e) => { e.stopPropagation(); moveTask(task.id, c.status); }}
-                        className={`text-[9px] px-1.5 py-0.5 rounded ${c.color}`}
-                      >
-                        {c.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {colTasks.length === 0 && (
                 <div className="text-center py-8 text-xs text-muted-foreground">Sem tarefas</div>
               )}
