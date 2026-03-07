@@ -47,6 +47,7 @@ export function TeamManagement() {
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
   const [newRole, setNewRole] = useState<"admin" | "team">("team");
   const [adding, setAdding] = useState(false);
 
