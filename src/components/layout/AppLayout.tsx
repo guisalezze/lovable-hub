@@ -75,6 +75,14 @@ export function AppLayout() {
             <Button
               variant="ghost"
               size="sm"
+              className="p-2"
+              onClick={() => setDark((d) => !d)}
+            >
+              {dark ? <Sun className="h-4 w-4 text-muted-foreground" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               className="relative p-2"
               onClick={() => navigate("/inbox")}
             >
