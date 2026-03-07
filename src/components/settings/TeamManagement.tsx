@@ -38,6 +38,7 @@ interface TeamMember {
   role: "admin" | "team";
   email: string;
   full_name: string;
+  phone_e164: string;
 }
 
 export function TeamManagement() {
