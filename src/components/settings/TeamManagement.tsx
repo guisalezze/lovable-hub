@@ -64,7 +64,7 @@ export function TeamManagement() {
       // Get all profiles
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, email, full_name");
+        .select("id, email, full_name, phone_e164");
 
       if (profilesError) throw profilesError;
 
