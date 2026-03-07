@@ -230,6 +230,7 @@ export function TeamManagement() {
             />
             <p className="text-xs text-muted-foreground mt-1">Código do país + DDD + número</p>
           </div>
+        </div>
         <Button onClick={handleAddMember} disabled={adding} className="w-full sm:w-auto">
           <UserPlus className="h-4 w-4 mr-2" />
           {adding ? "Adicionando..." : "Adicionar"}
