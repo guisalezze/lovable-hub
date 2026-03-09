@@ -19,6 +19,7 @@ const navItems = [
   { label: "Leads", icon: Users, to: "/leads" },
   { label: "Produtos", icon: Package, to: "/produtos" },
   { label: "Financeiro", icon: DollarSign, to: "/financeiro" },
+  { label: "Cobranças", icon: Receipt, to: "/cobrancas" },
   { label: "Agenda", icon: CalendarDays, to: "/agenda" },
   { label: "Tarefas", icon: CheckSquare, to: "/tarefas" },
   { label: "Integrações", icon: Plug, to: "/integracoes" },
