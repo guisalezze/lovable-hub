@@ -251,6 +251,275 @@ export type Database = {
           },
         ]
       }
+      implementation_documents: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          implementation_id: string
+          title: string
+          type: string | null
+          url: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          implementation_id: string
+          title: string
+          type?: string | null
+          url?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          implementation_id?: string
+          title?: string
+          type?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "implementation_documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "implementation_documents_implementation_id_fkey"
+            columns: ["implementation_id"]
+            isOneToOne: false
+            referencedRelation: "implementations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      implementation_notes: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          implementation_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          implementation_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          implementation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "implementation_notes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "implementation_notes_implementation_id_fkey"
+            columns: ["implementation_id"]
+            isOneToOne: false
+            referencedRelation: "implementations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      implementation_steps: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          id: string
+          implementation_id: string
+          order_index: number
+          status: string
+          title: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          implementation_id: string
+          order_index?: number
+          status?: string
+          title: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          implementation_id?: string
+          order_index?: number
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "implementation_steps_implementation_id_fkey"
+            columns: ["implementation_id"]
+            isOneToOne: false
+            referencedRelation: "implementations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      implementation_template_steps: {
+        Row: {
+          description: string | null
+          id: string
+          order_index: number
+          template_id: string
+          title: string
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          order_index?: number
+          template_id: string
+          title: string
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          order_index?: number
+          template_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "implementation_template_steps_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "implementation_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      implementation_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "implementation_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      implementations: {
+        Row: {
+          assigned_to: string | null
+          charge_id: string | null
+          client_email: string | null
+          client_name: string
+          client_phone: string | null
+          contract_end: string
+          contract_start: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          lead_id: string | null
+          status: string
+          total_value: number
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          charge_id?: string | null
+          client_email?: string | null
+          client_name: string
+          client_phone?: string | null
+          contract_end: string
+          contract_start: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          lead_id?: string | null
+          status?: string
+          total_value?: number
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          charge_id?: string | null
+          client_email?: string | null
+          client_name?: string
+          client_phone?: string | null
+          contract_end?: string
+          contract_start?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          lead_id?: string | null
+          status?: string
+          total_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "implementations_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "implementations_charge_id_fkey"
+            columns: ["charge_id"]
+            isOneToOne: false
+            referencedRelation: "charges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "implementations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "implementations_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       investments: {
         Row: {
           amount: number
