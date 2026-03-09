@@ -63,6 +63,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/onboarding/:token" element={<Onboarding />} />
           <Route
             element={
               <AuthGuard>
