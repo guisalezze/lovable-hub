@@ -1,47 +1,119 @@
 
+# Plano: Substituir Inbox por Modulo de Performance de Equipe
 
-## Plan: Módulo de Implementações
+## Resumo
 
-Implement the full Implementations module from the uploaded prompt file. 6 tables + RLS, 1 hook file, 3 component/page files, route + nav updates.
+Remover o modulo Inbox e substituir por um dashboard de Performance de Equipe. O modulo tera duas visoes: "Minha Performance" (acessivel por todos) e "Minha Equipe" (acessivel apenas por admins). Todos os dados serao derivados da tabela `tasks` existente -- nenhuma nova tabela e necessaria.
 
-### Step 1: Database Migration
+---
 
-Create migration with all 6 tables (`implementation_templates`, `implementation_template_steps`, `implementations`, `implementation_steps`, `implementation_documents`, `implementation_notes`), indexes, RLS policies, trigger, and seed data — exactly as specified in the prompt.
+## 1. Logica de Dados (sem alteracao de banco)
 
-### Step 2: Update Supabase Types
+Todos os KPIs serao calculados a partir da tabela `tasks` ja existente, usando os campos `assigned_to`, `status`, `completed_at`, `created_at` e `due_date`:
 
-Add TypeScript types for all 6 new tables to `src/integrations/supabase/types.ts`.
+- **Taxa de Conclusao (%)**: tarefas com status `concluido` / total de tarefas atribuidas ao usuario
+- **Produtividade Media**: media de tarefas concluidas por dia nos ultimos 30 dias
+- **Tarefas Ativas**: total de tarefas atribuidas com status diferente de `concluido`
+- **Tarefas em Andamento**: tarefas com status `em_andamento`
+- **Performance Individual**: score composto (conclusao no prazo, velocidade, volume) exibido como barra de progresso
+- **Grafico 7 dias**: contagem de tarefas concluidas por dia (`completed_at`) nos ultimos 7 dias
 
-### Step 3: Create Hook — `src/hooks/useImplementations.ts`
+---
 
-All hooks as specified: `useImplementations`, `useImplementationDetail`, `useImplementationTemplates`, `useCreateImplementation`, `useUpdateStepStatus`, `useAddDocument`, `useAddNote`, `useUpdateImplementationStatus`.
+## 2. Arquivos a Criar
 
-### Step 4: Create Page — `src/pages/Implementacoes.tsx`
+### `src/hooks/useTeamPerformance.ts`
+Hook que busca:
+- Tarefas do usuario logado (para "Minha Performance")
+- Tarefas de todos os membros (para admins, visao "Minha Equipe")
+- Lista de membros da equipe via `profiles` + `user_roles`
+- Verifica se o usuario e admin usando a query em `user_roles`
 
-Main page with KPI cards, search/filter, grid of `ImplementationCard` components, creation modal, and detail sheet.
+Retorna KPIs calculados no frontend a partir dos dados brutos.
 
-### Step 5: Create Modal — `src/components/implementations/ImplementationModal.tsx`
+### `src/pages/Equipe.tsx`
+Pagina principal com duas abas (Tabs):
+- **Minha Performance**: dashboard pessoal (todos veem)
+- **Minha Equipe**: grid de cards com cada membro (somente admins)
 
-Creation dialog with react-hook-form + zod, template loading, dynamic step fields.
+A aba "Minha Equipe" so aparece para admins.
 
-### Step 6: Create Detail Sheet — `src/components/implementations/ImplementationDetailSheet.tsx`
+### `src/components/equipe/PerformanceDashboard.tsx`
+Componente reutilizavel que renderiza o dashboard de um usuario (usado tanto na visao pessoal quanto ao clicar em um membro da equipe). Contem:
+- 4 KPI cards (Taxa de Conclusao com barra de progresso, Produtividade Media, Tarefas Ativas, Tarefas em Andamento)
+- Secao "Performance Individual" com metricas detalhadas e barras de progresso
+- Grafico de tendencia de 7 dias (recharts AreaChart)
 
-Sheet with tabs (Etapas, Notas, Documentos), step status cycling, note/doc adding.
+### `src/components/equipe/TeamMemberCard.tsx`
+Card para a visao "Minha Equipe" mostrando nome, avatar, taxa de conclusao resumida. Ao clicar, abre o `PerformanceDashboard` daquele membro.
 
-### Step 7: Route & Navigation
+---
 
-- `src/App.tsx`: Add import + route `/implementacoes`
-- `src/components/layout/AppSidebar.tsx`: Add `Briefcase` icon nav item after Cobranças
+## 3. Arquivos a Modificar
 
-### Files to Create
-- `supabase/migrations/[timestamp]_implementations.sql`
-- `src/hooks/useImplementations.ts`
-- `src/pages/Implementacoes.tsx`
-- `src/components/implementations/ImplementationModal.tsx`
-- `src/components/implementations/ImplementationDetailSheet.tsx`
+### `src/App.tsx`
+- Remover import de `Inbox`
+- Adicionar import de `Equipe`
+- Trocar rota `/inbox` por `/equipe`
 
-### Files to Edit
-- `src/integrations/supabase/types.ts` — add 6 table types
-- `src/App.tsx` — add route
-- `src/components/layout/AppSidebar.tsx` — add nav item
+### `src/components/layout/AppSidebar.tsx`
+- Remover item "Inbox" com badge
+- Adicionar item "Equipe" com icone `Users2` (ou `BarChart3`)
+- Remover import de `useUnreadCount` (nao sera mais usado)
 
+---
+
+## 4. Detalhes dos KPI Cards
+
+| Card | Calculo | Visual |
+|---|---|---|
+| Taxa de Conclusao | `(concluidas / total) * 100` | Porcentagem + barra de progresso (Progress component) |
+| Produtividade Media | `concluidas_30d / 30` formatado como "X.X tarefas/dia" | Numero com texto descritivo |
+| Tarefas Ativas | `count(status != concluido)` | Numero grande |
+| Em Andamento | `count(status == em_andamento)` | Numero grande |
+
+### Performance Individual (secao expandida)
+- **Conclusao no Prazo**: % de tarefas concluidas antes da `due_date` -- barra de progresso
+- **Velocidade Media**: dias entre `created_at` e `completed_at` -- barra de progresso (invertida, menos = melhor)
+- **Volume Semanal**: tarefas concluidas na ultima semana vs meta (ex: 10) -- barra de progresso
+
+---
+
+## 5. Grafico de Tendencia (7 dias)
+
+Usando recharts `AreaChart` com:
+- Eixo X: dias da semana (Seg, Ter, Qua...)
+- Eixo Y: numero de tarefas concluidas
+- Dados: agrupamento de `completed_at` por dia nos ultimos 7 dias
+- Visual: area com gradiente usando as cores do tema
+
+---
+
+## 6. Controle de Acesso
+
+- **Todos os usuarios**: veem apenas "Minha Performance" (seus proprios dados)
+- **Admins**: veem as duas abas. Na aba "Minha Equipe", podem clicar em qualquer membro para ver o dashboard completo dele
+- A verificacao de admin sera feita consultando `user_roles` onde `role = 'admin'`
+
+---
+
+## 7. Fluxo de Navegacao
+
+```text
+/equipe
+  |-- Aba "Minha Performance" (padrao para todos)
+  |     |-- KPI Cards pessoais
+  |     |-- Performance Individual com barras
+  |     |-- Grafico 7 dias
+  |
+  |-- Aba "Minha Equipe" (somente admin)
+        |-- Grid de cards com cada membro
+        |-- Clicar no card -> abre dashboard do membro (mesmo layout)
+        |-- Botao "Voltar" para retornar a lista
+```
+
+---
+
+## 8. Impacto no Inbox/Notificacoes
+
+O modulo de notificacoes (`useNotifications`, `useUnreadCount`) continuara existindo no banco e nos hooks, mas nao tera mais uma pagina dedicada. Se no futuro quiser reativar, basta adicionar a rota novamente. O badge de notificacoes sera removido do sidebar.
