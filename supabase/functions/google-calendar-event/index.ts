@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
       await supabaseAdmin
         .from("google_tokens")
         .update({ access_token: accessToken, expires_at: newExpiry })
-        .eq("user_id", userId);
+        .eq("user_id", targetUserId);
     }
 
     // Build calendar event
