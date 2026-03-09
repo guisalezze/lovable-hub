@@ -92,12 +92,27 @@ Deno.serve(async (req) => {
     const metadata = payload.metadata || {};
 
     const email = (customer.email || "")?.toLowerCase()?.trim();
-    if (!email) {
-      return new Response(JSON.stringify({ error: "No email in payload" }), {
+    
+    // Validate required fields
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 255) {
+      return new Response(JSON.stringify({ error: "Invalid payload" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Validate sale_amount
+    const rawSaleAmount = parseFloat(payload.sale_amount || "0");
+    if (isNaN(rawSaleAmount) || rawSaleAmount < 0 || rawSaleAmount > 999999999) {
+      return new Response(JSON.stringify({ error: "Invalid payload" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate string field lengths
+    const maxLen = (val: string | undefined | null, max: number) =>
+      typeof val === "string" ? val.slice(0, max) : val;
 
     const saleCode = payload.code || `PP-${Date.now()}`;
     const saleAmount = parseFloat(payload.sale_amount || "0");
