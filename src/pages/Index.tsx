@@ -11,6 +11,7 @@ import { InvestmentChart } from "@/components/dashboard/InvestmentChart";
 import { CampaignTable } from "@/components/dashboard/CampaignTable";
 import { OperationCards } from "@/components/dashboard/OperationCards";
 import { ChargesHealthCard } from "@/components/dashboard/ChargesHealthCard";
+import { LtvSummaryCard } from "@/components/dashboard/LtvSummaryCard";
 import { useMetaSpend } from "@/hooks/useMetaSpend";
 import { useMetaCampaigns } from "@/hooks/useMetaCampaigns";
 import { useDashboardKpis, useDailyRevenue, useSalesByProduct, usePreviousPeriodKpis } from "@/hooks/useDashboardData";
