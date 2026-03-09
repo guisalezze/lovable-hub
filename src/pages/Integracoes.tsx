@@ -55,7 +55,7 @@ export default function IntegracoesPage() {
         if (!session) return;
 
         const res = await fetch(
-          "https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/meta-ads-config",
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-ads-config`,
           {
             headers: {
               Authorization: `Bearer ${session.access_token}`,
