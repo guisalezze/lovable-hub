@@ -65,6 +65,18 @@ export function useCreateTask() {
       }).select("id").single();
       if (error) throw error;
 
+      // Sync to assignee's Google Calendar if task has due_date and assigned_to
+      if (task.assigned_to && task.due_date && inserted) {
+        supabase.functions.invoke("google-calendar-event", {
+          body: {
+            title: task.title,
+            start: task.due_date,
+            type: "task",
+            target_user_id: task.assigned_to,
+          },
+        }).catch(() => {});
+      }
+
       // Trigger WhatsApp notification if assigned to someone else
       if (task.assigned_to && user && task.assigned_to !== user.id && inserted) {
         supabase.functions.invoke("task-notify-assignment", {
