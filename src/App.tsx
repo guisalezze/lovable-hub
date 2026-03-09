@@ -18,6 +18,9 @@ import Integracoes from "./pages/Integracoes";
 import Configuracoes from "./pages/Configuracoes";
 import Cobrancas from "./pages/Cobrancas";
 import Auth from "./pages/Auth";
+import Relatorios from "./pages/Relatorios";
+import OnboardingAdmin from "./pages/OnboardingAdmin";
+import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
