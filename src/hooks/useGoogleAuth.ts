@@ -2,26 +2,29 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
 export function useGoogleAuth() {
   const qc = useQueryClient();
 
   const { data: isConnected = false, isLoading } = useQuery({
     queryKey: ["google-auth-status"],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return false;
-      // Use raw fetch since google_tokens isn't in the generated types yet
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return false;
+
       const res = await fetch(
-        `https://lqrlvefeznfaauwgvubl.supabase.co/rest/v1/google_tokens?user_id=eq.${user.id}&select=user_id`,
+        `${SUPABASE_URL}/functions/v1/google-auth-status`,
         {
           headers: {
-            apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxxcmx2ZWZlem5mYWF1d2d2dWJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5NTA4NzEsImV4cCI6MjA4NjUyNjg3MX0.umhDSKFm4yQRox1EkA_eqnHR1_N6pXyX9FstT_qkrfE",
-            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
           },
         }
       );
+      if (!res.ok) return false;
       const data = await res.json();
-      return Array.isArray(data) && data.length > 0;
+      return data.connected === true;
     },
   });
 
@@ -34,7 +37,7 @@ export function useGoogleAuth() {
       }
 
       const res = await fetch(
-        "https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/google-auth-start",
+        `${SUPABASE_URL}/functions/v1/google-auth-start`,
         {
           headers: {
             Authorization: `Bearer ${session.access_token}`,
@@ -59,17 +62,8 @@ export function useGoogleAuth() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: { session } } = await supabase.auth.getSession();
-      await fetch(
-        `https://lqrlvefeznfaauwgvubl.supabase.co/rest/v1/google_tokens?user_id=eq.${user.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxxcmx2ZWZlem5mYWF1d2d2dWJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5NTA4NzEsImV4cCI6MjA4NjUyNjg3MX0.umhDSKFm4yQRox1EkA_eqnHR1_N6pXyX9FstT_qkrfE",
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-        }
-      );
+      // Use supabase client to delete own tokens (RLS allows DELETE for own user)
+      await (supabase as any).from("google_tokens").delete().eq("user_id", user.id);
 
       qc.invalidateQueries({ queryKey: ["google-auth-status"] });
       toast.success("Google desconectado");
@@ -88,7 +82,7 @@ export function useGoogleAuth() {
     if (!session) return null;
 
     const res = await fetch(
-      "https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/google-calendar-event",
+      `${SUPABASE_URL}/functions/v1/google-calendar-event`,
       {
         method: "POST",
         headers: {
