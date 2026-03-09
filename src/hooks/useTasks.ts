@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useGoogleAuth } from "@/hooks/useGoogleAuth";
 
 export type TaskStatus = "backlog" | "em_andamento" | "bloqueado" | "concluido";
 export type TaskPriority = "baixa" | "media" | "alta" | "urgente";
