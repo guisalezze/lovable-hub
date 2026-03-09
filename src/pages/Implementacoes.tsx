@@ -11,6 +11,7 @@ import { useImplementations } from "@/hooks/useImplementations";
 import { ImplementationModal } from "@/components/implementations/ImplementationModal";
 import { ImplementationDetailSheet } from "@/components/implementations/ImplementationDetailSheet";
 import type { Implementation } from "@/hooks/useImplementations";
+import { LtvBadge } from "@/components/shared/LtvBadge";
 import { differenceInDays, parseISO, startOfDay, format } from "date-fns";
 
 function fmt(v: number) {
