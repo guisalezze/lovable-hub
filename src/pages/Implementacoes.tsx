@@ -70,6 +70,7 @@ function ImplementationCard({ impl, onClick }: { impl: Implementation; onClick: 
             <h3 className="font-semibold text-foreground truncate">{impl.client_name}</h3>
             {healthBadge}
           </div>
+          {impl.client_email && <LtvBadge email={impl.client_email} size="sm" />}
           {impl.description && (
             <p className="text-xs text-muted-foreground line-clamp-1">{impl.description}</p>
           )}
