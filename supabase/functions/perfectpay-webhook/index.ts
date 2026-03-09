@@ -114,8 +114,8 @@ Deno.serve(async (req) => {
     const maxLen = (val: string | undefined | null, max: number) =>
       typeof val === "string" ? val.slice(0, max) : val;
 
-    const saleCode = payload.code || `PP-${Date.now()}`;
-    const saleAmount = parseFloat(payload.sale_amount || "0");
+    const saleCode = (payload.code || `PP-${Date.now()}`).slice(0, 100);
+    const saleAmount = rawSaleAmount;
 
     // Convert numeric enums to readable strings
     const rawStatus = typeof payload.sale_status_enum === "number"
