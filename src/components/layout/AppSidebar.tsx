@@ -4,6 +4,7 @@ import {
   Users,
   Package,
   DollarSign,
+  Receipt,
   CalendarDays,
   CheckSquare,
   Plug,
