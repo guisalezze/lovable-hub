@@ -77,6 +77,7 @@ export function useGoogleAuth() {
     start: string;
     end?: string;
     type: "call" | "task";
+    targetUserId?: string;
   }) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return null;
