@@ -503,6 +503,88 @@ export type Database = {
           },
         ]
       }
+      onboarding_responses: {
+        Row: {
+          assigned_to: string | null
+          availability: string | null
+          charge_id: string | null
+          completed_at: string | null
+          created_at: string
+          current_revenue: string | null
+          expectations: string | null
+          full_name: string | null
+          how_found: string | null
+          id: string
+          lead_id: string | null
+          main_goal: string | null
+          niche: string | null
+          phone: string | null
+          status: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          availability?: string | null
+          charge_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          current_revenue?: string | null
+          expectations?: string | null
+          full_name?: string | null
+          how_found?: string | null
+          id?: string
+          lead_id?: string | null
+          main_goal?: string | null
+          niche?: string | null
+          phone?: string | null
+          status?: string
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          availability?: string | null
+          charge_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          current_revenue?: string | null
+          expectations?: string | null
+          full_name?: string | null
+          how_found?: string | null
+          id?: string
+          lead_id?: string | null
+          main_goal?: string | null
+          niche?: string | null
+          phone?: string | null
+          status?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_responses_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_responses_charge_id_fkey"
+            columns: ["charge_id"]
+            isOneToOne: false
+            referencedRelation: "charges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_responses_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pending_webhooks: {
         Row: {
           created_at: string
@@ -543,6 +625,57 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_goals: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          goal_amount: number
+          id: string
+          period_end: string
+          period_start: string
+          product_id: string | null
+          product_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          goal_amount: number
+          id?: string
+          period_end: string
+          period_start: string
+          product_id?: string | null
+          product_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          goal_amount?: number
+          id?: string
+          period_end?: string
+          period_start?: string
+          product_id?: string | null
+          product_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_goals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_goals_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]

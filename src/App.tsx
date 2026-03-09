@@ -18,6 +18,9 @@ import Integracoes from "./pages/Integracoes";
 import Configuracoes from "./pages/Configuracoes";
 import Cobrancas from "./pages/Cobrancas";
 import Auth from "./pages/Auth";
+import Relatorios from "./pages/Relatorios";
+import OnboardingAdmin from "./pages/OnboardingAdmin";
+import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -60,6 +63,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/onboarding/:token" element={<Onboarding />} />
           <Route
             element={
               <AuthGuard>
@@ -77,6 +81,8 @@ const App = () => (
             <Route path="/equipe" element={<Equipe />} />
             <Route path="/integracoes" element={<Integracoes />} />
             <Route path="/configuracoes" element={<Configuracoes />} />
+            <Route path="/relatorios" element={<Relatorios />} />
+            <Route path="/onboarding-admin" element={<OnboardingAdmin />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

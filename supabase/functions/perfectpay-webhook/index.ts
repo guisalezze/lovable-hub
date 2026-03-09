@@ -260,6 +260,79 @@ Deno.serve(async (req) => {
         .eq("product_code", product.code);
     }
 
+    // ── Auto-create onboarding task + record on approved sale ──────────────
+    if (saleStatus === "approved" && email) {
+      const { data: lead } = await supabase
+        .from("leads")
+        .select("id, assigned_to, full_name")
+        .eq("email", email)
+        .single();
+
+      if (lead) {
+        const productName = product.name || "Produto";
+        const buyerName = customer.full_name || lead.full_name || "Cliente";
+
+        // Create onboarding task
+        await supabase.from("tasks").insert({
+          title: `Onboarding: ${buyerName} — ${productName}`,
+          description: `Nova venda aprovada. Enviar link de onboarding e realizar primeira reunião.`,
+          assigned_to: lead.assigned_to,
+          status: "backlog",
+          priority: "alta",
+          due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        }).catch(() => {});
+
+        // Auto-create onboarding_responses record
+        await supabase.from("onboarding_responses").insert({
+          lead_id: lead.id,
+          assigned_to: lead.assigned_to,
+        }).catch(() => {});
+      }
+    }
+
+    // ── Auto-create charges for installment sales ────────────────────────
+    if (saleStatus === "approved" && email && saleAmount > 0) {
+      const rawInstallments = parseInt(String(metadata.installments || plan.installments || 1), 10);
+      if (rawInstallments > 1) {
+        const { data: lead } = await supabase
+          .from("leads")
+          .select("id, full_name, assigned_to")
+          .eq("email", email)
+          .single();
+
+        if (lead) {
+          const installmentValue = saleAmount / rawInstallments;
+          const { data: charge } = await supabase.from("charges").insert({
+            product_name: product.name || "Produto",
+            client_name: lead.full_name || email,
+            total_ticket: saleAmount,
+            entry_paid: installmentValue,
+            installments_count: rawInstallments - 1,
+            installment_value: installmentValue,
+            assigned_to: lead.assigned_to,
+            notes: `Criado automaticamente via PerfectPay. Código: ${saleCode}`,
+          }).select("id").single().catch(() => ({ data: null }));
+
+          if (charge?.id) {
+            const installments = Array.from({ length: rawInstallments - 1 }, (_, i) => {
+              const dueDate = new Date();
+              dueDate.setMonth(dueDate.getMonth() + i + 1);
+              return {
+                charge_id: charge.id,
+                installment_number: i + 2,
+                due_date: dueDate.toISOString().slice(0, 10),
+                amount: installmentValue,
+                status: "pending",
+              };
+            });
+            if (installments.length > 0) {
+              await supabase.from("charge_installments").insert(installments).catch(() => {});
+            }
+          }
+        }
+      }
+    }
+
     // Mark webhook as processed
     await supabase
       .from("webhook_logs")

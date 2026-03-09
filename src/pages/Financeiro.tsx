@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { format, subDays, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { ProductGoalsSection } from "@/components/financeiro/ProductGoalsSection";
 
 function usePeriodSales(since: string, until: string) {
   return useQuery({
@@ -219,6 +220,9 @@ export default function FinanceiroPage() {
           </ResponsiveContainer>
         </div>
       )}
+
+      {/* Product Goals */}
+      <ProductGoalsSection since={since} until={until} />
 
       {/* Investment History */}
       {allInvestments.length > 0 && (

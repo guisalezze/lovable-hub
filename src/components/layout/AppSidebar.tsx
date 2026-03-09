@@ -11,6 +11,8 @@ import {
   Settings,
   Zap,
   Users2,
+  FileBarChart,
+  ClipboardList,
 } from "lucide-react";
 
 const navItems = [
@@ -22,6 +24,8 @@ const navItems = [
   { label: "Cobranças", icon: Receipt, to: "/cobrancas" },
   { label: "Agenda", icon: CalendarDays, to: "/agenda" },
   { label: "Tarefas", icon: CheckSquare, to: "/tarefas" },
+  { label: "Relatórios", icon: FileBarChart, to: "/relatorios" },
+  { label: "Onboarding", icon: ClipboardList, to: "/onboarding-admin" },
   { label: "Integrações", icon: Plug, to: "/integracoes" },
   { label: "Configurações", icon: Settings, to: "/configuracoes" },
 ];
