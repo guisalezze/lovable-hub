@@ -4,10 +4,21 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state"); // user_id
+    const stateRaw = url.searchParams.get("state");
 
-    if (!code || !state) {
+    if (!code || !stateRaw) {
       return new Response("Missing code or state", { status: 400 });
+    }
+
+    // Decode state: try JSON first (new format), fallback to plain user_id
+    let userId: string;
+    let clientOrigin = "";
+    try {
+      const parsed = JSON.parse(atob(stateRaw));
+      userId = parsed.uid;
+      clientOrigin = parsed.origin || "";
+    } catch {
+      userId = stateRaw; // legacy plain user_id
     }
 
     const clientId = Deno.env.get("GOOGLE_CLIENT_ID")!;
