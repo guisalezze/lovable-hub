@@ -86,7 +86,7 @@ export default function IntegracoesPage() {
     loadConfig();
   }, []);
 
-  const webhookUrl = "https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/perfectpay-webhook";
+  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/perfectpay-webhook`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
