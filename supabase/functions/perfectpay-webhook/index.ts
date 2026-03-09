@@ -66,6 +66,18 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
+    // Verify webhook secret
+    const webhookSecret = Deno.env.get("PERFECTPAY_WEBHOOK_SECRET");
+    if (webhookSecret) {
+      const providedToken = req.headers.get("X-Webhook-Token") || req.headers.get("Authorization")?.replace("Bearer ", "");
+      if (providedToken !== webhookSecret) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const payload = await req.json();
 
     // Log raw webhook
