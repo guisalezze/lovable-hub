@@ -1,40 +1,44 @@
 
 
-## Plano: Modulo de Cobrancas Parceladas
+## Analysis
 
-### 1. Migracao de Banco de Dados
+After reviewing all files, the existing pages (Tarefas, Leads, Financeiro, Equipe) already implement the requested features from previous refactoring rounds — search, quick filters, React Query, DeltaBadge, ComposedChart, ranking tabs, etc. Those pages are already up to date.
 
-Criar tabelas `charges` e `charge_installments` com indices, triggers de `updated_at`, e RLS policies conforme especificado. Policies permitem leitura autenticada, insert autenticado, update por admin ou assigned_to, delete apenas admin.
+The only new work is **Part 5: Cobrancas module** (installment billing). Here is the plan:
 
-### 2. Nova Pagina `src/pages/Cobrancas.tsx`
+---
 
-Arquivo completo com:
-- Tipos: `Charge`, `ChargeInstallment`, `Profile`
-- Hooks: `useCharges` (query com join em installments + profiles), `useProfiles`
-- Helpers: `installmentStatusInfo`, `chargeOverallStatus`
-- **ChargeModal**: formulario com react-hook-form + zod, campos de produto/cliente/telefone/responsavel/ticket/entrada/parcelas/vencimento, geracao automatica de parcelas com addMonths, lista editavel. Submit insere em `charges`, `charge_installments`, cria tasks automaticamente, chama edge function `charge-notify` (silenciando erros)
-- **ChargeCard**: card com header (cliente + badge status + produto + responsavel), valor total, progress bar de parcelas pagas, grid pago/restante/proximo vencimento, lista expansivel de parcelas com botao marcar como pago
-- **CobrancasPage**: header com count + total a receber, 4 KPI cards (A Receber, Ativas, Atrasadas, Vencem Hoje), filtros (busca + quick filters), grid de ChargeCards com skeleton/empty state
+## Plan: Modulo de Cobrancas Parceladas
 
-### 3. Rota e Menu
+### 1. Database Migration
 
-- `src/App.tsx`: adicionar import e `<Route path="/cobrancas">` dentro das rotas protegidas
-- `src/components/layout/AppSidebar.tsx`: adicionar `{ label: "Cobrancas", icon: Receipt, to: "/cobrancas" }` apos Financeiro
+Create tables `charges` and `charge_installments` with:
+- Indexes on assigned_to, status, charge_id, due_date
+- Triggers using existing `update_updated_at_column()` function
+- RLS: select/insert open to authenticated, update restricted to admin or assigned_to, delete admin-only
 
-### 4. Edge Function `supabase/functions/charge-notify/index.ts`
+### 2. New Page `src/pages/Cobrancas.tsx`
 
-Funcao que recebe payload da cobranca, busca nome do responsavel, monta mensagem formatada, tenta enviar via WhatsApp se configurado (graceful fallback se nao). CORS headers incluidos.
+Single file containing:
+- **Types**: `Charge`, `ChargeInstallment` interfaces
+- **Hooks**: `useCharges` (query with join on installments + profiles via assigned_to), `useProfiles`, `markPaid` mutation
+- **Helpers**: `installmentStatusInfo` (paid/overdue/due_today/pending with colors/icons), `chargeOverallStatus`
+- **ChargeModal**: react-hook-form + zod form with product/client/phone/assigned_to/ticket/entry/installments/due_date fields. Auto-calculates installment_value. "Generate installments" button creates N monthly entries via addMonths. On submit: inserts charge, installments, creates tasks (one per installment), calls charge-notify edge function (silenced errors)
+- **ChargeCard**: glass-card with colored border by status, progress bar of paid installments, expandable installment list with mark-as-paid button
+- **CobrancasPage**: Header with KPI cards (A Receber, Ativas, Atrasadas, Vencem Hoje), search + quick filters, grid of ChargeCards
 
-### 5. Config.toml
+### 3. Route and Sidebar
 
-Adicionar:
-```toml
-[functions.charge-notify]
-verify_jwt = false
-```
+- `src/App.tsx`: Add import + `<Route path="/cobrancas">` after /financeiro
+- `src/components/layout/AppSidebar.tsx`: Add `{ label: "Cobranças", icon: Receipt, to: "/cobrancas" }` after Financeiro
 
-### Arquivos
-- **Criar**: `src/pages/Cobrancas.tsx`, `supabase/functions/charge-notify/index.ts`
-- **Editar**: `src/App.tsx` (1 import + 1 route), `src/components/layout/AppSidebar.tsx` (1 import + 1 nav item), `supabase/config.toml` (1 entry)
-- **Migracao**: 1 SQL migration (tables + indexes + triggers + RLS)
+### 4. Edge Function
+
+Create `supabase/functions/charge-notify/index.ts`: Receives charge payload, looks up assignee name from profiles, formats WhatsApp message, sends via configured API (graceful fallback if not configured). Add to `supabase/config.toml`.
+
+### Files
+
+- **Create**: `src/pages/Cobrancas.tsx`, `supabase/functions/charge-notify/index.ts`
+- **Edit**: `src/App.tsx` (1 import + 1 route), `src/components/layout/AppSidebar.tsx` (1 import + 1 nav item), `supabase/config.toml` (1 entry)
+- **Migration**: 1 SQL migration (tables + indexes + triggers + RLS)
 
