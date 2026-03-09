@@ -106,6 +106,119 @@ export type Database = {
         }
         Relationships: []
       }
+      charge_installments: {
+        Row: {
+          amount: number
+          charge_id: string
+          created_at: string
+          due_date: string
+          id: string
+          installment_number: number
+          notes: string | null
+          paid_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          charge_id: string
+          created_at?: string
+          due_date: string
+          id?: string
+          installment_number: number
+          notes?: string | null
+          paid_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          charge_id?: string
+          created_at?: string
+          due_date?: string
+          id?: string
+          installment_number?: number
+          notes?: string | null
+          paid_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_installments_charge_id_fkey"
+            columns: ["charge_id"]
+            isOneToOne: false
+            referencedRelation: "charges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charges: {
+        Row: {
+          assigned_to: string | null
+          client_name: string
+          client_phone: string | null
+          created_at: string
+          created_by: string | null
+          entry_paid: number
+          id: string
+          installment_value: number
+          installments_count: number
+          notes: string | null
+          product_name: string
+          status: string
+          total_ticket: number
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          client_name: string
+          client_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          entry_paid?: number
+          id?: string
+          installment_value: number
+          installments_count?: number
+          notes?: string | null
+          product_name: string
+          status?: string
+          total_ticket: number
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          client_name?: string
+          client_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          entry_paid?: number
+          id?: string
+          installment_value?: number
+          installments_count?: number
+          notes?: string | null
+          product_name?: string
+          status?: string
+          total_ticket?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charges_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charges_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       google_tokens: {
         Row: {
           access_token: string

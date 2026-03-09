@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.task-reminders-cron]
 verify_jwt = false
+
+[functions.charge-notify]
+verify_jwt = false

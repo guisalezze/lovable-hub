@@ -16,6 +16,7 @@ import Tarefas from "./pages/Tarefas";
 import Equipe from "./pages/Equipe";
 import Integracoes from "./pages/Integracoes";
 import Configuracoes from "./pages/Configuracoes";
+import Cobrancas from "./pages/Cobrancas";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -70,6 +71,7 @@ const App = () => (
             <Route path="/leads" element={<Leads />} />
             <Route path="/produtos" element={<Produtos />} />
             <Route path="/financeiro" element={<Financeiro />} />
+            <Route path="/cobrancas" element={<Cobrancas />} />
             <Route path="/agenda" element={<Agenda />} />
             <Route path="/tarefas" element={<Tarefas />} />
             <Route path="/equipe" element={<Equipe />} />
