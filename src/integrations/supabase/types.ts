@@ -278,6 +278,45 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_notes: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          lead_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_notes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_notes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_products: {
         Row: {
           id: string
@@ -324,10 +363,13 @@ export type Database = {
       }
       leads: {
         Row: {
+          assigned_to: string | null
           city: string | null
           country: string | null
           created_at: string
           email: string
+          follow_up_at: string | null
+          follow_up_note: string | null
           full_name: string | null
           id: string
           last_billet_url: string | null
@@ -340,6 +382,7 @@ export type Database = {
           owner_user_id: string | null
           phone_e164: string | null
           phone_formatted: string | null
+          source: string | null
           src: string | null
           state: string | null
           status: Database["public"]["Enums"]["lead_status"]
@@ -351,10 +394,13 @@ export type Database = {
           utm_term: string | null
         }
         Insert: {
+          assigned_to?: string | null
           city?: string | null
           country?: string | null
           created_at?: string
           email: string
+          follow_up_at?: string | null
+          follow_up_note?: string | null
           full_name?: string | null
           id?: string
           last_billet_url?: string | null
@@ -367,6 +413,7 @@ export type Database = {
           owner_user_id?: string | null
           phone_e164?: string | null
           phone_formatted?: string | null
+          source?: string | null
           src?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
@@ -378,10 +425,13 @@ export type Database = {
           utm_term?: string | null
         }
         Update: {
+          assigned_to?: string | null
           city?: string | null
           country?: string | null
           created_at?: string
           email?: string
+          follow_up_at?: string | null
+          follow_up_note?: string | null
           full_name?: string | null
           id?: string
           last_billet_url?: string | null
@@ -394,6 +444,7 @@ export type Database = {
           owner_user_id?: string | null
           phone_e164?: string | null
           phone_formatted?: string | null
+          source?: string | null
           src?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
@@ -404,7 +455,15 @@ export type Database = {
           utm_source?: string | null
           utm_term?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "leads_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notifications: {
         Row: {
