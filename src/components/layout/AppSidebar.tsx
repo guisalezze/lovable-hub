@@ -11,6 +11,8 @@ import {
   Settings,
   Zap,
   Users2,
+  FileBarChart,
+  ClipboardList,
 } from "lucide-react";
 
 const navItems = [
