@@ -13,6 +13,7 @@ import {
   Users2,
   FileBarChart,
   ClipboardList,
+  Briefcase,
 } from "lucide-react";
 
 const navItems = [
