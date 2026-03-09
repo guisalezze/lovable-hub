@@ -16,6 +16,7 @@ import Tarefas from "./pages/Tarefas";
 import Equipe from "./pages/Equipe";
 import Integracoes from "./pages/Integracoes";
 import Configuracoes from "./pages/Configuracoes";
+import Cobrancas from "./pages/Cobrancas";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
