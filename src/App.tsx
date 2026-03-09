@@ -22,6 +22,7 @@ import Relatorios from "./pages/Relatorios";
 import OnboardingAdmin from "./pages/OnboardingAdmin";
 import Onboarding from "./pages/Onboarding";
 import Implementacoes from "./pages/Implementacoes";
+import Clientes from "./pages/Clientes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
