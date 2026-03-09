@@ -14,6 +14,7 @@ import {
   FileBarChart,
   ClipboardList,
   Briefcase,
+  UserCheck,
 } from "lucide-react";
 
 const navItems = [
