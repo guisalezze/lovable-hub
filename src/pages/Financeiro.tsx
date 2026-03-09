@@ -221,6 +221,9 @@ export default function FinanceiroPage() {
         </div>
       )}
 
+      {/* Product Goals */}
+      <ProductGoalsSection since={since} until={until} />
+
       {/* Investment History */}
       {allInvestments.length > 0 && (
         <div className="glass-card p-4">

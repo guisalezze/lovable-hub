@@ -55,7 +55,7 @@ export default function OnboardingPage() {
     if (error) { toast.error("Erro ao enviar. Tente novamente."); setSubmitting(false); return; }
 
     if (record?.lead_id && fullName) {
-      await supabase.from("leads").update({ full_name: fullName, phone_formatted: phone }).eq("id", record.lead_id).catch(() => {});
+      try { await supabase.from("leads").update({ full_name: fullName, phone_formatted: phone }).eq("id", record.lead_id); } catch {}
     }
 
     setDone(true);
