@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Users can read own tokens" ON public.google_tokens;

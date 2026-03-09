@@ -55,7 +55,7 @@ export default function IntegracoesPage() {
         if (!session) return;
 
         const res = await fetch(
-          "https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/meta-ads-config",
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-ads-config`,
           {
             headers: {
               Authorization: `Bearer ${session.access_token}`,
@@ -86,7 +86,7 @@ export default function IntegracoesPage() {
     loadConfig();
   }, []);
 
-  const webhookUrl = "https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/perfectpay-webhook";
+  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/perfectpay-webhook`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -105,7 +105,7 @@ export default function IntegracoesPage() {
       if (!session) throw new Error("Not authenticated");
 
       const res = await fetch(
-        "https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/meta-ads-config",
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-ads-config`,
         {
           method: "POST",
           headers: {

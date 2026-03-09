@@ -66,6 +66,18 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
+    // Verify webhook secret
+    const webhookSecret = Deno.env.get("PERFECTPAY_WEBHOOK_SECRET");
+    if (webhookSecret) {
+      const providedToken = req.headers.get("X-Webhook-Token") || req.headers.get("Authorization")?.replace("Bearer ", "");
+      if (providedToken !== webhookSecret) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const payload = await req.json();
 
     // Log raw webhook
@@ -80,15 +92,30 @@ Deno.serve(async (req) => {
     const metadata = payload.metadata || {};
 
     const email = (customer.email || "")?.toLowerCase()?.trim();
-    if (!email) {
-      return new Response(JSON.stringify({ error: "No email in payload" }), {
+    
+    // Validate required fields
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 255) {
+      return new Response(JSON.stringify({ error: "Invalid payload" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const saleCode = payload.code || `PP-${Date.now()}`;
-    const saleAmount = parseFloat(payload.sale_amount || "0");
+    // Validate sale_amount
+    const rawSaleAmount = parseFloat(payload.sale_amount || "0");
+    if (isNaN(rawSaleAmount) || rawSaleAmount < 0 || rawSaleAmount > 999999999) {
+      return new Response(JSON.stringify({ error: "Invalid payload" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate string field lengths
+    const maxLen = (val: string | undefined | null, max: number) =>
+      typeof val === "string" ? val.slice(0, max) : val;
+
+    const saleCode = (payload.code || `PP-${Date.now()}`).slice(0, 100);
+    const saleAmount = rawSaleAmount;
 
     // Convert numeric enums to readable strings
     const rawStatus = typeof payload.sale_status_enum === "number"
@@ -245,7 +272,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error("Webhook error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "An error occurred processing your request" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

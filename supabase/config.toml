@@ -18,6 +18,9 @@ verify_jwt = false
 [functions.google-auth-callback]
 verify_jwt = false
 
+[functions.google-auth-status]
+verify_jwt = false
+
 [functions.meta-ads-config]
 verify_jwt = false
 

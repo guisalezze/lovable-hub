@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     if (!calRes.ok) {
       console.error("Calendar API error:", calData);
       return new Response(
-        JSON.stringify({ error: "Failed to create calendar event", details: calData }),
+        JSON.stringify({ error: "Failed to create calendar event" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error("Error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: "An error occurred processing your request" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
