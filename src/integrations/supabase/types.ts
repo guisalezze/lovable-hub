@@ -156,6 +156,7 @@ export type Database = {
       charges: {
         Row: {
           assigned_to: string | null
+          client_email: string | null
           client_name: string
           client_phone: string | null
           created_at: string
@@ -172,6 +173,7 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          client_email?: string | null
           client_name: string
           client_phone?: string | null
           created_at?: string
@@ -188,6 +190,7 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          client_email?: string | null
           client_name?: string
           client_phone?: string | null
           created_at?: string
@@ -515,6 +518,13 @@ export type Database = {
             foreignKeyName: "implementations_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
+            referencedRelation: "client_ltv"
+            referencedColumns: ["lead_id"]
+          },
+          {
+            foreignKeyName: "implementations_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["id"]
           },
@@ -576,6 +586,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_notes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "client_ltv"
+            referencedColumns: ["lead_id"]
           },
           {
             foreignKeyName: "lead_notes_lead_id_fkey"
@@ -844,6 +861,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "charges"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_responses_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "client_ltv"
+            referencedColumns: ["lead_id"]
           },
           {
             foreignKeyName: "onboarding_responses_lead_id_fkey"
@@ -1295,7 +1319,25 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      client_ltv: {
+        Row: {
+          charges_revenue: number | null
+          email: string | null
+          first_purchase_at: string | null
+          impl_revenue: number | null
+          last_purchase_at: string | null
+          lead_id: string | null
+          ltv: number | null
+          name: string | null
+          phone: string | null
+          sales_revenue: number | null
+          segment: string | null
+          total_charges: number | null
+          total_implementations: number | null
+          total_purchases: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
@@ -1304,6 +1346,31 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      search_clients: {
+        Args: { search_term: string }
+        Returns: {
+          charges_revenue: number | null
+          email: string | null
+          first_purchase_at: string | null
+          impl_revenue: number | null
+          last_purchase_at: string | null
+          lead_id: string | null
+          ltv: number | null
+          name: string | null
+          phone: string | null
+          sales_revenue: number | null
+          segment: string | null
+          total_charges: number | null
+          total_implementations: number | null
+          total_purchases: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_ltv"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
     }
     Enums: {

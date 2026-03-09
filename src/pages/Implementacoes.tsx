@@ -11,6 +11,7 @@ import { useImplementations } from "@/hooks/useImplementations";
 import { ImplementationModal } from "@/components/implementations/ImplementationModal";
 import { ImplementationDetailSheet } from "@/components/implementations/ImplementationDetailSheet";
 import type { Implementation } from "@/hooks/useImplementations";
+import { LtvBadge } from "@/components/shared/LtvBadge";
 import { differenceInDays, parseISO, startOfDay, format } from "date-fns";
 
 function fmt(v: number) {
@@ -69,6 +70,7 @@ function ImplementationCard({ impl, onClick }: { impl: Implementation; onClick: 
             <h3 className="font-semibold text-foreground truncate">{impl.client_name}</h3>
             {healthBadge}
           </div>
+          {impl.client_email && <LtvBadge email={impl.client_email} size="sm" />}
           {impl.description && (
             <p className="text-xs text-muted-foreground line-clamp-1">{impl.description}</p>
           )}

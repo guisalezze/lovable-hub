@@ -14,6 +14,7 @@ import {
   FileBarChart,
   ClipboardList,
   Briefcase,
+  UserCheck,
 } from "lucide-react";
 
 const navItems = [
@@ -24,6 +25,7 @@ const navItems = [
   { label: "Financeiro", icon: DollarSign, to: "/financeiro" },
   { label: "Cobranças", icon: Receipt, to: "/cobrancas" },
   { label: "Implementações", icon: Briefcase, to: "/implementacoes" },
+  { label: "Clientes", icon: UserCheck, to: "/clientes" },
   { label: "Agenda", icon: CalendarDays, to: "/agenda" },
   { label: "Tarefas", icon: CheckSquare, to: "/tarefas" },
   { label: "Relatórios", icon: FileBarChart, to: "/relatorios" },

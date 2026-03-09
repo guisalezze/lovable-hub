@@ -22,6 +22,7 @@ import Relatorios from "./pages/Relatorios";
 import OnboardingAdmin from "./pages/OnboardingAdmin";
 import Onboarding from "./pages/Onboarding";
 import Implementacoes from "./pages/Implementacoes";
+import Clientes from "./pages/Clientes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -85,6 +86,7 @@ const App = () => (
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/onboarding-admin" element={<OnboardingAdmin />} />
             <Route path="/implementacoes" element={<Implementacoes />} />
+            <Route path="/clientes" element={<Clientes />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

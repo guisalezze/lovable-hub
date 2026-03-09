@@ -17,6 +17,7 @@ import type { ImplementationStep } from "@/hooks/useImplementations";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { LtvBadge } from "@/components/shared/LtvBadge";
 
 const DOC_TYPE_ICONS: Record<string, any> = {
   link: Link2, doc: FileText, video: Video, sheet: Table2, other: File,
@@ -88,6 +89,7 @@ export function ImplementationDetailSheet({
               <div className="flex items-start justify-between">
                 <div>
                   <SheetTitle>{impl.client_name}</SheetTitle>
+                  {impl.client_email && <LtvBadge email={impl.client_email} size="md" />}
                   {impl.description && <p className="text-sm text-muted-foreground mt-1">{impl.description}</p>}
                 </div>
                 <p className="text-lg font-bold text-foreground shrink-0">{fmtCurrency(impl.total_value)}</p>
