@@ -1,119 +1,86 @@
 
-# Plano: Substituir Inbox por Modulo de Performance de Equipe
 
-## Resumo
+## Plan: Relatórios, Onboarding, Metas por Produto e PerfectPay Expansion
 
-Remover o modulo Inbox e substituir por um dashboard de Performance de Equipe. O modulo tera duas visoes: "Minha Performance" (acessivel por todos) e "Minha Equipe" (acessivel apenas por admins). Todos os dados serao derivados da tabela `tasks` existente -- nenhuma nova tabela e necessaria.
+This is a large feature set spanning 6 areas. I'll fix several issues from the user's prompt (wrong column names in queries, incomplete JSX, CHECK constraint) and adapt to the actual database schema.
 
----
-
-## 1. Logica de Dados (sem alteracao de banco)
-
-Todos os KPIs serao calculados a partir da tabela `tasks` ja existente, usando os campos `assigned_to`, `status`, `completed_at`, `created_at` e `due_date`:
-
-- **Taxa de Conclusao (%)**: tarefas com status `concluido` / total de tarefas atribuidas ao usuario
-- **Produtividade Media**: media de tarefas concluidas por dia nos ultimos 30 dias
-- **Tarefas Ativas**: total de tarefas atribuidas com status diferente de `concluido`
-- **Tarefas em Andamento**: tarefas com status `em_andamento`
-- **Performance Individual**: score composto (conclusao no prazo, velocidade, volume) exibido como barra de progresso
-- **Grafico 7 dias**: contagem de tarefas concluidas por dia (`completed_at`) nos ultimos 7 dias
+### Key Schema Observations
+- `sales` table uses `sale_amount` (not `amount`), `sale_status_enum` (not `status`), `product_name` exists
+- `calls` table has `start_at` (not `scheduled_at`), no `assigned_to` column, uses `call_status` enum with values: `scheduled`, `completed`, `canceled`, `no_show`
+- `charges` table requires `total_ticket` and `installment_value` as non-nullable
+- `onboarding_responses` needs a validation trigger instead of CHECK constraint (per Supabase guidelines)
 
 ---
 
-## 2. Arquivos a Criar
+### Step 1: Database Migration
 
-### `src/hooks/useTeamPerformance.ts`
-Hook que busca:
-- Tarefas do usuario logado (para "Minha Performance")
-- Tarefas de todos os membros (para admins, visao "Minha Equipe")
-- Lista de membros da equipe via `profiles` + `user_roles`
-- Verifica se o usuario e admin usando a query em `user_roles`
+Create two tables: `product_goals` and `onboarding_responses`. Use a validation trigger instead of CHECK constraint for the `status` field.
 
-Retorna KPIs calculados no frontend a partir dos dados brutos.
+**Tables:**
+- `product_goals`: id, product_name, product_id (FK products), goal_amount, period_start, period_end, created_by (FK profiles), timestamps. RLS: authenticated select/insert, admin update/delete.
+- `onboarding_responses`: id, token (unique UUID), lead_id, charge_id, assigned_to, form fields (full_name, phone, niche, current_revenue, main_goal, expectations, availability, how_found), status, completed_at, timestamps. RLS: authenticated select, anon+authenticated insert/update. Index on token.
 
-### `src/pages/Equipe.tsx`
-Pagina principal com duas abas (Tabs):
-- **Minha Performance**: dashboard pessoal (todos veem)
-- **Minha Equipe**: grid de cards com cada membro (somente admins)
+### Step 2: Install Dependencies
 
-A aba "Minha Equipe" so aparece para admins.
+Install `jspdf` and `html2canvas` for PDF export.
 
-### `src/components/equipe/PerformanceDashboard.tsx`
-Componente reutilizavel que renderiza o dashboard de um usuario (usado tanto na visao pessoal quanto ao clicar em um membro da equipe). Contem:
-- 4 KPI cards (Taxa de Conclusao com barra de progresso, Produtividade Media, Tarefas Ativas, Tarefas em Andamento)
-- Secao "Performance Individual" com metricas detalhadas e barras de progresso
-- Grafico de tendencia de 7 dias (recharts AreaChart)
+### Step 3: Create Relatórios Page (`src/pages/Relatorios.tsx`)
 
-### `src/components/equipe/TeamMemberCard.tsx`
-Card para a visao "Minha Equipe" mostrando nome, avatar, taxa de conclusao resumida. Ao clicar, abre o `PerformanceDashboard` daquele membro.
+- `useReportData` hook querying sales, leads, tasks, calls, investments, profiles for the selected period
+- Fix column references: `sale_amount` not `amount`, `sale_status_enum` not `status`, `start_at` not `scheduled_at`
+- 8 KPI cards (Receita, Investimento, Lucro, ROAS, Vendas aprovadas, Novos leads, Conversão, Reembolsos)
+- Daily revenue AreaChart, revenue by product BarChart, team performance BarChart
+- PDF export via html2canvas + jsPDF
+- PeriodSelector for date range
 
----
+### Step 4: Product Goals (`src/hooks/useProductGoals.ts` + `src/components/financeiro/ProductGoalsSection.tsx`)
 
-## 3. Arquivos a Modificar
+- Hook: `useProductGoals(since, until)` fetches goals overlapping the period and joins with actual sales revenue per product
+- Hook: `useProductsList`, `useUpsertProductGoal`, `useDeleteProductGoal`
+- Component: progress bars per product goal, dialog to add new goals, option to pick from existing products or type free-form name
+- Integrate into `Financeiro.tsx` after the chart section
 
-### `src/App.tsx`
-- Remover import de `Inbox`
-- Adicionar import de `Equipe`
-- Trocar rota `/inbox` por `/equipe`
+### Step 5: Onboarding Public Page (`src/pages/Onboarding.tsx`)
 
-### `src/components/layout/AppSidebar.tsx`
-- Remover item "Inbox" com badge
-- Adicionar item "Equipe" com icone `Users2` (ou `BarChart3`)
-- Remover import de `useUnreadCount` (nao sera mais usado)
+- Public page at `/onboarding/:token` — no auth required
+- Loads record by token, shows form if pending, success screen if completed, error if not found
+- Fields: full_name*, phone*, niche*, current_revenue, main_goal*, expectations, availability, how_found
+- On submit: updates onboarding_responses, optionally updates linked lead
 
----
+### Step 6: Onboarding Admin Page (`src/pages/OnboardingAdmin.tsx`)
 
-## 4. Detalhes dos KPI Cards
+- Authenticated page at `/onboarding-admin`
+- Lists all onboarding responses with status badges
+- Dialog to create new onboarding link (optionally linked to lead/assignee)
+- Copy link button
 
-| Card | Calculo | Visual |
-|---|---|---|
-| Taxa de Conclusao | `(concluidas / total) * 100` | Porcentagem + barra de progresso (Progress component) |
-| Produtividade Media | `concluidas_30d / 30` formatado como "X.X tarefas/dia" | Numero com texto descritivo |
-| Tarefas Ativas | `count(status != concluido)` | Numero grande |
-| Em Andamento | `count(status == em_andamento)` | Numero grande |
+### Step 7: Expand PerfectPay Webhook (`supabase/functions/perfectpay-webhook/index.ts`)
 
-### Performance Individual (secao expandida)
-- **Conclusao no Prazo**: % de tarefas concluidas antes da `due_date` -- barra de progresso
-- **Velocidade Media**: dias entre `created_at` e `completed_at` -- barra de progresso (invertida, menos = melhor)
-- **Volume Semanal**: tarefas concluidas na ultima semana vs meta (ex: 10) -- barra de progresso
+After existing approved sale processing, add:
+1. Create onboarding task assigned to lead's `assigned_to`
+2. Auto-create `onboarding_responses` record linked to the lead
+3. If installment sale detected, auto-create `charges` + `charge_installments` records
 
----
+Note: The webhook already handles lead status updates to "comprou" — avoid duplicate logic.
 
-## 5. Grafico de Tendencia (7 dias)
+### Step 8: Routing & Navigation
 
-Usando recharts `AreaChart` com:
-- Eixo X: dias da semana (Seg, Ter, Qua...)
-- Eixo Y: numero de tarefas concluidas
-- Dados: agrupamento de `completed_at` por dia nos ultimos 7 dias
-- Visual: area com gradiente usando as cores do tema
+- Add routes in `App.tsx`: `/relatorios` (authenticated), `/onboarding-admin` (authenticated), `/onboarding/:token` (public, outside AuthGuard)
+- Add "Relatórios" and "Onboarding" nav items in `AppSidebar.tsx`
 
----
+### Files to Create
+- `src/pages/Relatorios.tsx`
+- `src/hooks/useProductGoals.ts`
+- `src/components/financeiro/ProductGoalsSection.tsx`
+- `src/pages/Onboarding.tsx`
+- `src/pages/OnboardingAdmin.tsx`
 
-## 6. Controle de Acesso
+### Files to Edit
+- `src/App.tsx` — add 3 routes
+- `src/components/layout/AppSidebar.tsx` — add 2 nav items
+- `src/pages/Financeiro.tsx` — import and render ProductGoalsSection
+- `supabase/functions/perfectpay-webhook/index.ts` — add post-approval automation
 
-- **Todos os usuarios**: veem apenas "Minha Performance" (seus proprios dados)
-- **Admins**: veem as duas abas. Na aba "Minha Equipe", podem clicar em qualquer membro para ver o dashboard completo dele
-- A verificacao de admin sera feita consultando `user_roles` onde `role = 'admin'`
+### Dependencies to Install
+- `jspdf`, `html2canvas`
 
----
-
-## 7. Fluxo de Navegacao
-
-```text
-/equipe
-  |-- Aba "Minha Performance" (padrao para todos)
-  |     |-- KPI Cards pessoais
-  |     |-- Performance Individual com barras
-  |     |-- Grafico 7 dias
-  |
-  |-- Aba "Minha Equipe" (somente admin)
-        |-- Grid de cards com cada membro
-        |-- Clicar no card -> abre dashboard do membro (mesmo layout)
-        |-- Botao "Voltar" para retornar a lista
-```
-
----
-
-## 8. Impacto no Inbox/Notificacoes
-
-O modulo de notificacoes (`useNotifications`, `useUnreadCount`) continuara existindo no banco e nos hooks, mas nao tera mais uma pagina dedicada. Se no futuro quiser reativar, basta adicionar a rota novamente. O badge de notificacoes sera removido do sidebar.
