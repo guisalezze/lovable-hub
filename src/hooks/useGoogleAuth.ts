@@ -77,6 +77,7 @@ export function useGoogleAuth() {
     start: string;
     end?: string;
     type: "call" | "task";
+    targetUserId?: string;
   }) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return null;
@@ -89,7 +90,13 @@ export function useGoogleAuth() {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(params),
+        body: JSON.stringify({
+          title: params.title,
+          start: params.start,
+          end: params.end,
+          type: params.type,
+          target_user_id: params.targetUserId,
+        }),
       }
     );
 
