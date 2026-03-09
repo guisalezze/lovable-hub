@@ -52,9 +52,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    const userId = claimsData.claims.sub;
+    const callerId = claimsData.claims.sub;
     const body = await req.json();
-    const { title, start, end, type } = body; // type: "call" | "task"
+    const { title, start, end, type, target_user_id } = body; // type: "call" | "task"
+
+    // Determine whose calendar to use: target_user_id (for task assignee) or caller
+    const targetUserId = target_user_id || callerId;
 
     // Get tokens using service role
     const supabaseAdmin = createClient(
@@ -65,7 +68,7 @@ Deno.serve(async (req) => {
     const { data: tokenRow, error: tokenError } = await supabaseAdmin
       .from("google_tokens")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", targetUserId)
       .single();
 
     if (tokenError || !tokenRow) {
