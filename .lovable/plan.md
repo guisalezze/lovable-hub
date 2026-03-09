@@ -1,119 +1,59 @@
 
-# Plano: Substituir Inbox por Modulo de Performance de Equipe
 
-## Resumo
+## Plan: OpsCRM Strategic Improvements
 
-Remover o modulo Inbox e substituir por um dashboard de Performance de Equipe. O modulo tera duas visoes: "Minha Performance" (acessivel por todos) e "Minha Equipe" (acessivel apenas por admins). Todos os dados serao derivados da tabela `tasks` existente -- nenhuma nova tabela e necessaria.
+### 1. Database Migration
 
----
+Add to `leads` table:
+- `source text` (nullable)
+- `follow_up_at timestamptz` (nullable)
+- `follow_up_note text` (nullable)
+- `assigned_to uuid` referencing profiles
 
-## 1. Logica de Dados (sem alteracao de banco)
+Create `lead_notes` table with `id`, `lead_id` (FK to leads), `content`, `created_by` (FK to profiles), `created_at`. RLS: select/insert open to authenticated, delete for admin or creator.
 
-Todos os KPIs serao calculados a partir da tabela `tasks` ja existente, usando os campos `assigned_to`, `status`, `completed_at`, `created_at` e `due_date`:
+Indexes on `leads.source`, `leads.follow_up_at`, `leads.assigned_to`, `lead_notes.lead_id`.
 
-- **Taxa de Conclusao (%)**: tarefas com status `concluido` / total de tarefas atribuidas ao usuario
-- **Produtividade Media**: media de tarefas concluidas por dia nos ultimos 30 dias
-- **Tarefas Ativas**: total de tarefas atribuidas com status diferente de `concluido`
-- **Tarefas em Andamento**: tarefas com status `em_andamento`
-- **Performance Individual**: score composto (conclusao no prazo, velocidade, volume) exibido como barra de progresso
-- **Grafico 7 dias**: contagem de tarefas concluidas por dia (`completed_at`) nos ultimos 7 dias
+### 2. Lead Detail Modal — Tabs + Source + Notes + Follow-up
 
----
+Rewrite `src/components/leads/LeadDetailModal.tsx` with:
+- **Tabs**: Detalhes | Notas | Timeline (using shadcn Tabs)
+- **Detalhes tab**: Current content + source selector (inline Select) + follow-up section (schedule/view/clear)
+- **Notas tab**: List of notes from `lead_notes` with add form. Hook `useLeadNotes(leadId)` queries with profile join. Add mutation with invalidation.
+- **Timeline tab**: Unified timeline from `sales` (via `lead_email`) + `lead_notes`. Sales use `sale_amount`/`sale_status_enum`/`product_name`. Sorted by date desc.
 
-## 2. Arquivos a Criar
+Update Lead interface to include `source`, `follow_up_at`, `follow_up_note`.
 
-### `src/hooks/useTeamPerformance.ts`
-Hook que busca:
-- Tarefas do usuario logado (para "Minha Performance")
-- Tarefas de todos os membros (para admins, visao "Minha Equipe")
-- Lista de membros da equipe via `profiles` + `user_roles`
-- Verifica se o usuario e admin usando a query em `user_roles`
+### 3. Leads Page — Source Filter + Follow-up Filter
 
-Retorna KPIs calculados no frontend a partir dos dados brutos.
+In `src/pages/Leads.tsx`:
+- Add `sourceFilter` state + Select in filter bar
+- Add source badge on kanban cards
+- Add follow-up indicator on kanban cards
+- Apply source filter in useMemo
+- Note: follow-up "quick filter" as a simple additional filter option
 
-### `src/pages/Equipe.tsx`
-Pagina principal com duas abas (Tabs):
-- **Minha Performance**: dashboard pessoal (todos veem)
-- **Minha Equipe**: grid de cards com cada membro (somente admins)
+### 4. Revenue Goal — Hook + Dashboard Bar
 
-A aba "Minha Equipe" so aparece para admins.
+Create `src/hooks/useRevenueGoal.ts` with `useRevenueGoal()` and `useSetRevenueGoal()` using `app_settings` table (key: `revenue_goal`, value is jsonb so store as number).
 
-### `src/components/equipe/PerformanceDashboard.tsx`
-Componente reutilizavel que renderiza o dashboard de um usuario (usado tanto na visao pessoal quanto ao clicar em um membro da equipe). Contem:
-- 4 KPI cards (Taxa de Conclusao com barra de progresso, Produtividade Media, Tarefas Ativas, Tarefas em Andamento)
-- Secao "Performance Individual" com metricas detalhadas e barras de progresso
-- Grafico de tendencia de 7 dias (recharts AreaChart)
+In `src/pages/Index.tsx`:
+- Add revenue goal progress bar between HeroMetrics and OperationalCards
+- Editable inline with input + save/cancel
+- Color-coded progress: green >= 100%, primary >= 70%, yellow >= 40%, red < 40%
 
-### `src/components/equipe/TeamMemberCard.tsx`
-Card para a visao "Minha Equipe" mostrando nome, avatar, taxa de conclusao resumida. Ao clicar, abre o `PerformanceDashboard` daquele membro.
+### 5. Charges Health Card on Dashboard
 
----
+Create `src/components/dashboard/ChargesHealthCard.tsx`:
+- Query pending `charge_installments` with charge details
+- Show overdue count/amount, due today count, next 30 days count/amount
+- List next 4 upcoming installments
+- Link to /cobrancas
+- Replace "Calls de Hoje" placeholder in Index.tsx
 
-## 3. Arquivos a Modificar
+### Files
 
-### `src/App.tsx`
-- Remover import de `Inbox`
-- Adicionar import de `Equipe`
-- Trocar rota `/inbox` por `/equipe`
+- **Migration**: 1 SQL (alter leads + create lead_notes + indexes + RLS)
+- **Create**: `src/hooks/useRevenueGoal.ts`, `src/components/dashboard/ChargesHealthCard.tsx`
+- **Edit**: `src/components/leads/LeadDetailModal.tsx` (full rewrite with tabs), `src/pages/Leads.tsx` (add source/follow-up filter + card badges), `src/pages/Index.tsx` (add revenue goal bar + ChargesHealthCard)
 
-### `src/components/layout/AppSidebar.tsx`
-- Remover item "Inbox" com badge
-- Adicionar item "Equipe" com icone `Users2` (ou `BarChart3`)
-- Remover import de `useUnreadCount` (nao sera mais usado)
-
----
-
-## 4. Detalhes dos KPI Cards
-
-| Card | Calculo | Visual |
-|---|---|---|
-| Taxa de Conclusao | `(concluidas / total) * 100` | Porcentagem + barra de progresso (Progress component) |
-| Produtividade Media | `concluidas_30d / 30` formatado como "X.X tarefas/dia" | Numero com texto descritivo |
-| Tarefas Ativas | `count(status != concluido)` | Numero grande |
-| Em Andamento | `count(status == em_andamento)` | Numero grande |
-
-### Performance Individual (secao expandida)
-- **Conclusao no Prazo**: % de tarefas concluidas antes da `due_date` -- barra de progresso
-- **Velocidade Media**: dias entre `created_at` e `completed_at` -- barra de progresso (invertida, menos = melhor)
-- **Volume Semanal**: tarefas concluidas na ultima semana vs meta (ex: 10) -- barra de progresso
-
----
-
-## 5. Grafico de Tendencia (7 dias)
-
-Usando recharts `AreaChart` com:
-- Eixo X: dias da semana (Seg, Ter, Qua...)
-- Eixo Y: numero de tarefas concluidas
-- Dados: agrupamento de `completed_at` por dia nos ultimos 7 dias
-- Visual: area com gradiente usando as cores do tema
-
----
-
-## 6. Controle de Acesso
-
-- **Todos os usuarios**: veem apenas "Minha Performance" (seus proprios dados)
-- **Admins**: veem as duas abas. Na aba "Minha Equipe", podem clicar em qualquer membro para ver o dashboard completo dele
-- A verificacao de admin sera feita consultando `user_roles` onde `role = 'admin'`
-
----
-
-## 7. Fluxo de Navegacao
-
-```text
-/equipe
-  |-- Aba "Minha Performance" (padrao para todos)
-  |     |-- KPI Cards pessoais
-  |     |-- Performance Individual com barras
-  |     |-- Grafico 7 dias
-  |
-  |-- Aba "Minha Equipe" (somente admin)
-        |-- Grid de cards com cada membro
-        |-- Clicar no card -> abre dashboard do membro (mesmo layout)
-        |-- Botao "Voltar" para retornar a lista
-```
-
----
-
-## 8. Impacto no Inbox/Notificacoes
-
-O modulo de notificacoes (`useNotifications`, `useUnreadCount`) continuara existindo no banco e nos hooks, mas nao tera mais uma pagina dedicada. Se no futuro quiser reativar, basta adicionar a rota novamente. O badge de notificacoes sera removido do sidebar.
