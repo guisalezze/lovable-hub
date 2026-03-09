@@ -4,10 +4,21 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state"); // user_id
+    const stateRaw = url.searchParams.get("state");
 
-    if (!code || !state) {
+    if (!code || !stateRaw) {
       return new Response("Missing code or state", { status: 400 });
+    }
+
+    // Decode state: try JSON first (new format), fallback to plain user_id
+    let userId: string;
+    let clientOrigin = "";
+    try {
+      const parsed = JSON.parse(atob(stateRaw));
+      userId = parsed.uid;
+      clientOrigin = parsed.origin || "";
+    } catch {
+      userId = stateRaw; // legacy plain user_id
     }
 
     const clientId = Deno.env.get("GOOGLE_CLIENT_ID")!;
@@ -46,7 +57,7 @@ Deno.serve(async (req) => {
 
     const { error } = await supabase.from("google_tokens").upsert(
       {
-        user_id: state,
+        user_id: userId,
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
         expires_at: expiresAt,
@@ -59,8 +70,8 @@ Deno.serve(async (req) => {
       return new Response("Failed to save tokens", { status: 500 });
     }
 
-    // Get the project's site URL for redirect
-    const siteUrl =
+    // Use the origin from the OAuth state, or fall back to SITE_URL / env
+    const siteUrl = clientOrigin ||
       Deno.env.get("SITE_URL") ||
       "https://id-preview--536953bf-b30e-47df-b0b4-1647d8e7c879.lovable.app";
 

@@ -45,6 +45,11 @@ Deno.serve(async (req) => {
       "https://www.googleapis.com/auth/calendar.events",
     ].join(" ");
 
+    // Encode user_id + origin so callback knows where to redirect
+    const origin = req.headers.get("origin") || req.headers.get("referer") || "";
+    const statePayload = JSON.stringify({ uid: userId, origin });
+    const stateB64 = btoa(statePayload);
+
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
@@ -52,7 +57,7 @@ Deno.serve(async (req) => {
       scope: scopes,
       access_type: "offline",
       prompt: "consent",
-      state: userId,
+      state: stateB64,
     });
 
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
