@@ -23,6 +23,7 @@ const navItems = [
   { label: "Produtos", icon: Package, to: "/produtos" },
   { label: "Financeiro", icon: DollarSign, to: "/financeiro" },
   { label: "Cobranças", icon: Receipt, to: "/cobrancas" },
+  { label: "Implementações", icon: Briefcase, to: "/implementacoes" },
   { label: "Agenda", icon: CalendarDays, to: "/agenda" },
   { label: "Tarefas", icon: CheckSquare, to: "/tarefas" },
   { label: "Relatórios", icon: FileBarChart, to: "/relatorios" },
