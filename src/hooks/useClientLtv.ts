@@ -36,7 +36,7 @@ export function useClientLtvList(search?: string) {
         .order("ltv", { ascending: false })
         .limit(100);
       if (error) throw error;
-      return (data || []) as ClientLtv[];
+      return (data || []) as unknown as ClientLtv[];
     },
   });
 }
@@ -52,7 +52,7 @@ export function useClientLtvByEmail(email: string | null | undefined) {
         .eq("email", email!)
         .maybeSingle();
       if (error) throw error;
-      return data as ClientLtv | null;
+      return data as unknown as ClientLtv | null;
     },
   });
 }
@@ -65,7 +65,7 @@ export function useClientLtvKpis() {
         .from("client_ltv" as any)
         .select("*");
       if (error) throw error;
-      const clients = (data || []) as ClientLtv[];
+      const clients = (data || []) as unknown as ClientLtv[];
       const totalClients = clients.length;
       const totalLtv = clients.reduce((acc, c) => acc + c.ltv, 0);
       const avgLtv = totalClients > 0 ? totalLtv / totalClients : 0;
