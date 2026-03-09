@@ -70,8 +70,8 @@ Deno.serve(async (req) => {
       return new Response("Failed to save tokens", { status: 500 });
     }
 
-    // Get the project's site URL for redirect
-    const siteUrl =
+    // Use the origin from the OAuth state, or fall back to SITE_URL / env
+    const siteUrl = clientOrigin ||
       Deno.env.get("SITE_URL") ||
       "https://id-preview--536953bf-b30e-47df-b0b4-1647d8e7c879.lovable.app";
 
