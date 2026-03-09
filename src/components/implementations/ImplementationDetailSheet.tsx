@@ -17,6 +17,7 @@ import type { ImplementationStep } from "@/hooks/useImplementations";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { LtvBadge } from "@/components/shared/LtvBadge";
 
 const DOC_TYPE_ICONS: Record<string, any> = {
   link: Link2, doc: FileText, video: Video, sheet: Table2, other: File,
