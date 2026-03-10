@@ -363,6 +363,16 @@ export default function AgendaPage() {
         defaultDate={selectedDay || new Date()}
         googleAuth={googleAuth}
       />
+
+      {/* Edit Call Dialog */}
+      {editingCall && (
+        <EditCallDialog
+          open={showEditCallDialog}
+          onOpenChange={(v) => { setShowEditCallDialog(v); if (!v) setEditingCall(null); }}
+          call={editingCall}
+          leads={leads}
+        />
+      )}
     </div>
   );
 }
