@@ -752,3 +752,121 @@ function NewTaskDialog({
     </Dialog>
   );
 }
+
+/* ---- Edit Call Dialog ---- */
+function EditCallDialog({
+  open,
+  onOpenChange,
+  call,
+  leads,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  call: Call;
+  leads: Lead[];
+}) {
+  const qc = useQueryClient();
+  const startDate = new Date(call.start_at);
+  const [date, setDate] = useState(format(startDate, "yyyy-MM-dd"));
+  const [time, setTime] = useState(format(startDate, "HH:mm"));
+  const [meetLink, setMeetLink] = useState(call.meet_link || "");
+  const [notes, setNotes] = useState(call.notes || "");
+  const [status, setStatus] = useState(call.status);
+
+  const updateCall = useMutation({
+    mutationFn: async () => {
+      const startAt = new Date(`${date}T${time}:00`);
+      const { error } = await supabase.from("calls").update({
+        start_at: startAt.toISOString(),
+        meet_link: meetLink || null,
+        notes: notes || null,
+        status: status as any,
+      }).eq("id", call.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["calls"] });
+      toast.success("Call atualizada!");
+      onOpenChange(false);
+    },
+    onError: () => toast.error("Erro ao atualizar call"),
+  });
+
+  const deleteCall = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("calls").delete().eq("id", call.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["calls"] });
+      toast.success("Call excluída!");
+      onOpenChange(false);
+    },
+    onError: () => toast.error("Erro ao excluir call"),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-4 w-4 text-primary" />
+              Editar Call
+            </DialogTitle>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive hover:text-destructive gap-1 h-8"
+              onClick={() => deleteCall.mutate()}
+              disabled={deleteCall.isPending}
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Excluir
+            </Button>
+          </div>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Lead</label>
+            <p className="text-sm text-foreground">{call.lead_email || "Sem lead vinculado"}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Data</label>
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Horário</label>
+              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Status</label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="scheduled">Agendada</SelectItem>
+                <SelectItem value="completed">Realizada</SelectItem>
+                <SelectItem value="canceled">Cancelada</SelectItem>
+                <SelectItem value="no_show">Não compareceu</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Link do Meet</label>
+            <Input placeholder="https://meet.google.com/..." value={meetLink} onChange={(e) => setMeetLink(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Notas</label>
+            <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={() => updateCall.mutate()} disabled={!date || updateCall.isPending}>
+            {updateCall.isPending ? "Salvando..." : "Salvar Alterações"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
