@@ -40,6 +40,7 @@ export function ImplementationDetailSheet({
 }: { implId: string; open: boolean; onClose: () => void }) {
   const { data, isLoading } = useImplementationDetail(implId);
   const updateStep = useUpdateStepStatus();
+  const addStepMut = useAddStep();
   const addDoc = useAddDocument();
   const addNote = useAddNote();
   const updateImpl = useUpdateImplementation();
