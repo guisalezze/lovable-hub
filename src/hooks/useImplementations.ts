@@ -221,6 +221,22 @@ export function useAddNote() {
   });
 }
 
+export function useAddStep() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ implementation_id, title, order_index }: { implementation_id: string; title: string; order_index: number }) => {
+      const { error } = await (supabase as any).from("implementation_steps").insert({
+        implementation_id, title, order_index, status: "pending",
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["implementation", vars.implementation_id] });
+      qc.invalidateQueries({ queryKey: ["implementations"] });
+    },
+  });
+}
+
 export function useUpdateImplementationStatus() {
   const qc = useQueryClient();
   return useMutation({
