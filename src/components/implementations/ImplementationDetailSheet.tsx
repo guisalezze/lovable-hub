@@ -272,7 +272,29 @@ export function ImplementationDetailSheet({
                     </div>
                   );
                 })}
-                <p className="text-[11px] text-muted-foreground text-center pt-2">Clique em uma etapa para avançar o status</p>
+                <div className="flex gap-2 pt-2">
+                  <Input
+                    placeholder="Nova etapa..."
+                    value={newStepTitle}
+                    onChange={e => setNewStepTitle(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && newStepTitle.trim()) {
+                        addStepMut.mutate({ implementation_id: implId, title: newStepTitle, order_index: steps.length }, {
+                          onSuccess: () => { toast.success("Etapa adicionada!"); setNewStepTitle(""); },
+                        });
+                      }
+                    }}
+                    className="bg-secondary text-sm flex-1"
+                  />
+                  <Button size="sm" disabled={!newStepTitle.trim() || addStepMut.isPending} onClick={() => {
+                    addStepMut.mutate({ implementation_id: implId, title: newStepTitle, order_index: steps.length }, {
+                      onSuccess: () => { toast.success("Etapa adicionada!"); setNewStepTitle(""); },
+                    });
+                  }}>
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground text-center pt-1">Clique em uma etapa para avançar o status</p>
               </TabsContent>
 
               <TabsContent value="notes" className="space-y-4 mt-4">
