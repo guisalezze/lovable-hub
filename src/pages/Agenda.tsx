@@ -28,6 +28,8 @@ import {
   Phone,
   CheckSquare,
   Video,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import {
   format,
