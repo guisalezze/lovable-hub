@@ -89,6 +89,8 @@ export default function AgendaPage() {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [showCallDialog, setShowCallDialog] = useState(false);
   const [showTaskDialog, setShowTaskDialog] = useState(false);
+  const [showEditCallDialog, setShowEditCallDialog] = useState(false);
+  const [editingCall, setEditingCall] = useState<Call | null>(null);
 
   const { data: calls = [], isLoading: loadingCalls } = useCalls();
   const { data: tasks = [], isLoading: loadingTasks } = useTasks();
