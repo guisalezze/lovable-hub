@@ -139,6 +139,46 @@ export function useCreateImplementation() {
   });
 }
 
+export function useUpdateImplementation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string } & Partial<{
+      client_name: string;
+      client_email: string | null;
+      client_phone: string | null;
+      description: string | null;
+      contract_start: string;
+      contract_end: string;
+      total_value: number;
+      assigned_to: string | null;
+      status: string;
+    }>) => {
+      const { error } = await (supabase as any).from("implementations").update(updates).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["implementations"] });
+    },
+  });
+}
+
+export function useDeleteImplementation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // Delete related data first
+      await Promise.all([
+        (supabase as any).from("implementation_steps").delete().eq("implementation_id", id),
+        (supabase as any).from("implementation_documents").delete().eq("implementation_id", id),
+        (supabase as any).from("implementation_notes").delete().eq("implementation_id", id),
+      ]);
+      const { error } = await (supabase as any).from("implementations").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["implementations"] }),
+  });
+}
+
 export function useUpdateStepStatus() {
   const qc = useQueryClient();
   return useMutation({

@@ -3,21 +3,27 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   CheckCircle2, Circle, Clock, Plus, ExternalLink,
   FileText, Link2, Video, Table2, File, Loader2,
+  Pencil, Trash2, Save, X,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   useImplementationDetail, useUpdateStepStatus,
-  useAddDocument, useAddNote,
+  useAddDocument, useAddNote, useUpdateImplementation, useDeleteImplementation,
 } from "@/hooks/useImplementations";
 import type { ImplementationStep } from "@/hooks/useImplementations";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { LtvBadge } from "@/components/shared/LtvBadge";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const DOC_TYPE_ICONS: Record<string, any> = {
   link: Link2, doc: FileText, video: Video, sheet: Table2, other: File,
@@ -36,12 +42,23 @@ export function ImplementationDetailSheet({
   const updateStep = useUpdateStepStatus();
   const addDoc = useAddDocument();
   const addNote = useAddNote();
+  const updateImpl = useUpdateImplementation();
+  const deleteImpl = useDeleteImplementation();
 
   const [noteText, setNoteText] = useState("");
   const [docTitle, setDocTitle] = useState("");
   const [docUrl, setDocUrl] = useState("");
   const [docType, setDocType] = useState("link");
   const [addingDoc, setAddingDoc] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editFields, setEditFields] = useState({
+    client_name: "",
+    description: "",
+    contract_start: "",
+    contract_end: "",
+    total_value: 0,
+    status: "active",
+  });
 
   if (!data && !isLoading) return null;
 
@@ -53,6 +70,41 @@ export function ImplementationDetailSheet({
   const daysLeft = impl ? differenceInDays(parseISO(impl.contract_end), new Date()) : 0;
   const steps = (impl?.implementation_steps || []).sort((a, b) => a.order_index - b.order_index);
   const progress = steps.length > 0 ? Math.round(steps.filter(s => s.status === "done").length / steps.length * 100) : 0;
+
+  function startEditing() {
+    if (!impl) return;
+    setEditFields({
+      client_name: impl.client_name,
+      description: impl.description || "",
+      contract_start: impl.contract_start,
+      contract_end: impl.contract_end,
+      total_value: impl.total_value,
+      status: impl.status,
+    });
+    setEditing(true);
+  }
+
+  function handleSaveEdit() {
+    updateImpl.mutate({
+      id: implId,
+      client_name: editFields.client_name,
+      description: editFields.description || null,
+      contract_start: editFields.contract_start,
+      contract_end: editFields.contract_end,
+      total_value: editFields.total_value,
+      status: editFields.status,
+    }, {
+      onSuccess: () => { toast.success("Implementação atualizada"); setEditing(false); },
+      onError: () => toast.error("Erro ao atualizar"),
+    });
+  }
+
+  function handleDelete() {
+    deleteImpl.mutate(implId, {
+      onSuccess: () => { toast.success("Implementação excluída"); onClose(); },
+      onError: () => toast.error("Erro ao excluir"),
+    });
+  }
 
   function handleStepClick(step: ImplementationStep) {
     const next: ImplementationStep["status"] =
@@ -86,30 +138,104 @@ export function ImplementationDetailSheet({
         ) : impl ? (
           <>
             <SheetHeader>
-              <div className="flex items-start justify-between">
-                <div>
-                  <SheetTitle>{impl.client_name}</SheetTitle>
-                  {impl.client_email && <LtvBadge email={impl.client_email} size="md" />}
-                  {impl.description && <p className="text-sm text-muted-foreground mt-1">{impl.description}</p>}
+              {editing ? (
+                <div className="space-y-3">
+                  <Input value={editFields.client_name} onChange={e => setEditFields(p => ({ ...p, client_name: e.target.value }))} placeholder="Nome do cliente" />
+                  <Textarea value={editFields.description} onChange={e => setEditFields(p => ({ ...p, description: e.target.value }))} placeholder="Descrição" rows={2} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Início</label>
+                      <Input type="date" value={editFields.contract_start} onChange={e => setEditFields(p => ({ ...p, contract_start: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Fim</label>
+                      <Input type="date" value={editFields.contract_end} onChange={e => setEditFields(p => ({ ...p, contract_end: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Valor total</label>
+                      <Input type="number" value={editFields.total_value} onChange={e => setEditFields(p => ({ ...p, total_value: Number(e.target.value) }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Status</label>
+                      <Select value={editFields.status} onValueChange={v => setEditFields(p => ({ ...p, status: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Ativa</SelectItem>
+                          <SelectItem value="completed">Concluída</SelectItem>
+                          <SelectItem value="paused">Pausada</SelectItem>
+                          <SelectItem value="cancelled">Cancelada</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={handleSaveEdit} disabled={updateImpl.isPending} className="gap-1">
+                      <Save className="h-3.5 w-3.5" /> Salvar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(false)} className="gap-1">
+                      <X className="h-3.5 w-3.5" /> Cancelar
+                    </Button>
+                  </div>
                 </div>
-                <p className="text-lg font-bold text-foreground shrink-0">{fmtCurrency(impl.total_value)}</p>
-              </div>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <SheetTitle>{impl.client_name}</SheetTitle>
+                      {impl.client_email && <LtvBadge email={impl.client_email} size="md" />}
+                      {impl.description && <p className="text-sm text-muted-foreground mt-1">{impl.description}</p>}
+                    </div>
+                    <p className="text-lg font-bold text-foreground shrink-0">{fmtCurrency(impl.total_value)}</p>
+                  </div>
 
-              <div className="space-y-2 mt-4">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{steps.filter(s => s.status === "done").length} de {steps.length} etapas concluídas</span>
-                  <span>{progress}%</span>
+                  <div className="flex gap-1 mt-3">
+                    <Button size="sm" variant="outline" onClick={startEditing} className="gap-1 text-xs">
+                      <Pencil className="h-3 w-3" /> Editar
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button size="sm" variant="outline" className="gap-1 text-xs text-destructive hover:text-destructive">
+                          <Trash2 className="h-3 w-3" /> Excluir
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Excluir implementação?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Isso excluirá permanentemente a implementação de "{impl.client_name}" e todas as etapas, documentos e notas associadas.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Excluir
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </>
+              )}
+
+              {!editing && (
+                <div className="space-y-2 mt-4">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{steps.filter(s => s.status === "done").length} de {steps.length} etapas concluídas</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${progress >= 100 ? "bg-emerald-500" : "bg-primary"}`} style={{ width: `${progress}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>{format(parseISO(impl.contract_start), "d MMM yyyy", { locale: ptBR })} → {format(parseISO(impl.contract_end), "d MMM yyyy", { locale: ptBR })}</span>
+                    <span className={daysLeft < 0 ? "text-destructive" : ""}>
+                      {daysLeft < 0 ? `${Math.abs(daysLeft)} dias em atraso` : `${daysLeft} dias restantes`}
+                    </span>
+                  </div>
                 </div>
-                <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${progress >= 100 ? "bg-emerald-500" : "bg-primary"}`} style={{ width: `${progress}%` }} />
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>{format(parseISO(impl.contract_start), "d MMM yyyy", { locale: ptBR })} → {format(parseISO(impl.contract_end), "d MMM yyyy", { locale: ptBR })}</span>
-                  <span className={daysLeft < 0 ? "text-destructive" : ""}>
-                    {daysLeft < 0 ? `${Math.abs(daysLeft)} dias em atraso` : `${daysLeft} dias restantes`}
-                  </span>
-                </div>
-              </div>
+              )}
             </SheetHeader>
 
             <Tabs defaultValue="steps" className="mt-6">

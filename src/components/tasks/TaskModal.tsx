@@ -4,9 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCreateTask, useUpdateTask, useTeamMembers, type Task, type TaskStatus, type TaskPriority } from "@/hooks/useTasks";
+import { useCreateTask, useUpdateTask, useDeleteTask, useTeamMembers, type Task, type TaskStatus, type TaskPriority } from "@/hooks/useTasks";
 import { toast } from "sonner";
 import { Plus, Trash2, CheckSquare } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const statusOptions: { value: TaskStatus; label: string }[] = [
   { value: "backlog", label: "Backlog" },
@@ -41,6 +45,7 @@ export function TaskModal({ open, onOpenChange, task }: Props) {
 
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
   const { data: members } = useTeamMembers();
 
   const isEdit = !!task;
@@ -72,6 +77,17 @@ export function TaskModal({ open, onOpenChange, task }: Props) {
     }
   };
 
+  const handleDelete = async () => {
+    if (!task) return;
+    try {
+      await deleteTask.mutateAsync(task.id);
+      toast.success("Tarefa excluída");
+      onOpenChange(false);
+    } catch {
+      toast.error("Erro ao excluir tarefa");
+    }
+  };
+
   const addCheckItem = () => {
     if (!newCheckItem.trim()) return;
     setChecklist([...checklist, { text: newCheckItem, done: false }]);
@@ -90,7 +106,32 @@ export function TaskModal({ open, onOpenChange, task }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar Tarefa" : "Nova Tarefa"}</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle>{isEdit ? "Editar Tarefa" : "Nova Tarefa"}</DialogTitle>
+            {isEdit && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive gap-1 h-8">
+                    <Trash2 className="h-3.5 w-3.5" /> Excluir
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      A tarefa "{task?.title}" será excluída permanentemente.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Excluir
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <Input placeholder="Título *" value={title} onChange={(e) => setTitle(e.target.value)} />
