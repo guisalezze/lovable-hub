@@ -282,7 +282,8 @@ export default function AgendaPage() {
               {selectedDayCalls.map((call) => (
                 <div
                   key={call.id}
-                  className="flex items-center gap-3 p-3 rounded-md bg-primary/5 border border-primary/10"
+                  onClick={() => { setEditingCall(call); setShowEditCallDialog(true); }}
+                  className="flex items-center gap-3 p-3 rounded-md bg-primary/5 border border-primary/10 cursor-pointer hover:bg-primary/10 transition-colors"
                 >
                   <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
                     <Video className="h-4 w-4 text-primary" />
@@ -305,6 +306,7 @@ export default function AgendaPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs font-medium text-primary hover:underline shrink-0"
+                      onClick={e => e.stopPropagation()}
                     >
                       Entrar
                     </a>
