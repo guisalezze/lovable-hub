@@ -51,6 +51,7 @@ export function ImplementationDetailSheet({
   const [docUrl, setDocUrl] = useState("");
   const [docType, setDocType] = useState("link");
   const [addingDoc, setAddingDoc] = useState(false);
+  const [newStepTitle, setNewStepTitle] = useState("");
   const [editing, setEditing] = useState(false);
   const [editFields, setEditFields] = useState({
     client_name: "",
