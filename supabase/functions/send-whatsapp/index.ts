@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const webhookUrl = "https://neown8n.neowchat.com.br/webhook/4444916b-60aa-4868-81d3-f120412682";
+    const webhookUrl = "https://hook.neowchat.com.br/webhook/4444916b-60aa-4868-81d3-f120412682";
 
     const payload = {
       body: {
