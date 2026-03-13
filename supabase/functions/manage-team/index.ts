@@ -20,7 +20,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Verify caller is admin
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -35,7 +34,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Check admin role
     const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -59,7 +57,7 @@ Deno.serve(async (req) => {
     const { action } = body;
 
     if (action === "create") {
-      const { email, password, full_name, role } = body;
+      const { email, password, full_name, role, phone_e164, project_ids } = body;
 
       if (!email || !password || !full_name) {
         return new Response(JSON.stringify({ error: "Campos obrigatórios: email, password, full_name" }), {
@@ -68,7 +66,6 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Create user via admin API
       const { data: newUser, error: createError } = await serviceClient.auth.admin.createUser({
         email,
         password,
@@ -84,21 +81,73 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Insert profile
+      const userId = newUser.user.id;
+
+      // Upsert profile with phone
       await serviceClient.from("profiles").upsert({
-        id: newUser.user.id,
+        id: userId,
         email,
         full_name,
+        phone_e164: phone_e164 || null,
       });
 
       // Insert role
       await serviceClient.from("user_roles").insert({
-        user_id: newUser.user.id,
+        user_id: userId,
         role: role || "team",
       });
 
+      // Insert project access
+      if (Array.isArray(project_ids) && project_ids.length > 0) {
+        await serviceClient.from("user_project_access").insert(
+          project_ids.map((pid: string) => ({ user_id: userId, project_id: pid }))
+        );
+      }
+
       return new Response(
-        JSON.stringify({ success: true, user_id: newUser.user.id }),
+        JSON.stringify({ success: true, user_id: userId }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (action === "update") {
+      const { user_id, full_name, phone_e164, role, project_ids } = body;
+
+      if (!user_id) {
+        return new Response(JSON.stringify({ error: "user_id é obrigatório" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Update profile
+      const profileUpdate: Record<string, any> = {};
+      if (full_name !== undefined) profileUpdate.full_name = full_name;
+      if (phone_e164 !== undefined) profileUpdate.phone_e164 = phone_e164 || null;
+
+      if (Object.keys(profileUpdate).length > 0) {
+        await serviceClient.from("profiles").update(profileUpdate).eq("id", user_id);
+      }
+
+      // Update role if provided
+      if (role) {
+        await serviceClient.from("user_roles").update({ role }).eq("user_id", user_id);
+      }
+
+      // Update project access if provided
+      if (Array.isArray(project_ids)) {
+        // Remove all existing access
+        await serviceClient.from("user_project_access").delete().eq("user_id", user_id);
+        // Insert new access
+        if (project_ids.length > 0) {
+          await serviceClient.from("user_project_access").insert(
+            project_ids.map((pid: string) => ({ user_id: user_id, project_id: pid }))
+          );
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ success: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -113,7 +162,6 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Prevent self-deletion
       if (user_id === user.id) {
         return new Response(JSON.stringify({ error: "Você não pode remover a si mesmo" }), {
           status: 400,
@@ -121,10 +169,10 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Delete role, profile, and user
+      await serviceClient.from("user_project_access").delete().eq("user_id", user_id);
       await serviceClient.from("user_roles").delete().eq("user_id", user_id);
       await serviceClient.from("profiles").delete().eq("id", user_id);
-      
+
       const { error: deleteError } = await serviceClient.auth.admin.deleteUser(user_id);
       if (deleteError) {
         console.error("Delete user error:", deleteError);
