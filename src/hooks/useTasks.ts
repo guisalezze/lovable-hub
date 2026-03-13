@@ -113,17 +113,7 @@ export function useUpdateTask() {
       const { error } = await supabase.from("tasks").update(updates).eq("id", id);
       if (error) throw error;
 
-      // If assigned_to changed, sync to new assignee's Google Calendar
-      if (updates.assigned_to && updates.due_date) {
-        supabase.functions.invoke("google-calendar-event", {
-          body: {
-            title: updates.title || "Tarefa",
-            start: updates.due_date,
-            type: "task",
-            target_user_id: updates.assigned_to,
-          },
-        }).catch(() => {});
-      }
+      // Google Calendar sync removed — using WhatsApp notifications only
 
       // If assigned_to changed, trigger WhatsApp notification
       if (updates.assigned_to) {
