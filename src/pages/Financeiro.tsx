@@ -86,8 +86,8 @@ function useAllInvestments(projectId: string | undefined) {
   return useQuery({
     queryKey: ["investments", "all", projectId],
     queryFn: async () => {
-      let query = supabase.from("investments").select("*").order("date", { ascending: false }).limit(50);
-      if (projectId) query = query.eq("project_id", projectId);
+      const base = supabase.from("investments").select("*").order("date", { ascending: false }).limit(50);
+      const query = projectId ? base.eq("project_id", projectId) : base;
       const { data, error } = await query;
       if (error) throw error;
       return data || [];
