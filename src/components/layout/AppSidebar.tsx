@@ -17,6 +17,7 @@ import {
   UserCheck,
   BarChart3,
   ChevronDown,
+  FileText,
 } from "lucide-react";
 import { useProject, type Project } from "@/contexts/ProjectContext";
 import { useState } from "react";
