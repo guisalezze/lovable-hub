@@ -82,6 +82,7 @@ export default function ConfiguracoesPage() {
         <div className="space-y-6">
           <TeamManagement />
           <WhatsAppConfig />
+          <ProjectAccessManager />
         </div>
       ) : null}
     </div>
