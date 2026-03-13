@@ -20,6 +20,7 @@ export interface Task {
   created_at: string;
   updated_at: string;
   owner_user_id: string | null;
+  project_id: string | null;
 }
 
 export function useTasks(filter?: { assignedToMe?: boolean; status?: TaskStatus; overdue?: boolean }) {
