@@ -83,6 +83,34 @@ export function useCreateTask() {
           body: { task_id: inserted.id, assigned_to: task.assigned_to },
         }).catch(() => {});
       }
+
+      // Send WhatsApp message for high/urgent priority tasks
+      if (task.assigned_to && inserted && (task.priority === "alta" || task.priority === "urgente")) {
+        try {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, phone_e164")
+            .eq("id", task.assigned_to)
+            .single();
+
+          if (profile?.phone_e164) {
+            const prioLabel = task.priority === "urgente" ? "🔴 URGENTE" : "🟠 Alta";
+            const prazo = task.due_date
+              ? new Date(task.due_date + "T12:00:00").toLocaleDateString("pt-BR")
+              : "Sem prazo definido";
+            const mensagem = `📋 *Nova tarefa ${prioLabel}*\n\n*Tarefa:* ${task.title}\n*Prazo:* ${prazo}\n*Prioridade:* ${prioLabel}\n\nAcesse o sistema para mais detalhes.`;
+            const telefone = profile.phone_e164.replace(/\D/g, "");
+
+            supabase.functions.invoke("send-whatsapp", {
+              body: {
+                nomeCliente: profile.full_name || "Responsável",
+                telefoneCliente: telefone,
+                mensagem,
+              },
+            }).catch(() => {});
+          }
+        } catch {}
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
   });
