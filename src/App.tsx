@@ -26,6 +26,8 @@ import Implementacoes from "./pages/Implementacoes";
 import Clientes from "./pages/Clientes";
 import MetaAds from "./pages/nutra/MetaAds";
 import MetaCallback from "./pages/nutra/MetaCallback";
+import Copies from "./pages/Copies";
+import CopyProjectDetail from "./pages/CopyProjectDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
