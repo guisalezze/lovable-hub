@@ -200,6 +200,37 @@ export default function ClientesPage() {
           onClose={() => setSelectedEmail(null)}
         />
       )}
+
+      <Dialog open={!!waClient} onOpenChange={(open) => { if (!open) setWaClient(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enviar WhatsApp</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">{waClient?.name || waClient?.email}</p>
+              <p className="text-xs text-muted-foreground">{waClient?.phone}</p>
+            </div>
+            <Textarea
+              placeholder="Digite a mensagem..."
+              value={waMessage}
+              onChange={(e) => setWaMessage(e.target.value)}
+              rows={4}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWaClient(null)}>Cancelar</Button>
+            <Button
+              onClick={handleSendWhatsApp}
+              disabled={waSending || !waMessage.trim()}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              {waSending ? "Enviando..." : "Enviar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
