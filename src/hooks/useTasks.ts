@@ -20,13 +20,14 @@ export interface Task {
   created_at: string;
   updated_at: string;
   owner_user_id: string | null;
+  project_id: string | null;
 }
 
 export function useTasks(filter?: { assignedToMe?: boolean; status?: TaskStatus; overdue?: boolean }) {
   return useQuery({
     queryKey: ["tasks", filter],
     queryFn: async () => {
-      let query = supabase.from("tasks").select("*").order("created_at", { ascending: false });
+      let query = supabase.from("tasks").select("*").order("created_at", { ascending: false }) as any;
 
       if (filter?.assignedToMe) {
         const { data: { user } } = await supabase.auth.getUser();
@@ -40,7 +41,7 @@ export function useTasks(filter?: { assignedToMe?: boolean; status?: TaskStatus;
       }
 
       const { data } = await query;
-      return (data as Task[]) || [];
+      return (data as unknown as Task[]) || [];
     },
   });
 }

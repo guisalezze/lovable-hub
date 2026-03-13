@@ -751,6 +751,312 @@ export type Database = {
           },
         ]
       }
+      meta_ad_accounts: {
+        Row: {
+          access_token: string
+          account_id: string
+          account_name: string | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          project_id: string
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          account_id: string
+          account_name?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          project_id: string
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          account_id?: string
+          account_name?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          project_id?: string
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_ad_accounts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_ads: {
+        Row: {
+          ad_id: string
+          ad_name: string | null
+          adset_id: string
+          clicks: number | null
+          conversions: number | null
+          created_at: string
+          creative_thumbnail_url: string | null
+          date: string
+          id: string
+          impressions: number | null
+          spend: number | null
+          status: string | null
+        }
+        Insert: {
+          ad_id: string
+          ad_name?: string | null
+          adset_id: string
+          clicks?: number | null
+          conversions?: number | null
+          created_at?: string
+          creative_thumbnail_url?: string | null
+          date?: string
+          id?: string
+          impressions?: number | null
+          spend?: number | null
+          status?: string | null
+        }
+        Update: {
+          ad_id?: string
+          ad_name?: string | null
+          adset_id?: string
+          clicks?: number | null
+          conversions?: number | null
+          created_at?: string
+          creative_thumbnail_url?: string | null
+          date?: string
+          id?: string
+          impressions?: number | null
+          spend?: number | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_ads_adset_id_fkey"
+            columns: ["adset_id"]
+            isOneToOne: false
+            referencedRelation: "meta_adsets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_adsets: {
+        Row: {
+          adset_id: string
+          adset_name: string | null
+          campaign_id: string
+          clicks: number | null
+          conversions: number | null
+          created_at: string
+          daily_budget: number | null
+          date: string
+          id: string
+          impressions: number | null
+          spend: number | null
+          status: string | null
+        }
+        Insert: {
+          adset_id: string
+          adset_name?: string | null
+          campaign_id: string
+          clicks?: number | null
+          conversions?: number | null
+          created_at?: string
+          daily_budget?: number | null
+          date?: string
+          id?: string
+          impressions?: number | null
+          spend?: number | null
+          status?: string | null
+        }
+        Update: {
+          adset_id?: string
+          adset_name?: string | null
+          campaign_id?: string
+          clicks?: number | null
+          conversions?: number | null
+          created_at?: string
+          daily_budget?: number | null
+          date?: string
+          id?: string
+          impressions?: number | null
+          spend?: number | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_adsets_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "meta_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_campaigns: {
+        Row: {
+          ad_account_id: string
+          campaign_id: string
+          campaign_name: string | null
+          clicks: number | null
+          conversions: number | null
+          cpa: number | null
+          created_at: string
+          daily_budget: number | null
+          date: string
+          id: string
+          impressions: number | null
+          lifetime_budget: number | null
+          objective: string | null
+          revenue: number | null
+          roas: number | null
+          spend: number | null
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id: string
+          campaign_id: string
+          campaign_name?: string | null
+          clicks?: number | null
+          conversions?: number | null
+          cpa?: number | null
+          created_at?: string
+          daily_budget?: number | null
+          date?: string
+          id?: string
+          impressions?: number | null
+          lifetime_budget?: number | null
+          objective?: string | null
+          revenue?: number | null
+          roas?: number | null
+          spend?: number | null
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string
+          campaign_id?: string
+          campaign_name?: string | null
+          clicks?: number | null
+          conversions?: number | null
+          cpa?: number | null
+          created_at?: string
+          daily_budget?: number | null
+          date?: string
+          id?: string
+          impressions?: number | null
+          lifetime_budget?: number | null
+          objective?: string | null
+          revenue?: number | null
+          roas?: number | null
+          spend?: number | null
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_campaigns_ad_account_id_fkey"
+            columns: ["ad_account_id"]
+            isOneToOne: false
+            referencedRelation: "meta_ad_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_custom_metrics: {
+        Row: {
+          ad_account_id: string
+          created_at: string
+          formula: string
+          id: string
+          name: string
+        }
+        Insert: {
+          ad_account_id: string
+          created_at?: string
+          formula: string
+          id?: string
+          name: string
+        }
+        Update: {
+          ad_account_id?: string
+          created_at?: string
+          formula?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_custom_metrics_ad_account_id_fkey"
+            columns: ["ad_account_id"]
+            isOneToOne: false
+            referencedRelation: "meta_ad_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_rules: {
+        Row: {
+          action_type: string
+          action_value: string | null
+          ad_account_id: string
+          condition_metric: string
+          condition_operator: string
+          condition_period: string | null
+          condition_value: number
+          created_at: string
+          id: string
+          is_active: boolean | null
+          last_triggered_at: string | null
+          name: string
+        }
+        Insert: {
+          action_type: string
+          action_value?: string | null
+          ad_account_id: string
+          condition_metric: string
+          condition_operator: string
+          condition_period?: string | null
+          condition_value: number
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          name: string
+        }
+        Update: {
+          action_type?: string
+          action_value?: string | null
+          ad_account_id?: string
+          condition_metric?: string
+          condition_operator?: string
+          condition_period?: string | null
+          condition_value?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_rules_ad_account_id_fkey"
+            columns: ["ad_account_id"]
+            isOneToOne: false
+            referencedRelation: "meta_ad_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
@@ -785,6 +1091,83 @@ export type Database = {
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutra_sales: {
+        Row: {
+          amount: number | null
+          created_at: string
+          currency: string | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          id: string
+          order_id: string | null
+          payment_method: string | null
+          product_id: string | null
+          product_name: string | null
+          project_id: string
+          raw_payload: Json | null
+          source: string
+          status: string | null
+          tracking_code: string | null
+          updated_at: string
+          utm_campaign: string | null
+          utm_medium: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          currency?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          order_id?: string | null
+          payment_method?: string | null
+          product_id?: string | null
+          product_name?: string | null
+          project_id: string
+          raw_payload?: Json | null
+          source: string
+          status?: string | null
+          tracking_code?: string | null
+          updated_at?: string
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          currency?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          order_id?: string | null
+          payment_method?: string | null
+          product_id?: string | null
+          product_name?: string | null
+          project_id?: string
+          raw_payload?: Json | null
+          source?: string
+          status?: string | null
+          tracking_code?: string | null
+          updated_at?: string
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutra_sales_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -1060,6 +1443,33 @@ export type Database = {
         }
         Relationships: []
       }
+      projects: {
+        Row: {
+          color: string | null
+          created_at: string
+          icon: string | null
+          id: string
+          name: string
+          slug: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name: string
+          slug: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name?: string
+          slug?: string
+        }
+        Relationships: []
+      }
       sales: {
         Row: {
           billet_url: string | null
@@ -1223,6 +1633,7 @@ export type Database = {
           lead_email: string | null
           owner_user_id: string | null
           priority: Database["public"]["Enums"]["task_priority"]
+          project_id: string | null
           status: Database["public"]["Enums"]["task_status"]
           tags: string[] | null
           title: string
@@ -1240,6 +1651,7 @@ export type Database = {
           lead_email?: string | null
           owner_user_id?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
+          project_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           tags?: string[] | null
           title: string
@@ -1257,6 +1669,7 @@ export type Database = {
           lead_email?: string | null
           owner_user_id?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
+          project_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           tags?: string[] | null
           title?: string
@@ -1269,6 +1682,42 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["email"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_project_access: {
+        Row: {
+          created_at: string
+          id: string
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_project_access_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1340,6 +1789,23 @@ export type Database = {
       }
     }
     Functions: {
+      get_my_projects: {
+        Args: never
+        Returns: {
+          color: string | null
+          created_at: string
+          icon: string | null
+          id: string
+          name: string
+          slug: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

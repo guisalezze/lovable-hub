@@ -15,9 +15,19 @@ import {
   ClipboardList,
   Briefcase,
   UserCheck,
+  BarChart3,
 } from "lucide-react";
+import { ProjectSwitcher } from "./ProjectSwitcher";
+import { useProject } from "@/contexts/ProjectContext";
 
-const navItems = [
+interface NavItem {
+  label: string;
+  icon: React.ElementType;
+  to: string;
+  projects?: string[]; // if set, only show when current project slug matches
+}
+
+const navItems: NavItem[] = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/" },
   { label: "Equipe", icon: Users2, to: "/equipe" },
   { label: "Leads", icon: Users, to: "/leads" },
@@ -26,6 +36,7 @@ const navItems = [
   { label: "Cobranças", icon: Receipt, to: "/cobrancas" },
   { label: "Implementações", icon: Briefcase, to: "/implementacoes" },
   { label: "Clientes", icon: UserCheck, to: "/clientes" },
+  { label: "Meta Ads", icon: BarChart3, to: "/nutra/meta-ads", projects: ["nutra"] },
   { label: "Agenda", icon: CalendarDays, to: "/agenda" },
   { label: "Tarefas", icon: CheckSquare, to: "/tarefas" },
   { label: "Relatórios", icon: FileBarChart, to: "/relatorios" },
@@ -40,6 +51,12 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ open }: AppSidebarProps) {
+  const { currentProject } = useProject();
+
+  const visibleItems = navItems.filter((item) => {
+    if (!item.projects) return true;
+    return currentProject && item.projects.includes(currentProject.slug);
+  });
 
   return (
     <aside
@@ -51,13 +68,18 @@ export function AppSidebar({ open }: AppSidebarProps) {
       <div className="h-14 flex items-center px-5 border-b border-sidebar-border shrink-0">
         <Zap className="h-5 w-5 text-primary shrink-0" />
         <span className="ml-2.5 font-bold text-foreground text-lg tracking-tight whitespace-nowrap">
-          OpsCRM
+          Solaryz
         </span>
       </div>
 
+      {/* Project Switcher */}
+      <div className="px-3 pt-3 pb-1">
+        <ProjectSwitcher />
+      </div>
+
       {/* Nav */}
-      <nav className="flex-1 py-3 px-3 space-y-0.5">
-        {navItems.map((item) => (
+      <nav className="flex-1 py-2 px-3 space-y-0.5 overflow-y-auto">
+        {visibleItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -80,11 +102,13 @@ export function AppSidebar({ open }: AppSidebarProps) {
       <div className="p-3 border-t border-sidebar-border">
         <div className="flex items-center gap-3 px-3 py-2">
           <div className="h-7 w-7 rounded-full bg-primary/20 flex items-center justify-center">
-            <span className="text-xs font-semibold text-primary">O</span>
+            <span className="text-xs font-semibold text-primary">S</span>
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-medium text-foreground truncate">Operação</p>
-            <p className="text-[10px] text-muted-foreground truncate">Admin</p>
+            <p className="text-xs font-medium text-foreground truncate">Solaryz</p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              {currentProject?.name || "Carregando..."}
+            </p>
           </div>
         </div>
       </div>
