@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -29,8 +30,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, Trash2, Shield, Users } from "lucide-react";
+import { UserPlus, Trash2, Shield, Users, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 interface TeamMember {
@@ -39,43 +46,67 @@ interface TeamMember {
   email: string;
   full_name: string;
   phone_e164: string;
+  project_ids: string[];
 }
+
+interface ProjectOption {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+const MANAGE_TEAM_URL = `https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/manage-team`;
 
 export function TeamManagement() {
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newRole, setNewRole] = useState<"admin" | "team">("team");
+  const [newProjectIds, setNewProjectIds] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
+
+  // Edit state
+  const [editMember, setEditMember] = useState<TeamMember | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editRole, setEditRole] = useState<"admin" | "team">("team");
+  const [editProjectIds, setEditProjectIds] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const fetchProjects = async () => {
+    const { data } = await supabase.from("projects").select("id, name, icon");
+    setProjects((data || []).map((p) => ({ id: p.id, name: p.name, icon: p.icon || "📁" })));
+  };
 
   const fetchMembers = async () => {
     setLoading(true);
     try {
-      // Get all roles
-      const { data: roles, error: rolesError } = await supabase
-        .from("user_roles")
-        .select("user_id, role");
-
-      if (rolesError) throw rolesError;
-
-      // Get all profiles
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("id, email, full_name, phone_e164");
-
-      if (profilesError) throw profilesError;
+      const [
+        { data: roles },
+        { data: profiles },
+        { data: access },
+      ] = await Promise.all([
+        supabase.from("user_roles").select("user_id, role"),
+        supabase.from("profiles").select("id, email, full_name, phone_e164"),
+        supabase.from("user_project_access").select("user_id, project_id"),
+      ]);
 
       const memberList: TeamMember[] = (roles || []).map((r) => {
         const profile = profiles?.find((p) => p.id === r.user_id);
+        const userProjects = (access || [])
+          .filter((a) => a.user_id === r.user_id)
+          .map((a) => a.project_id);
         return {
           user_id: r.user_id,
           role: r.role as "admin" | "team",
           email: profile?.email || "—",
           full_name: profile?.full_name || "—",
           phone_e164: profile?.phone_e164 || "",
+          project_ids: userProjects,
         };
       });
 
@@ -88,38 +119,49 @@ export function TeamManagement() {
   };
 
   useEffect(() => {
+    fetchProjects();
     fetchMembers();
   }, []);
 
+  const getAuthHeaders = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("Não autenticado");
+    return {
+      Authorization: `Bearer ${session.access_token}`,
+      "Content-Type": "application/json",
+    };
+  };
+
+  const toggleProjectId = (id: string, list: string[], setter: (v: string[]) => void) => {
+    setter(list.includes(id) ? list.filter((p) => p !== id) : [...list, id]);
+  };
+
   const handleAddMember = async () => {
     if (!newEmail || !newPassword || !newName) {
-      toast.error("Preencha todos os campos");
+      toast.error("Preencha todos os campos obrigatórios");
+      return;
+    }
+    if (newProjectIds.length === 0) {
+      toast.error("Selecione pelo menos um projeto");
       return;
     }
 
     setAdding(true);
     try {
-      // Call edge function to create user (needs service role)
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Não autenticado");
-
-      const res = await fetch(
-        `https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/manage-team`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            action: "create",
-            email: newEmail,
-            password: newPassword,
-            full_name: newName,
-            role: newRole,
-          }),
-        }
-      );
+      const headers = await getAuthHeaders();
+      const res = await fetch(MANAGE_TEAM_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          action: "create",
+          email: newEmail,
+          password: newPassword,
+          full_name: newName,
+          phone_e164: newPhone || undefined,
+          role: newRole,
+          project_ids: newProjectIds,
+        }),
+      });
 
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Erro ao criar usuário");
@@ -128,7 +170,9 @@ export function TeamManagement() {
       setNewEmail("");
       setNewPassword("");
       setNewName("");
+      setNewPhone("");
       setNewRole("team");
+      setNewProjectIds([]);
       fetchMembers();
     } catch (err: any) {
       toast.error(err.message);
@@ -137,25 +181,58 @@ export function TeamManagement() {
     }
   };
 
+  const openEdit = (m: TeamMember) => {
+    setEditMember(m);
+    setEditName(m.full_name);
+    setEditPhone(m.phone_e164);
+    setEditRole(m.role);
+    setEditProjectIds([...m.project_ids]);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editMember) return;
+    if (editProjectIds.length === 0) {
+      toast.error("Selecione pelo menos um projeto");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(MANAGE_TEAM_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          action: "update",
+          user_id: editMember.user_id,
+          full_name: editName,
+          phone_e164: editPhone || "",
+          role: editRole,
+          project_ids: editProjectIds,
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Erro ao atualizar");
+
+      toast.success("Membro atualizado!");
+      setEditMember(null);
+      fetchMembers();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleRemoveMember = async (userId: string, name: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Não autenticado");
-
-      const res = await fetch(
-        `https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/manage-team`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            action: "remove",
-            user_id: userId,
-          }),
-        }
-      );
+      const headers = await getAuthHeaders();
+      const res = await fetch(MANAGE_TEAM_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action: "remove", user_id: userId }),
+      });
 
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Erro ao remover usuário");
@@ -167,7 +244,37 @@ export function TeamManagement() {
     }
   };
 
-  const currentUserId = supabase.auth.getUser().then((r) => r.data.user?.id);
+  const projectBadges = (pIds: string[]) =>
+    projects
+      .filter((p) => pIds.includes(p.id))
+      .map((p) => (
+        <Badge key={p.id} variant="outline" className="text-[10px] gap-1">
+          {p.icon} {p.name}
+        </Badge>
+      ));
+
+  const ProjectCheckboxes = ({
+    selected,
+    onChange,
+  }: {
+    selected: string[];
+    onChange: (id: string) => void;
+  }) => (
+    <div className="flex flex-wrap gap-3">
+      {projects.map((p) => (
+        <label
+          key={p.id}
+          className="flex items-center gap-2 cursor-pointer text-sm"
+        >
+          <Checkbox
+            checked={selected.includes(p.id)}
+            onCheckedChange={() => onChange(p.id)}
+          />
+          <span>{p.icon} {p.name}</span>
+        </label>
+      ))}
+    </div>
+  );
 
   return (
     <div className="glass-card p-6 space-y-6">
@@ -185,51 +292,38 @@ export function TeamManagement() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <Label className="text-xs text-muted-foreground">Nome completo</Label>
-            <Input
-              placeholder="João Silva"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-            />
+            <Input placeholder="João Silva" value={newName} onChange={(e) => setNewName(e.target.value)} />
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Email</Label>
-            <Input
-              type="email"
-              placeholder="joao@empresa.com"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-            />
+            <Input type="email" placeholder="joao@empresa.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Senha inicial</Label>
-            <Input
-              type="password"
-              placeholder="••••••••"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-            />
+            <Input type="password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Telefone (WhatsApp)</Label>
+            <Input placeholder="5527999999999" value={newPhone} onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, ""))} />
+            <p className="text-xs text-muted-foreground mt-1">Código do país + DDD + número</p>
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Função</Label>
             <Select value={newRole} onValueChange={(v) => setNewRole(v as "admin" | "team")}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="team">Membro</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Telefone (WhatsApp)</Label>
-            <Input
-              placeholder="5527999999999"
-              value={newPhone}
-              onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, ""))}
-            />
-            <p className="text-xs text-muted-foreground mt-1">Código do país + DDD + número</p>
-          </div>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground mb-2 block">Acesso aos Projetos</Label>
+          <ProjectCheckboxes
+            selected={newProjectIds}
+            onChange={(id) => toggleProjectId(id, newProjectIds, setNewProjectIds)}
+          />
         </div>
         <Button onClick={handleAddMember} disabled={adding} className="w-full sm:w-auto">
           <UserPlus className="h-4 w-4 mr-2" />
@@ -251,6 +345,7 @@ export function TeamManagement() {
                 <TableHead className="text-xs">Email</TableHead>
                 <TableHead className="text-xs">Telefone</TableHead>
                 <TableHead className="text-xs">Função</TableHead>
+                <TableHead className="text-xs">Projetos</TableHead>
                 <TableHead className="text-xs text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -266,32 +361,43 @@ export function TeamManagement() {
                       {m.role === "admin" ? "Admin" : "Membro"}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {projectBadges(m.project_ids)}
+                      {m.project_ids.length === 0 && <span className="text-xs text-muted-foreground">Nenhum</span>}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Remover membro?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Tem certeza que deseja remover <strong>{m.full_name}</strong> da equipe?
-                            Esta ação não pode ser desfeita.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleRemoveMember(m.user_id, m.full_name)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Remover
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(m)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Remover membro?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja remover <strong>{m.full_name}</strong> da equipe?
+                              Esta ação não pode ser desfeita.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleRemoveMember(m.user_id, m.full_name)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Remover
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -299,6 +405,49 @@ export function TeamManagement() {
           </Table>
         )}
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editMember} onOpenChange={(open) => !open && setEditMember(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Membro</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label className="text-xs text-muted-foreground">Nome completo</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Telefone (WhatsApp)</Label>
+              <Input
+                placeholder="5527999999999"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value.replace(/\D/g, ""))}
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Função</Label>
+              <Select value={editRole} onValueChange={(v) => setEditRole(v as "admin" | "team")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="team">Membro</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-2 block">Acesso aos Projetos</Label>
+              <ProjectCheckboxes
+                selected={editProjectIds}
+                onChange={(id) => toggleProjectId(id, editProjectIds, setEditProjectIds)}
+              />
+            </div>
+            <Button onClick={handleSaveEdit} disabled={saving} className="w-full">
+              {saving ? "Salvando..." : "Salvar Alterações"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
