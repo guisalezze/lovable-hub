@@ -37,6 +37,10 @@ const educacionalItems: NavItem[] = [
   { label: "Clientes", icon: UserCheck, to: "/clientes" },
   { label: "Tarefas", icon: CheckSquare, to: "/tarefas" },
   { label: "Onboarding", icon: ClipboardList, to: "/onboarding-admin" },
+  { label: "Produtos", icon: Package, to: "/produtos" },
+  { label: "Agenda", icon: CalendarDays, to: "/agenda" },
+  { label: "Relatórios", icon: FileBarChart, to: "/relatorios" },
+  { label: "Integrações", icon: Plug, to: "/integracoes" },
 ];
 
 const nutraItems: NavItem[] = [
@@ -44,14 +48,14 @@ const nutraItems: NavItem[] = [
   { label: "Meta Ads", icon: BarChart3, to: "/nutra/meta-ads" },
   { label: "Financeiro", icon: DollarSign, to: "/financeiro" },
   { label: "Tarefas", icon: CheckSquare, to: "/tarefas" },
-];
-
-const sharedItems: NavItem[] = [
-  { label: "Equipe", icon: Users2, to: "/equipe" },
   { label: "Produtos", icon: Package, to: "/produtos" },
   { label: "Agenda", icon: CalendarDays, to: "/agenda" },
   { label: "Relatórios", icon: FileBarChart, to: "/relatorios" },
   { label: "Integrações", icon: Plug, to: "/integracoes" },
+];
+
+const sharedItems: NavItem[] = [
+  { label: "Equipe", icon: Users2, to: "/equipe" },
   { label: "Configurações", icon: Settings, to: "/configuracoes" },
 ];
 
