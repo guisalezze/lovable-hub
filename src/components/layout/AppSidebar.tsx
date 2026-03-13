@@ -37,6 +37,7 @@ const educacionalItems: NavItem[] = [
   { label: "Implementações", icon: Briefcase, to: "/implementacoes" },
   { label: "Clientes", icon: UserCheck, to: "/clientes" },
   { label: "Tarefas", icon: CheckSquare, to: "/tarefas" },
+  { label: "Copies", icon: FileText, to: "/copies" },
   { label: "Onboarding", icon: ClipboardList, to: "/onboarding-admin" },
   { label: "Produtos", icon: Package, to: "/produtos" },
   { label: "Agenda", icon: CalendarDays, to: "/agenda" },
