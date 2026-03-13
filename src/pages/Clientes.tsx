@@ -21,9 +21,35 @@ export default function ClientesPage() {
   const [segmentFilter, setSegmentFilter] = useState("all");
   const [sortBy, setSortBy] = useState<SortKey>("ltv");
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
+  const [waClient, setWaClient] = useState<ClientLtv | null>(null);
+  const [waMessage, setWaMessage] = useState("");
+  const [waSending, setWaSending] = useState(false);
 
   const { data: clients = [], isLoading } = useClientLtvList(search.length >= 2 ? search : undefined);
   const { data: kpis } = useClientLtvKpis();
+
+  const handleSendWhatsApp = async () => {
+    if (!waClient?.phone || !waMessage.trim()) return;
+    setWaSending(true);
+    try {
+      const cleanPhone = waClient.phone.replace(/[\s\-\+\(\)]/g, "");
+      const { data, error } = await supabase.functions.invoke("send-whatsapp", {
+        body: {
+          nomeCliente: waClient.name || waClient.email,
+          telefoneCliente: cleanPhone,
+          mensagem: waMessage.trim(),
+        },
+      });
+      if (error) throw error;
+      toast({ title: "Mensagem enviada!", description: `WhatsApp enviado para ${waClient.name || waClient.email}` });
+      setWaClient(null);
+      setWaMessage("");
+    } catch (err: any) {
+      toast({ title: "Erro ao enviar", description: err.message || "Tente novamente", variant: "destructive" });
+    } finally {
+      setWaSending(false);
+    }
+  };
 
   const filtered = useMemo(() => {
     let result = clients;
