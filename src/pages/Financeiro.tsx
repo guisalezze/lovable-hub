@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useProject } from "@/contexts/ProjectContext";
+import { useMetaAdAccounts, useMetaAdCampaigns } from "@/hooks/useMetaAds";
 import { DollarSign, TrendingUp, Target, Wallet, Plus, Download, ArrowUpRight, ArrowDownRight, BarChart2 } from "lucide-react";
-import { KpiCard } from "@/components/dashboard/KpiCard";
 import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,13 +37,42 @@ function usePeriodSales(since: string, until: string) {
   });
 }
 
-function usePeriodInvestments(since: string, until: string) {
+function useNutraSalesRevenue(projectId: string | undefined, since: string, until: string) {
   return useQuery({
-    queryKey: ["period-investments", since, until],
+    queryKey: ["nutra-sales-revenue", projectId, since, until],
     queryFn: async () => {
+      if (!projectId) return { totalRevenue: 0, daily: [] as { date: string; revenue: number }[] };
       const { data, error } = await supabase
+        .from("nutra_sales")
+        .select("created_at, amount, status")
+        .eq("project_id", projectId)
+        .in("status", ["approved", "paid", "complete"])
+        .gte("created_at", `${since}T00:00:00`)
+        .lte("created_at", `${until}T23:59:59`);
+      if (error) throw error;
+      const totalRevenue = (data || []).reduce((a, s) => a + Number(s.amount || 0), 0);
+      const map: Record<string, number> = {};
+      (data || []).forEach((s: any) => {
+        const d = s.created_at.slice(0, 10);
+        map[d] = (map[d] || 0) + Number(s.amount || 0);
+      });
+      const daily = Object.entries(map).map(([date, revenue]) => ({ date, revenue })).sort((a, b) => a.date.localeCompare(b.date));
+      return { totalRevenue, daily };
+    },
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+}
+
+function usePeriodInvestments(projectId: string | undefined, since: string, until: string) {
+  return useQuery({
+    queryKey: ["period-investments", projectId, since, until],
+    queryFn: async () => {
+      const base = supabase
         .from("investments").select("amount, date, description")
         .gte("date", since).lte("date", until);
+      const query = projectId ? base.eq("project_id", projectId) : base;
+      const { data, error } = await query;
       if (error) throw error;
       const total = (data || []).reduce((a, i) => a + Number(i.amount), 0);
       const daily = (data || []).map(i => ({ date: i.date, amount: Number(i.amount), description: i.description }));
@@ -52,11 +82,13 @@ function usePeriodInvestments(since: string, until: string) {
   });
 }
 
-function useAllInvestments() {
+function useAllInvestments(projectId: string | undefined) {
   return useQuery({
-    queryKey: ["investments", "all"],
+    queryKey: ["investments", "all", projectId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("investments").select("*").order("date", { ascending: false }).limit(50);
+      const base = supabase.from("investments").select("*").order("date", { ascending: false }).limit(50);
+      const query = projectId ? base.eq("project_id", projectId) : base;
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
@@ -81,8 +113,8 @@ const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency"
 
 function exportCSV(chartData: any[], since: string, until: string) {
   const rows = [
-    ["Data", "Receita", "Investimento", "Lucro"],
-    ...chartData.map(d => [d.date, d.revenue.toFixed(2), d.investment.toFixed(2), d.profit.toFixed(2)]),
+    ["Data", "Receita", "Investimento (Manual)", "Investimento (Ads)", "Lucro"],
+    ...chartData.map(d => [d.date, d.revenue.toFixed(2), d.investment.toFixed(2), d.adSpend.toFixed(2), d.profit.toFixed(2)]),
   ];
   const csv = rows.map(r => r.join(";")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -96,6 +128,9 @@ function exportCSV(chartData: any[], since: string, until: string) {
 }
 
 export default function FinanceiroPage() {
+  const { currentProject } = useProject();
+  const isNutra = currentProject?.slug === "nutra";
+
   const [since, setSince] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
   const [until, setUntil] = useState(format(new Date(), "yyyy-MM-dd"));
   const [investAmount, setInvestAmount] = useState("");
@@ -108,40 +143,71 @@ export default function FinanceiroPage() {
   const prevUntil = format(subDays(parseISO(since), 1), "yyyy-MM-dd");
   const prevSince = format(subDays(parseISO(since), days), "yyyy-MM-dd");
 
+  // Revenue: sales for educacional, nutra_sales for nutra
   const { data: salesData } = usePeriodSales(since, until);
   const { data: prevSalesData } = usePeriodSales(prevSince, prevUntil);
-  const { data: invData } = usePeriodInvestments(since, until);
-  const { data: prevInvData } = usePeriodInvestments(prevSince, prevUntil);
-  const { data: allInvestments = [] } = useAllInvestments();
+  const { data: nutraSalesData } = useNutraSalesRevenue(isNutra ? currentProject?.id : undefined, since, until);
+  const { data: prevNutraSalesData } = useNutraSalesRevenue(isNutra ? currentProject?.id : undefined, prevSince, prevUntil);
 
-  const totalRevenue = salesData?.totalRevenue ?? 0;
-  const totalInvestment = invData?.total ?? 0;
+  // Manual investments filtered by project
+  const { data: invData } = usePeriodInvestments(currentProject?.id, since, until);
+  const { data: prevInvData } = usePeriodInvestments(currentProject?.id, prevSince, prevUntil);
+  const { data: allInvestments = [] } = useAllInvestments(currentProject?.id);
+
+  // Meta Ad Spend from campaigns table
+  const { data: adAccounts = [] } = useMetaAdAccounts();
+  const activeAccount = adAccounts[0];
+  const { data: adCampaigns = [] } = useMetaAdCampaigns(activeAccount?.id, since, until);
+  const { data: prevAdCampaigns = [] } = useMetaAdCampaigns(activeAccount?.id, prevSince, prevUntil);
+
+  const adSpendTotal = adCampaigns.reduce((s: number, c: any) => s + Number(c.spend || 0), 0);
+  const prevAdSpendTotal = prevAdCampaigns.reduce((s: number, c: any) => s + Number(c.spend || 0), 0);
+
+  // Use appropriate revenue source
+  const revenueData = isNutra ? nutraSalesData : salesData;
+  const prevRevenueData = isNutra ? prevNutraSalesData : prevSalesData;
+
+  const totalRevenue = revenueData?.totalRevenue ?? 0;
+  const manualInvestment = invData?.total ?? 0;
+  const totalInvestment = manualInvestment + adSpendTotal;
   const profit = totalRevenue - totalInvestment;
   const roas = totalInvestment > 0 ? (totalRevenue / totalInvestment).toFixed(1) : "—";
 
-  const prevRevenue = prevSalesData?.totalRevenue ?? 0;
-  const prevInvestment = prevInvData?.total ?? 0;
-  const prevProfit = prevRevenue - prevInvestment;
+  const prevRevenue = prevRevenueData?.totalRevenue ?? 0;
+  const prevManualInvestment = prevInvData?.total ?? 0;
+  const prevTotalInvestment = prevManualInvestment + prevAdSpendTotal;
+  const prevProfit = prevRevenue - prevTotalInvestment;
 
   // Chart data
   const chartData = useMemo(() => {
-    const map: Record<string, { date: string; revenue: number; investment: number; profit: number }> = {};
-    (salesData?.daily || []).forEach(d => {
-      map[d.date] = { date: d.date, revenue: d.revenue, investment: 0, profit: 0 };
+    const map: Record<string, { date: string; revenue: number; investment: number; adSpend: number; profit: number }> = {};
+    (revenueData?.daily || []).forEach((d: any) => {
+      map[d.date] = { date: d.date, revenue: d.revenue, investment: 0, adSpend: 0, profit: 0 };
     });
-    (invData?.daily || []).forEach(i => {
-      if (!map[i.date]) map[i.date] = { date: i.date, revenue: 0, investment: 0, profit: 0 };
+    (invData?.daily || []).forEach((i: any) => {
+      if (!map[i.date]) map[i.date] = { date: i.date, revenue: 0, investment: 0, adSpend: 0, profit: 0 };
       map[i.date].investment += i.amount;
     });
+    // Aggregate ad spend by date from campaigns
+    adCampaigns.forEach((c: any) => {
+      const d = c.date;
+      if (!d) return;
+      if (!map[d]) map[d] = { date: d, revenue: 0, investment: 0, adSpend: 0, profit: 0 };
+      map[d].adSpend += Number(c.spend || 0);
+    });
     return Object.values(map)
-      .map(d => ({ ...d, profit: d.revenue - d.investment }))
+      .map(d => ({ ...d, profit: d.revenue - d.investment - d.adSpend }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [salesData, invData]);
+  }, [revenueData, invData, adCampaigns]);
 
   async function addInvestment() {
     const amount = parseFloat(investAmount);
     if (!amount || amount <= 0) return toast.error("Valor inválido");
-    const { error } = await supabase.from("investments").insert({ amount, description: investDesc || null });
+    const { error } = await supabase.from("investments").insert({
+      amount,
+      description: investDesc || null,
+      project_id: currentProject?.id || null,
+    });
     if (error) return toast.error("Erro ao salvar");
     toast.success("Investimento registrado");
     setInvestAmount("");
@@ -155,7 +221,9 @@ export default function FinanceiroPage() {
     <div className="space-y-6 max-w-5xl">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Financeiro</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            {currentProject?.icon} Financeiro · {currentProject?.name}
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">Receita, investimento e ROAS</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -165,10 +233,10 @@ export default function FinanceiroPage() {
           </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" className="gap-2"><Plus className="h-4 w-4" />Investimento</Button>
+              <Button size="sm" className="gap-2"><Plus className="h-4 w-4" />Gasto Manual</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>Novo Investimento</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Novo Gasto Manual</DialogTitle></DialogHeader>
               <div className="space-y-3 mt-2">
                 <Input placeholder="Valor (R$)" type="number" value={investAmount} onChange={(e) => setInvestAmount(e.target.value)} />
                 <Input placeholder="Descrição (opcional)" value={investDesc} onChange={(e) => setInvestDesc(e.target.value)} />
@@ -180,16 +248,21 @@ export default function FinanceiroPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="glass-card p-4 space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground"><DollarSign className="h-4 w-4" /><span className="text-xs font-medium">Receita Total</span></div>
+          <div className="flex items-center gap-2 text-muted-foreground"><DollarSign className="h-4 w-4" /><span className="text-xs font-medium">Receita</span></div>
           <p className="text-xl font-bold text-foreground">{fmtBRL(totalRevenue)}</p>
           <DeltaBadge current={totalRevenue} previous={prevRevenue} />
         </div>
         <div className="glass-card p-4 space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground"><Wallet className="h-4 w-4" /><span className="text-xs font-medium">Investimento</span></div>
-          <p className="text-xl font-bold text-foreground">{fmtBRL(totalInvestment)}</p>
-          <DeltaBadge current={totalInvestment} previous={prevInvestment} />
+          <div className="flex items-center gap-2 text-muted-foreground"><BarChart2 className="h-4 w-4" /><span className="text-xs font-medium">Ads Spend</span></div>
+          <p className="text-xl font-bold text-foreground">{fmtBRL(adSpendTotal)}</p>
+          <DeltaBadge current={adSpendTotal} previous={prevAdSpendTotal} />
+        </div>
+        <div className="glass-card p-4 space-y-1">
+          <div className="flex items-center gap-2 text-muted-foreground"><Wallet className="h-4 w-4" /><span className="text-xs font-medium">Gastos Manuais</span></div>
+          <p className="text-xl font-bold text-foreground">{fmtBRL(manualInvestment)}</p>
+          <DeltaBadge current={manualInvestment} previous={prevManualInvestment} />
         </div>
         <div className="glass-card p-4 space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground"><TrendingUp className="h-4 w-4" /><span className="text-xs font-medium">Lucro</span></div>
@@ -214,27 +287,28 @@ export default function FinanceiroPage() {
               <Tooltip formatter={(v: number) => fmtBRL(v)} labelFormatter={d => { try { return format(parseISO(d as string), "dd/MM/yyyy"); } catch { return d; }}} />
               <Legend />
               <Bar dataKey="revenue" name="Receita" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="investment" name="Investimento" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="investment" name="Gastos Manuais" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="adSpend" name="Ads Spend" fill="#f59e0b" radius={[4, 4, 0, 0]} />
               <Line dataKey="profit" name="Lucro" stroke="#10b981" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      {/* Product Goals */}
-      <ProductGoalsSection since={since} until={until} />
+      {/* Product Goals - only for educacional */}
+      {!isNutra && <ProductGoalsSection since={since} until={until} />}
 
-      {/* Investment History */}
+      {/* Manual Investment History */}
       {allInvestments.length > 0 && (
         <div className="glass-card p-4">
-          <h3 className="text-sm font-semibold text-foreground mb-3">Histórico de Investimentos</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-3">Histórico de Gastos Manuais</h3>
           <div className="space-y-2">
             {allInvestments.map((inv: any) => (
               <div key={inv.id} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
                 <div className="flex items-center gap-3">
                   <BarChart2 className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-sm text-foreground">{inv.description || "Investimento em tráfego"}</p>
+                    <p className="text-sm text-foreground">{inv.description || "Gasto manual"}</p>
                     <p className="text-[10px] text-muted-foreground">
                       {(() => { try { return format(parseISO(inv.date), "d 'de' MMM 'de' yyyy", { locale: ptBR }); } catch { return inv.date; }})()}
                     </p>

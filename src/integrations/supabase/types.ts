@@ -538,6 +538,7 @@ export type Database = {
           date: string
           description: string | null
           id: string
+          project_id: string | null
         }
         Insert: {
           amount: number
@@ -546,6 +547,7 @@ export type Database = {
           date?: string
           description?: string | null
           id?: string
+          project_id?: string | null
         }
         Update: {
           amount?: number
@@ -554,8 +556,17 @@ export type Database = {
           date?: string
           description?: string | null
           id?: string
+          project_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "investments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lead_notes: {
         Row: {
