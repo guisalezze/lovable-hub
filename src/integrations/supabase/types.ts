@@ -222,6 +222,183 @@ export type Database = {
           },
         ]
       }
+      copy_files: {
+        Row: {
+          copy_item_id: string | null
+          copy_project_id: string
+          created_at: string
+          file_name: string
+          file_size_kb: number | null
+          file_type: string | null
+          file_url: string
+          folder: string
+          id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          copy_item_id?: string | null
+          copy_project_id: string
+          created_at?: string
+          file_name: string
+          file_size_kb?: number | null
+          file_type?: string | null
+          file_url: string
+          folder?: string
+          id?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          copy_item_id?: string | null
+          copy_project_id?: string
+          created_at?: string
+          file_name?: string
+          file_size_kb?: number | null
+          file_type?: string | null
+          file_url?: string
+          folder?: string
+          id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copy_files_copy_item_id_fkey"
+            columns: ["copy_item_id"]
+            isOneToOne: false
+            referencedRelation: "copy_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copy_files_copy_project_id_fkey"
+            columns: ["copy_project_id"]
+            isOneToOne: false
+            referencedRelation: "copy_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copy_item_versions: {
+        Row: {
+          content: string
+          copy_item_id: string
+          created_at: string
+          id: string
+          saved_by: string | null
+        }
+        Insert: {
+          content?: string
+          copy_item_id: string
+          created_at?: string
+          id?: string
+          saved_by?: string | null
+        }
+        Update: {
+          content?: string
+          copy_item_id?: string
+          created_at?: string
+          id?: string
+          saved_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copy_item_versions_copy_item_id_fkey"
+            columns: ["copy_item_id"]
+            isOneToOne: false
+            referencedRelation: "copy_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copy_items: {
+        Row: {
+          content: string
+          copy_project_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_validated: boolean
+          sort_order: number
+          tags: string[] | null
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string
+          copy_project_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_validated?: boolean
+          sort_order?: number
+          tags?: string[] | null
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          copy_project_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_validated?: boolean
+          sort_order?: number
+          tags?: string[] | null
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copy_items_copy_project_id_fkey"
+            columns: ["copy_project_id"]
+            isOneToOne: false
+            referencedRelation: "copy_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copy_projects: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          project_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          project_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          project_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copy_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       google_tokens: {
         Row: {
           access_token: string
