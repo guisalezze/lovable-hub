@@ -168,6 +168,21 @@ export default function ClientesPage() {
                 </div>
               </div>
               <div className="flex items-center gap-4 shrink-0 ml-3">
+                {client.phone && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setWaClient(client);
+                      setWaMessage("");
+                    }}
+                    title="Enviar WhatsApp"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                  </Button>
+                )}
                 <div className="text-right hidden md:block">
                   <p className="text-[11px] text-muted-foreground">{client.total_purchases} compras</p>
                 </div>
