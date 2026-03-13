@@ -1,119 +1,102 @@
 
-# Plano: Substituir Inbox por Modulo de Performance de Equipe
 
-## Resumo
+# Plano: Multi-Projeto + Nutra + Rebranding Solaryz
 
-Remover o modulo Inbox e substituir por um dashboard de Performance de Equipe. O modulo tera duas visoes: "Minha Performance" (acessivel por todos) e "Minha Equipe" (acessivel apenas por admins). Todos os dados serao derivados da tabela `tasks` existente -- nenhuma nova tabela e necessaria.
+## Escopo Total
 
----
-
-## 1. Logica de Dados (sem alteracao de banco)
-
-Todos os KPIs serao calculados a partir da tabela `tasks` ja existente, usando os campos `assigned_to`, `status`, `completed_at`, `created_at` e `due_date`:
-
-- **Taxa de Conclusao (%)**: tarefas com status `concluido` / total de tarefas atribuidas ao usuario
-- **Produtividade Media**: media de tarefas concluidas por dia nos ultimos 30 dias
-- **Tarefas Ativas**: total de tarefas atribuidas com status diferente de `concluido`
-- **Tarefas em Andamento**: tarefas com status `em_andamento`
-- **Performance Individual**: score composto (conclusao no prazo, velocidade, volume) exibido como barra de progresso
-- **Grafico 7 dias**: contagem de tarefas concluidas por dia (`completed_at`) nos ultimos 7 dias
+Consolidação dos dois prompts num único plano de implementação, com rebranding de OpsCRM para **Solaryz** e garantia de que o disparo WhatsApp de tarefas funcione para ambos os projetos.
 
 ---
 
-## 2. Arquivos a Criar
+## 1. Banco de Dados (Migrações SQL)
 
-### `src/hooks/useTeamPerformance.ts`
-Hook que busca:
-- Tarefas do usuario logado (para "Minha Performance")
-- Tarefas de todos os membros (para admins, visao "Minha Equipe")
-- Lista de membros da equipe via `profiles` + `user_roles`
-- Verifica se o usuario e admin usando a query em `user_roles`
+**Migração única com:**
 
-Retorna KPIs calculados no frontend a partir dos dados brutos.
+- Tabela `projects` (slug: educacional/nutra) + seed
+- Tabela `user_project_access` com RLS
+- Coluna `project_id` na tabela `tasks` + migração das tarefas existentes para "educacional"
+- Função `get_my_projects()` (security definer)
+- Admins recebem acesso a ambos os projetos automaticamente
+- Tabelas Meta Ads: `meta_ad_accounts`, `meta_campaigns`, `meta_adsets`, `meta_ads`, `meta_rules`, `meta_custom_metrics`
+- Tabela `nutra_sales` (Cartpanda + ClickBank)
+- RLS em todas as novas tabelas
 
-### `src/pages/Equipe.tsx`
-Pagina principal com duas abas (Tabs):
-- **Minha Performance**: dashboard pessoal (todos veem)
-- **Minha Equipe**: grid de cards com cada membro (somente admins)
+## 2. Contexto de Projeto
 
-A aba "Minha Equipe" so aparece para admins.
+- Criar `src/contexts/ProjectContext.tsx` com `ProjectProvider` e hook `useProject()`
+- Persiste projeto selecionado no localStorage
+- Usa `supabase.rpc("get_my_projects")` para listar projetos acessíveis
+- Envolver App.tsx com `ProjectProvider`
 
-### `src/components/equipe/PerformanceDashboard.tsx`
-Componente reutilizavel que renderiza o dashboard de um usuario (usado tanto na visao pessoal quanto ao clicar em um membro da equipe). Contem:
-- 4 KPI cards (Taxa de Conclusao com barra de progresso, Produtividade Media, Tarefas Ativas, Tarefas em Andamento)
-- Secao "Performance Individual" com metricas detalhadas e barras de progresso
-- Grafico de tendencia de 7 dias (recharts AreaChart)
+## 3. Sidebar + Rebranding
 
-### `src/components/equipe/TeamMemberCard.tsx`
-Card para a visao "Minha Equipe" mostrando nome, avatar, taxa de conclusao resumida. Ao clicar, abre o `PerformanceDashboard` daquele membro.
+- Renomear "OpsCRM" → "Solaryz" no logo da sidebar e em qualquer referência no código
+- Adicionar `ProjectSwitcher` (dropdown) no topo da sidebar
+- Filtrar itens de menu por projeto (`projects: ["educacional"]`, `projects: ["nutra"]`, ou sem filtro = ambos)
+- Menu Nutra inclui: "Meta Ads" (ícone BarChart3)
 
----
+## 4. Tarefas — Filtro por Projeto + WhatsApp Nutra
 
-## 3. Arquivos a Modificar
+- `useTasks`: adicionar filtro `.eq("project_id", currentProject?.id)` nas queries
+- `useCreateTask`: incluir `project_id: currentProject?.id` ao criar tarefa
+- **WhatsApp**: A lógica de disparo já existe em `useTasks.ts` e é agnóstica de projeto — funciona automaticamente para qualquer tarefa com prioridade alta/urgente e responsável com `phone_e164`. Nenhuma alteração necessária.
 
-### `src/App.tsx`
-- Remover import de `Inbox`
-- Adicionar import de `Equipe`
-- Trocar rota `/inbox` por `/equipe`
+## 5. Edge Functions (5 novas)
 
-### `src/components/layout/AppSidebar.tsx`
-- Remover item "Inbox" com badge
-- Adicionar item "Equipe" com icone `Users2` (ou `BarChart3`)
-- Remover import de `useUnreadCount` (nao sera mais usado)
+| Função | Finalidade |
+|---|---|
+| `meta-oauth` | Troca code OAuth por token longo, salva contas |
+| `meta-sync` | Sincroniza métricas de campanhas/adsets/ads da API Meta |
+| `meta-action` | Pausa/retoma/altera orçamento de campanhas |
+| `cartpanda-s2s` | Webhook S2S da Cartpanda → `nutra_sales` |
+| `clickbank-webhook` | Webhook IPN do ClickBank → `nutra_sales` |
 
----
+Config TOML: `verify_jwt = false` para webhooks públicos (cartpanda, clickbank).
 
-## 4. Detalhes dos KPI Cards
+## 6. Hooks e Páginas
 
-| Card | Calculo | Visual |
-|---|---|---|
-| Taxa de Conclusao | `(concluidas / total) * 100` | Porcentagem + barra de progresso (Progress component) |
-| Produtividade Media | `concluidas_30d / 30` formatado como "X.X tarefas/dia" | Numero com texto descritivo |
-| Tarefas Ativas | `count(status != concluido)` | Numero grande |
-| Em Andamento | `count(status == em_andamento)` | Numero grande |
+- Criar `src/hooks/useMetaAds.ts` (contas, campanhas, sync, ações, vendas nutra)
+- Criar `src/pages/nutra/MetaAds.tsx` (tabela de campanhas com KPIs, filtros, ações)
+- Criar `src/pages/nutra/MetaCallback.tsx` (callback OAuth)
+- Criar `src/components/nutra/MetaOAuthButton.tsx`
+- Criar `src/components/nutra/MetaRulesDialog.tsx`
+- Criar `src/components/settings/ProjectAccessManager.tsx`
 
-### Performance Individual (secao expandida)
-- **Conclusao no Prazo**: % de tarefas concluidas antes da `due_date` -- barra de progresso
-- **Velocidade Media**: dias entre `created_at` e `completed_at` -- barra de progresso (invertida, menos = melhor)
-- **Volume Semanal**: tarefas concluidas na ultima semana vs meta (ex: 10) -- barra de progresso
+## 7. Rotas
 
----
+Novas rotas no App.tsx:
+- `/nutra/meta-callback` (pública, fora do AuthGuard)
+- `/nutra/meta-ads` (protegida)
 
-## 5. Grafico de Tendencia (7 dias)
+## 8. Dashboard
 
-Usando recharts `AreaChart` com:
-- Eixo X: dias da semana (Seg, Ter, Qua...)
-- Eixo Y: numero de tarefas concluidas
-- Dados: agrupamento de `completed_at` por dia nos ultimos 7 dias
-- Visual: area com gradiente usando as cores do tema
+- Exibir `{currentProject?.icon} Dashboard · {currentProject?.name}` no header
+- Filtrar tasks do dashboard por `project_id`
 
----
+## 9. Secrets Necessários
 
-## 6. Controle de Acesso
+Serão solicitados antes da implementação:
+- `META_APP_ID` / `META_APP_SECRET` (Meta for Developers)
+- `CLICKBANK_SECRET_KEY` (ClickBank vendor settings)
+- `VITE_META_APP_ID` (variável pública no .env)
 
-- **Todos os usuarios**: veem apenas "Minha Performance" (seus proprios dados)
-- **Admins**: veem as duas abas. Na aba "Minha Equipe", podem clicar em qualquer membro para ver o dashboard completo dele
-- A verificacao de admin sera feita consultando `user_roles` onde `role = 'admin'`
+## 10. Ordem de Execução
 
----
-
-## 7. Fluxo de Navegacao
-
-```text
-/equipe
-  |-- Aba "Minha Performance" (padrao para todos)
-  |     |-- KPI Cards pessoais
-  |     |-- Performance Individual com barras
-  |     |-- Grafico 7 dias
-  |
-  |-- Aba "Minha Equipe" (somente admin)
-        |-- Grid de cards com cada membro
-        |-- Clicar no card -> abre dashboard do membro (mesmo layout)
-        |-- Botao "Voltar" para retornar a lista
-```
+1. Migração SQL (tudo numa única migração)
+2. Solicitar secrets (META_APP_ID, META_APP_SECRET, CLICKBANK_SECRET_KEY)
+3. Criar ProjectContext + Provider
+4. Atualizar App.tsx (provider + rotas)
+5. Atualizar Sidebar (rebranding + switcher + menu filtrado)
+6. Atualizar useTasks + Tarefas.tsx (filtro project_id)
+7. Criar edge functions (meta-oauth, meta-sync, meta-action, cartpanda-s2s, clickbank-webhook)
+8. Criar hooks, páginas e componentes Nutra
+9. Atualizar Dashboard
+10. Adicionar ProjectAccessManager em Configurações
 
 ---
 
-## 8. Impacto no Inbox/Notificacoes
+**Arquivos criados:** ~12 novos  
+**Arquivos modificados:** ~6 existentes  
+**Migrações:** 1 grande  
+**Edge functions:** 5 novas
 
-O modulo de notificacoes (`useNotifications`, `useUnreadCount`) continuara existindo no banco e nos hooks, mas nao tera mais uma pagina dedicada. Se no futuro quiser reativar, basta adicionar a rota novamente. O badge de notificacoes sera removido do sidebar.
