@@ -1,11 +1,15 @@
 import { useState, useMemo } from "react";
-import { Search, Crown, ArrowUpDown } from "lucide-react";
+import { Search, Crown, ArrowUpDown, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useClientLtvList, useClientLtvKpis, type ClientLtv } from "@/hooks/useClientLtv";
 import { LtvBadge } from "@/components/shared/LtvBadge";
 import { ClientDetailSheet } from "@/components/clients/ClientDetailSheet";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const fmtBRL = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -17,9 +21,35 @@ export default function ClientesPage() {
   const [segmentFilter, setSegmentFilter] = useState("all");
   const [sortBy, setSortBy] = useState<SortKey>("ltv");
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
+  const [waClient, setWaClient] = useState<ClientLtv | null>(null);
+  const [waMessage, setWaMessage] = useState("");
+  const [waSending, setWaSending] = useState(false);
 
   const { data: clients = [], isLoading } = useClientLtvList(search.length >= 2 ? search : undefined);
   const { data: kpis } = useClientLtvKpis();
+
+  const handleSendWhatsApp = async () => {
+    if (!waClient?.phone || !waMessage.trim()) return;
+    setWaSending(true);
+    try {
+      const cleanPhone = waClient.phone.replace(/[\s\-\+\(\)]/g, "");
+      const { data, error } = await supabase.functions.invoke("send-whatsapp", {
+        body: {
+          nomeCliente: waClient.name || waClient.email,
+          telefoneCliente: cleanPhone,
+          mensagem: waMessage.trim(),
+        },
+      });
+      if (error) throw error;
+      toast({ title: "Mensagem enviada!", description: `WhatsApp enviado para ${waClient.name || waClient.email}` });
+      setWaClient(null);
+      setWaMessage("");
+    } catch (err: any) {
+      toast({ title: "Erro ao enviar", description: err.message || "Tente novamente", variant: "destructive" });
+    } finally {
+      setWaSending(false);
+    }
+  };
 
   const filtered = useMemo(() => {
     let result = clients;
@@ -138,6 +168,21 @@ export default function ClientesPage() {
                 </div>
               </div>
               <div className="flex items-center gap-4 shrink-0 ml-3">
+                {client.phone && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setWaClient(client);
+                      setWaMessage("");
+                    }}
+                    title="Enviar WhatsApp"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                  </Button>
+                )}
                 <div className="text-right hidden md:block">
                   <p className="text-[11px] text-muted-foreground">{client.total_purchases} compras</p>
                 </div>
@@ -155,6 +200,37 @@ export default function ClientesPage() {
           onClose={() => setSelectedEmail(null)}
         />
       )}
+
+      <Dialog open={!!waClient} onOpenChange={(open) => { if (!open) setWaClient(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enviar WhatsApp</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">{waClient?.name || waClient?.email}</p>
+              <p className="text-xs text-muted-foreground">{waClient?.phone}</p>
+            </div>
+            <Textarea
+              placeholder="Digite a mensagem..."
+              value={waMessage}
+              onChange={(e) => setWaMessage(e.target.value)}
+              rows={4}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWaClient(null)}>Cancelar</Button>
+            <Button
+              onClick={handleSendWhatsApp}
+              disabled={waSending || !waMessage.trim()}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              {waSending ? "Enviando..." : "Enviar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
