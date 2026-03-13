@@ -1,11 +1,15 @@
 import { useState, useMemo } from "react";
-import { Search, Crown, ArrowUpDown } from "lucide-react";
+import { Search, Crown, ArrowUpDown, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useClientLtvList, useClientLtvKpis, type ClientLtv } from "@/hooks/useClientLtv";
 import { LtvBadge } from "@/components/shared/LtvBadge";
 import { ClientDetailSheet } from "@/components/clients/ClientDetailSheet";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const fmtBRL = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
