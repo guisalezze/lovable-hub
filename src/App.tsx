@@ -26,6 +26,8 @@ import Implementacoes from "./pages/Implementacoes";
 import Clientes from "./pages/Clientes";
 import MetaAds from "./pages/nutra/MetaAds";
 import MetaCallback from "./pages/nutra/MetaCallback";
+import Copies from "./pages/Copies";
+import CopyProjectDetail from "./pages/CopyProjectDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -94,6 +96,8 @@ const App = () => (
             <Route path="/implementacoes" element={<Implementacoes />} />
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/nutra/meta-ads" element={<MetaAds />} />
+            <Route path="/copies" element={<Copies />} />
+            <Route path="/copies/:id" element={<CopyProjectDetail />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

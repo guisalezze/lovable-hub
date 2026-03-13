@@ -1,61 +1,119 @@
 
-
-# Plano: Modulo de Copies
+# Plano: Substituir Inbox por Modulo de Performance de Equipe
 
 ## Resumo
-Adicionar o modulo **Copies** ao Solaryz, disponivel em ambos os projetos (Educacional e Nutra). Permite criar projetos de copy com blocos de criativos, oferta e referencias, com auto-save, versionamento e upload de arquivos.
+
+Remover o modulo Inbox e substituir por um dashboard de Performance de Equipe. O modulo tera duas visoes: "Minha Performance" (acessivel por todos) e "Minha Equipe" (acessivel apenas por admins). Todos os dados serao derivados da tabela `tasks` existente -- nenhuma nova tabela e necessaria.
 
 ---
 
-## 1. Banco de Dados (1 migracao)
+## 1. Logica de Dados (sem alteracao de banco)
 
-4 novas tabelas:
-- `copy_projects` (project_id, name, description, status, created_by)
-- `copy_items` (copy_project_id, type criativo/oferta, title, content, tags, is_validated)
-- `copy_item_versions` (copy_item_id, content, saved_by)
-- `copy_files` (copy_project_id, copy_item_id nullable, folder, file_name, file_url, file_type, file_size_kb, uploaded_by)
+Todos os KPIs serao calculados a partir da tabela `tasks` ja existente, usando os campos `assigned_to`, `status`, `completed_at`, `created_at` e `due_date`:
 
-RLS usando `has_role` + `user_project_access` (corrigindo o prompt original que referenciava `profiles.role` inexistente).
+- **Taxa de Conclusao (%)**: tarefas com status `concluido` / total de tarefas atribuidas ao usuario
+- **Produtividade Media**: media de tarefas concluidas por dia nos ultimos 30 dias
+- **Tarefas Ativas**: total de tarefas atribuidas com status diferente de `concluido`
+- **Tarefas em Andamento**: tarefas com status `em_andamento`
+- **Performance Individual**: score composto (conclusao no prazo, velocidade, volume) exibido como barra de progresso
+- **Grafico 7 dias**: contagem de tarefas concluidas por dia (`completed_at`) nos ultimos 7 dias
 
-Storage bucket `copy-files` (privado) com politica de upload/download para autenticados.
+---
 
-## 2. Sidebar
+## 2. Arquivos a Criar
 
-Adicionar `{ label: "Copies", icon: FileText, to: "/copies" }` em ambos `educacionalItems` e `nutraItems`, apos "Tarefas".
+### `src/hooks/useTeamPerformance.ts`
+Hook que busca:
+- Tarefas do usuario logado (para "Minha Performance")
+- Tarefas de todos os membros (para admins, visao "Minha Equipe")
+- Lista de membros da equipe via `profiles` + `user_roles`
+- Verifica se o usuario e admin usando a query em `user_roles`
 
-## 3. Rotas
+Retorna KPIs calculados no frontend a partir dos dados brutos.
 
-- `/copies` — lista de projetos de copy (filtrado por `currentProject`)
-- `/copies/:id` — detalhe com 3 abas (Criativos, Oferta, Referencias)
+### `src/pages/Equipe.tsx`
+Pagina principal com duas abas (Tabs):
+- **Minha Performance**: dashboard pessoal (todos veem)
+- **Minha Equipe**: grid de cards com cada membro (somente admins)
 
-## 4. Arquivos a Criar
+A aba "Minha Equipe" so aparece para admins.
 
-| Arquivo | Descricao |
-|---|---|
-| `src/pages/Copies.tsx` | Grid de cards de projetos de copy + filtros |
-| `src/pages/CopyProjectDetail.tsx` | 3 abas: Criativos, Oferta, Referencias |
-| `src/components/copies/CopyProjectDialog.tsx` | Modal criar/editar projeto |
-| `src/components/copies/CopyItemBlock.tsx` | Card expansivel com textarea auto-save, tags, validacao, historico |
-| `src/components/copies/CopyFileUpload.tsx` | Modal upload com drag & drop |
-| `src/components/copies/CopyVersionsDrawer.tsx` | Drawer lateral com historico de versoes |
-| `src/hooks/useCopyProjects.ts` | CRUD de copy_projects filtrado por currentProject |
-| `src/hooks/useCopyItems.ts` | CRUD de copy_items + versionamento automatico |
-| `src/hooks/useCopyFiles.ts` | Upload/delete Storage + copy_files |
+### `src/components/equipe/PerformanceDashboard.tsx`
+Componente reutilizavel que renderiza o dashboard de um usuario (usado tanto na visao pessoal quanto ao clicar em um membro da equipe). Contem:
+- 4 KPI cards (Taxa de Conclusao com barra de progresso, Produtividade Media, Tarefas Ativas, Tarefas em Andamento)
+- Secao "Performance Individual" com metricas detalhadas e barras de progresso
+- Grafico de tendencia de 7 dias (recharts AreaChart)
 
-## 5. Arquivos a Modificar
+### `src/components/equipe/TeamMemberCard.tsx`
+Card para a visao "Minha Equipe" mostrando nome, avatar, taxa de conclusao resumida. Ao clicar, abre o `PerformanceDashboard` daquele membro.
 
-- `src/components/layout/AppSidebar.tsx` — adicionar "Copies" nos dois menus
-- `src/App.tsx` — adicionar rotas `/copies` e `/copies/:id`
+---
 
-## 6. Auto-Save
+## 3. Arquivos a Modificar
 
-Debounce de 3s no textarea de cada bloco. Ao salvar: atualiza `copy_items.content` e insere nova versao em `copy_item_versions`. Indicador visual "Salvo as HH:MM".
+### `src/App.tsx`
+- Remover import de `Inbox`
+- Adicionar import de `Equipe`
+- Trocar rota `/inbox` por `/equipe`
 
-## 7. Detalhes Tecnicos
+### `src/components/layout/AppSidebar.tsx`
+- Remover item "Inbox" com badge
+- Adicionar item "Equipe" com icone `Users2` (ou `BarChart3`)
+- Remover import de `useUnreadCount` (nao sera mais usado)
 
-- React Query para queries/mutations com invalidacao
-- Upload para Supabase Storage no path `copy-files/{copy_project_id}/{folder}/{filename}`
-- Restaurar versao: salva versao atual antes de sobrescrever
-- Filtros: busca por nome, status (ativo/pausado/arquivado)
-- Tags como chips editaveis nos blocos
+---
 
+## 4. Detalhes dos KPI Cards
+
+| Card | Calculo | Visual |
+|---|---|---|
+| Taxa de Conclusao | `(concluidas / total) * 100` | Porcentagem + barra de progresso (Progress component) |
+| Produtividade Media | `concluidas_30d / 30` formatado como "X.X tarefas/dia" | Numero com texto descritivo |
+| Tarefas Ativas | `count(status != concluido)` | Numero grande |
+| Em Andamento | `count(status == em_andamento)` | Numero grande |
+
+### Performance Individual (secao expandida)
+- **Conclusao no Prazo**: % de tarefas concluidas antes da `due_date` -- barra de progresso
+- **Velocidade Media**: dias entre `created_at` e `completed_at` -- barra de progresso (invertida, menos = melhor)
+- **Volume Semanal**: tarefas concluidas na ultima semana vs meta (ex: 10) -- barra de progresso
+
+---
+
+## 5. Grafico de Tendencia (7 dias)
+
+Usando recharts `AreaChart` com:
+- Eixo X: dias da semana (Seg, Ter, Qua...)
+- Eixo Y: numero de tarefas concluidas
+- Dados: agrupamento de `completed_at` por dia nos ultimos 7 dias
+- Visual: area com gradiente usando as cores do tema
+
+---
+
+## 6. Controle de Acesso
+
+- **Todos os usuarios**: veem apenas "Minha Performance" (seus proprios dados)
+- **Admins**: veem as duas abas. Na aba "Minha Equipe", podem clicar em qualquer membro para ver o dashboard completo dele
+- A verificacao de admin sera feita consultando `user_roles` onde `role = 'admin'`
+
+---
+
+## 7. Fluxo de Navegacao
+
+```text
+/equipe
+  |-- Aba "Minha Performance" (padrao para todos)
+  |     |-- KPI Cards pessoais
+  |     |-- Performance Individual com barras
+  |     |-- Grafico 7 dias
+  |
+  |-- Aba "Minha Equipe" (somente admin)
+        |-- Grid de cards com cada membro
+        |-- Clicar no card -> abre dashboard do membro (mesmo layout)
+        |-- Botao "Voltar" para retornar a lista
+```
+
+---
+
+## 8. Impacto no Inbox/Notificacoes
+
+O modulo de notificacoes (`useNotifications`, `useUnreadCount`) continuara existindo no banco e nos hooks, mas nao tera mais uma pagina dedicada. Se no futuro quiser reativar, basta adicionar a rota novamente. O badge de notificacoes sera removido do sidebar.
