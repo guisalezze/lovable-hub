@@ -27,7 +27,7 @@ export function useTasks(filter?: { assignedToMe?: boolean; status?: TaskStatus;
   return useQuery({
     queryKey: ["tasks", filter],
     queryFn: async () => {
-      let query = supabase.from("tasks").select("*").order("created_at", { ascending: false });
+      let query = supabase.from("tasks").select("*").order("created_at", { ascending: false }) as any;
 
       if (filter?.assignedToMe) {
         const { data: { user } } = await supabase.auth.getUser();
