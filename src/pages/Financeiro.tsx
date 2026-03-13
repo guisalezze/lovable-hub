@@ -68,10 +68,10 @@ function usePeriodInvestments(projectId: string | undefined, since: string, unti
   return useQuery({
     queryKey: ["period-investments", projectId, since, until],
     queryFn: async () => {
-      let query = supabase
+      const base = supabase
         .from("investments").select("amount, date, description")
         .gte("date", since).lte("date", until);
-      if (projectId) query = query.eq("project_id", projectId);
+      const query = projectId ? base.eq("project_id", projectId) : base;
       const { data, error } = await query;
       if (error) throw error;
       const total = (data || []).reduce((a, i) => a + Number(i.amount), 0);
