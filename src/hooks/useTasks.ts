@@ -41,7 +41,7 @@ export function useTasks(filter?: { assignedToMe?: boolean; status?: TaskStatus;
       }
 
       const { data } = await query;
-      return (data as Task[]) || [];
+      return (data as unknown as Task[]) || [];
     },
   });
 }

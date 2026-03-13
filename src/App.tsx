@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
+import { ProjectProvider } from "@/contexts/ProjectContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Index from "./pages/Index";
 import Leads from "./pages/Leads";
@@ -23,6 +24,8 @@ import OnboardingAdmin from "./pages/OnboardingAdmin";
 import Onboarding from "./pages/Onboarding";
 import Implementacoes from "./pages/Implementacoes";
 import Clientes from "./pages/Clientes";
+import MetaAds from "./pages/nutra/MetaAds";
+import MetaCallback from "./pages/nutra/MetaCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -66,10 +69,13 @@ const App = () => (
         <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/onboarding/:token" element={<Onboarding />} />
+          <Route path="/nutra/meta-callback" element={<AuthGuard><MetaCallback /></AuthGuard>} />
           <Route
             element={
               <AuthGuard>
-                <AppLayout />
+                <ProjectProvider>
+                  <AppLayout />
+                </ProjectProvider>
               </AuthGuard>
             }
           >
@@ -87,6 +93,7 @@ const App = () => (
             <Route path="/onboarding-admin" element={<OnboardingAdmin />} />
             <Route path="/implementacoes" element={<Implementacoes />} />
             <Route path="/clientes" element={<Clientes />} />
+            <Route path="/nutra/meta-ads" element={<MetaAds />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

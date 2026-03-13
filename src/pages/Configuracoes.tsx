@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Settings, Link2, Unlink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TeamManagement } from "@/components/settings/TeamManagement";
+import { ProjectAccessManager } from "@/components/settings/ProjectAccessManager";
 import { WhatsAppConfig } from "@/components/settings/WhatsAppConfig";
 import { useGoogleAuth } from "@/hooks/useGoogleAuth";
 import { Button } from "@/components/ui/button";
