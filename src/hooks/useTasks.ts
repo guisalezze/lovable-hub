@@ -65,17 +65,7 @@ export function useCreateTask() {
       }).select("id").single();
       if (error) throw error;
 
-      // Sync to assignee's Google Calendar if task has due_date and assigned_to
-      if (task.assigned_to && task.due_date && inserted) {
-        supabase.functions.invoke("google-calendar-event", {
-          body: {
-            title: task.title,
-            start: task.due_date,
-            type: "task",
-            target_user_id: task.assigned_to,
-          },
-        }).catch(() => {});
-      }
+      // Google Calendar sync removed — using WhatsApp notifications only
 
       // Trigger WhatsApp notification if assigned to someone else
       if (task.assigned_to && user && task.assigned_to !== user.id && inserted) {
@@ -123,17 +113,7 @@ export function useUpdateTask() {
       const { error } = await supabase.from("tasks").update(updates).eq("id", id);
       if (error) throw error;
 
-      // If assigned_to changed, sync to new assignee's Google Calendar
-      if (updates.assigned_to && updates.due_date) {
-        supabase.functions.invoke("google-calendar-event", {
-          body: {
-            title: updates.title || "Tarefa",
-            start: updates.due_date,
-            type: "task",
-            target_user_id: updates.assigned_to,
-          },
-        }).catch(() => {});
-      }
+      // Google Calendar sync removed — using WhatsApp notifications only
 
       // If assigned_to changed, trigger WhatsApp notification
       if (updates.assigned_to) {
