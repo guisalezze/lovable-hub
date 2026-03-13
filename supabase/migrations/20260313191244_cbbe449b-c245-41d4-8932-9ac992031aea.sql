@@ -1,0 +1,1 @@
+UPDATE profiles SET phone_e164 = '+5527995296860' WHERE id = 'af31ba38-3f7f-4363-9055-dba4118696dd';
