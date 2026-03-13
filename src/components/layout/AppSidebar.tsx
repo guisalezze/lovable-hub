@@ -50,6 +50,7 @@ const nutraItems: NavItem[] = [
   { label: "Meta Ads", icon: BarChart3, to: "/nutra/meta-ads" },
   { label: "Financeiro", icon: DollarSign, to: "/financeiro" },
   { label: "Tarefas", icon: CheckSquare, to: "/tarefas" },
+  { label: "Copies", icon: FileText, to: "/copies" },
   { label: "Produtos", icon: Package, to: "/produtos" },
   { label: "Agenda", icon: CalendarDays, to: "/agenda" },
   { label: "Relatórios", icon: FileBarChart, to: "/relatorios" },
