@@ -94,7 +94,7 @@ const App = () => (
             <Route path="/configuracoes" element={<Configuracoes />} />
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="/onboarding-admin" element={<OnboardingAdmin />} />
-            <Route path="/implementacoes" element={<Implementacoes />} />
+            <Route path="/mentorias" element={<Implementacoes />} />
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/nutra/meta-ads" element={<MetaAds />} />
             <Route path="/meta-ads" element={<MetaAds />} />
