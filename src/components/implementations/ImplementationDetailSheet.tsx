@@ -230,10 +230,14 @@ export function ImplementationDetailSheet({
     }
   }
 
+  if (!open) return null;
+
   return (
     <>
     <Sheet open={open} onOpenChange={(v) => {
-      if (!v) onClose();
+      if (!v) {
+        onClose();
+      }
     }}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         {isLoading ? (
