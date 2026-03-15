@@ -54,7 +54,7 @@ function installmentStatusInfo(inst: ChargeInstallmentForImpl) {
 export function ImplementationDetailSheet({
   implId, open, onClose,
 }: { implId: string; open: boolean; onClose: () => void }) {
-  const { data, isLoading } = useImplementationDetail(implId);
+  const { data, isLoading, error } = useImplementationDetail(implId);
   const updateStep = useUpdateStepStatus();
   const addStepMut = useAddStep();
   const addDoc = useAddDocument();
@@ -238,6 +238,12 @@ export function ImplementationDetailSheet({
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center h-40"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center h-40 space-y-2">
+            <AlertTriangle className="h-6 w-6 text-destructive" />
+            <p className="text-sm text-destructive">Erro ao carregar mentoria</p>
+            <p className="text-xs text-muted-foreground">{(error as any)?.message || "Erro desconhecido"}</p>
+          </div>
         ) : !impl ? (
           <div className="flex flex-col items-center justify-center h-40 space-y-2">
             <AlertTriangle className="h-6 w-6 text-muted-foreground" />
