@@ -303,6 +303,7 @@ export function LeadDetailModal({ lead, open, onClose, onStatusChange }: LeadDet
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -596,5 +597,4 @@ export function LeadDetailModal({ lead, open, onClose, onStatusChange }: LeadDet
     />
   </>
   );
-}
 }
