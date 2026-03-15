@@ -91,15 +91,19 @@ export function useCopyItems(copyProjectId: string | undefined) {
         throw error;
       }
 
-      // Depois atualiza com structured_content (se a coluna existir)
+      // Depois atualiza com structured_content
       try {
         await (supabase as any)
           .from("copy_items")
           .update({ structured_content: defaultStructuredContent() })
           .eq("id", data.id);
-      } catch (e) {
-        // Se a coluna não existir, ignora (migration pendente)
-        console.warn("Could not set structured_content:", e);
+      } catch (e: any) {
+        // Se a coluna não existir (PGRST204), ignora
+        if (e?.code === "PGRST204") {
+          console.warn("structured_content column not found, skipping update");
+        } else {
+          console.error("Error setting structured_content:", e);
+        }
       }
 
       return data;
