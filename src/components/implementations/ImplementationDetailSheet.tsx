@@ -308,6 +308,28 @@ export function ImplementationDetailSheet({
     }
   }
 
+  function openReceiptModal(inst: ChargeInstallmentForImpl, isPaid: boolean) {
+    setReceiptModalIsEntry(false);
+    setReceiptModalInstallmentId(inst.id);
+    setReceiptModalIsPaid(isPaid);
+    setEntryReceiptFile(null);
+    setEntryReceiptPreview(null);
+    // Limpar previews anteriores se houver
+    if (!isPaid) {
+      setInstallmentReceiptFile(prev => {
+        const next = { ...prev };
+        delete next[inst.id];
+        return next;
+      });
+      setInstallmentReceiptPreview(prev => {
+        const next = { ...prev };
+        delete next[inst.id];
+        return next;
+      });
+    }
+    setReceiptModalOpen(true);
+  }
+
   if (!open) return null;
 
   return (
