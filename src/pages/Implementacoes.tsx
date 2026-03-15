@@ -66,7 +66,6 @@ function ImplementationCard({ impl, onClick }: { impl: Implementation; onClick: 
   return (
     <div
       onClick={(e) => {
-        e.preventDefault();
         e.stopPropagation();
         onClick();
       }}

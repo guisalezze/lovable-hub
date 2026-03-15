@@ -230,11 +230,11 @@ export function ImplementationDetailSheet({
     }
   }
 
-  if (!open) return null;
-
   return (
     <>
-    <Sheet open={open} onOpenChange={v => !v && onClose()}>
+    <Sheet open={open} onOpenChange={(v) => {
+      if (!v) onClose();
+    }}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center h-40"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
