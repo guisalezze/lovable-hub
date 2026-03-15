@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
+import { BottomNavBar } from "./BottomNavBar";
 import { Menu, Moon, Sun } from "lucide-react";
 import { NotificationPopover } from "./NotificationPopover";
 import { RevenueProgressBar, RevenueBarStrip } from "./RevenueProgressBar";
@@ -90,10 +91,16 @@ export function AppLayout() {
             <NotificationPopover />
           </div>
         </header>
-        <div className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
+        <div className={cn(
+          "flex-1 overflow-auto p-3 sm:p-4 md:p-6",
+          isMobile && "pb-20" // Espaço para o bottom nav
+        )}>
           <Outlet />
         </div>
       </main>
+      
+      {/* Bottom Navigation Bar - apenas no mobile */}
+      {isMobile && <BottomNavBar onMenuClick={() => setSidebarOpen(true)} />}
     </div>
   );
 }
