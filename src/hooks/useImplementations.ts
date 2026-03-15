@@ -401,11 +401,16 @@ export function useUpdateImplementation() {
       assigned_to: string | null;
       status: string;
     }>) => {
-      const { error } = await (supabase as any).from("implementations").update(updates).eq("id", id);
-      if (error) throw error;
+      const { error, data } = await (supabase as any).from("implementations").update(updates).eq("id", id).select();
+      if (error) {
+        console.error("Erro ao atualizar mentoria:", error);
+        throw new Error(error.message || "Erro ao atualizar mentoria. Verifique suas permissões.");
+      }
+      return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["implementations"] });
+      qc.invalidateQueries({ queryKey: ["implementation"] });
     },
   });
 }

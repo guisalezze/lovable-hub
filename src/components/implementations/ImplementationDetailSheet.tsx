@@ -142,8 +142,16 @@ export function ImplementationDetailSheet({
       total_value: editFields.total_value,
       status: editFields.status,
     }, {
-      onSuccess: () => { toast.success("Mentoria atualizada"); setEditing(false); },
-      onError: () => toast.error("Erro ao atualizar"),
+      onSuccess: () => { 
+        toast.success("Mentoria atualizada"); 
+        setEditing(false); 
+      },
+      onError: (error: any) => {
+        console.error("Erro ao atualizar:", error);
+        const errorMessage = error?.message || "Erro ao atualizar mentoria. Verifique suas permissões.";
+        toast.error(errorMessage);
+        setEditing(false); // Fechar modo de edição mesmo em caso de erro
+      },
     });
   }
 
@@ -209,6 +217,10 @@ export function ImplementationDetailSheet({
             return next;
           });
           setReceiptModalOpen(false);
+        },
+        onError: (err: any) => {
+          toast.error(err.message || "Erro ao marcar parcela como paga");
+          setReceiptModalOpen(false);
         }
       }
     );
@@ -230,7 +242,10 @@ export function ImplementationDetailSheet({
             setEntryReceiptPreview(null);
             setReceiptModalOpen(false);
           },
-          onError: (err: any) => toast.error(err.message || "Erro ao atualizar comprovante"),
+          onError: (err: any) => {
+            toast.error(err.message || "Erro ao atualizar comprovante");
+            setReceiptModalOpen(false);
+          },
         }
       );
     } else if (inst && receiptModalIsPaid && installmentReceiptFile[inst.id]) {
@@ -256,7 +271,10 @@ export function ImplementationDetailSheet({
             });
             setReceiptModalOpen(false);
           },
-          onError: (err: any) => toast.error(err.message || "Erro ao atualizar comprovante"),
+          onError: (err: any) => {
+            toast.error(err.message || "Erro ao atualizar comprovante");
+            setReceiptModalOpen(false);
+          },
         }
       );
     } else if (inst) {
@@ -952,7 +970,16 @@ export function ImplementationDetailSheet({
     </Sheet>
 
       {/* Modal de upload de comprovante */}
-      <Dialog open={receiptModalOpen} onOpenChange={setReceiptModalOpen}>
+      <Dialog open={receiptModalOpen} onOpenChange={(open) => {
+        setReceiptModalOpen(open);
+        if (!open) {
+          // Limpar estados ao fechar
+          setReceiptModalIsEntry(false);
+          setReceiptModalInstallmentId(null);
+          setEntryReceiptFile(null);
+          setEntryReceiptPreview(null);
+        }
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
