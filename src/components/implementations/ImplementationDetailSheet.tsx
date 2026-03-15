@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   CheckCircle2, Circle, Clock, Plus, ExternalLink,
   FileText, Link2, Video, Table2, File, Loader2,
-  Pencil, Trash2, Save, X, CreditCard, AlertTriangle, Check, Upload, Image,
+  Pencil, Trash2, Save, X, CreditCard, AlertTriangle, Check, Upload, Image, XCircle,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
