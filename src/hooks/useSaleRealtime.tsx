@@ -75,10 +75,17 @@ async function sendPushNotification(amount: number, productName: string) {
     }
 
     const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      console.debug("[useSaleRealtime] Sem sessão, push não enviado");
+    let { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      console.debug("[useSaleRealtime] Sem sessão válida, push não enviado:", sessionError);
       return;
+    }
+    
+    // Renovar token se expirado
+    const now = Math.floor(Date.now() / 1000);
+    if (session.expires_at && session.expires_at < now + 60) {
+      const { data: { session: newSession } } = await supabase.auth.refreshSession();
+      if (newSession) session = newSession;
     }
 
     const formattedAmount = new Intl.NumberFormat("pt-BR", {

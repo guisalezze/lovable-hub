@@ -144,8 +144,18 @@ async function sendTaskPushNotification(
 ) {
   try {
     const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
+    let { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      console.debug("[useTaskRealtime] Sem sessão válida, push não enviado:", sessionError);
+      return;
+    }
+    
+    // Renovar token se expirado
+    const now = Math.floor(Date.now() / 1000);
+    if (session.expires_at && session.expires_at < now + 60) {
+      const { data: { session: newSession } } = await supabase.auth.refreshSession();
+      if (newSession) session = newSession;
+    }
 
     await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
       method: "POST",

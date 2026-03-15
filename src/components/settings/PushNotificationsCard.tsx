@@ -43,33 +43,49 @@ export function PushNotificationsCard() {
       // Envia push nativo se inscrito
       if (isSubscribed && user) {
         const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          console.log("[PushNotificationsCard] Enviando push nativo para Edge Function...");
-          const response = await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              userId: user.id,
-              title: "Tarefa Criada!",
-              body: `${myName} criou uma tarefa pra você: Tarefa de teste`,
-              icon: "/logo.png",
-              tag: `task-test-${Date.now()}`,
-              data: { url: "/tarefas", type: "task" },
-            }),
-          });
-
-          const result = await response.json();
-          console.log("[PushNotificationsCard] Resposta da Edge Function:", result);
-
-          if (!response.ok) {
-            throw new Error(result.error || `HTTP ${response.status}: ${result.details || result.message || "Erro desconhecido"}`);
+        // Renovar sessão para garantir token válido
+        let { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          console.error("[PushNotificationsCard] Erro ao obter sessão:", sessionError);
+          throw new Error(`Erro de autenticação: ${sessionError.message}`);
+        }
+        if (!session) {
+          throw new Error("Sessão não encontrada. Faça login novamente.");
+        }
+        
+        // Verificar se token está expirado e renovar se necessário
+        const now = Math.floor(Date.now() / 1000);
+        if (session.expires_at && session.expires_at < now + 60) {
+          console.log("[PushNotificationsCard] Token expirado, renovando...");
+          const { data: { session: newSession }, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError || !newSession) {
+            throw new Error(`Erro ao renovar sessão: ${refreshError?.message || "Sessão inválida"}`);
           }
-        } else {
-          console.warn("[PushNotificationsCard] Sem sessão, não foi possível enviar push nativo");
+          session = newSession;
+        }
+        
+        console.log("[PushNotificationsCard] Enviando push nativo para Edge Function...");
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            title: "Tarefa Criada!",
+            body: `${myName} criou uma tarefa pra você: Tarefa de teste`,
+            icon: "/logo.png",
+            tag: `task-test-${Date.now()}`,
+            data: { url: "/tarefas", type: "task" },
+          }),
+        });
+
+        const result = await response.json();
+        console.log("[PushNotificationsCard] Resposta da Edge Function:", result);
+
+        if (!response.ok) {
+          throw new Error(result.error || `HTTP ${response.status}: ${result.details || result.message || "Erro desconhecido"}`);
         }
       } else {
         console.log("[PushNotificationsCard] Usuário não está inscrito, apenas toast será exibido");
@@ -184,9 +200,12 @@ export function PushNotificationsCard() {
 
         {/* Seção de teste de notificações */}
         <div className="border-t border-border pt-4">
-          <p className="text-xs font-medium text-muted-foreground mb-3">
+          <p className="text-xs font-medium text-muted-foreground mb-2">
             Testar Notificações
-            <span className="ml-1 font-normal">(gera no PC, veja no celular)</span>
+          </p>
+          <p className="text-[10px] text-muted-foreground mb-3">
+            💡 A notificação será enviada para o dispositivo onde você ativou as notificações push. 
+            Se ativou no celular, a notificação aparecerá lá mesmo testando do PC.
           </p>
           <div className="flex flex-col gap-2">
             <Button
