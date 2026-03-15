@@ -16,7 +16,7 @@ const SheetPortal = SheetPrimitive.Portal;
 const SheetOverlay = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay>
->(({ className, ...props }, ref) => (
+>(({ className, onClick, ...props }, ref) => (
   <SheetPrimitive.Overlay
     className={cn(
       "fixed inset-0 z-[90] bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -24,6 +24,13 @@ const SheetOverlay = React.forwardRef<
     )}
     {...props}
     ref={ref}
+    onClick={(e) => {
+      // Prevenir fechamento automático ao clicar no overlay quando há erro
+      // O Sheet controla isso através da prop modal
+      if (onClick) {
+        onClick(e);
+      }
+    }}
   />
 ));
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;

@@ -55,6 +55,7 @@ function installmentStatusInfo(inst: ChargeInstallmentForImpl) {
 export function ImplementationDetailSheet({
   implId, open, onClose,
 }: { implId: string; open: boolean; onClose: () => void }) {
+  const [isError, setIsError] = useState(false);
   const { data, isLoading, error } = useImplementationDetail(implId || "");
   const updateStep = useUpdateStepStatus();
   const addStepMut = useAddStep();
@@ -148,9 +149,16 @@ export function ImplementationDetailSheet({
       },
       onError: (error: any) => {
         console.error("Erro ao atualizar:", error);
+        setIsError(true);
         const errorMessage = error?.message || "Erro ao atualizar mentoria. Verifique suas permissões.";
-        toast.error(errorMessage);
-        setEditing(false); // Fechar modo de edição mesmo em caso de erro
+        toast.error(errorMessage, {
+          duration: 5000,
+          action: {
+            label: "Fechar",
+            onClick: () => setIsError(false),
+          },
+        });
+        // Não fechar o modo de edição em caso de erro - permite que o usuário tente novamente
       },
     });
   }
@@ -353,10 +361,11 @@ export function ImplementationDetailSheet({
   return (
     <>
     <Sheet open={open} onOpenChange={(v) => {
-      if (!v) {
+      // Não fechar se houver erro - permite que o usuário veja a mensagem de erro
+      if (!v && !isError) {
         onClose();
       }
-    }}>
+    }} modal={true}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center h-40"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -365,6 +374,17 @@ export function ImplementationDetailSheet({
             <AlertTriangle className="h-6 w-6 text-destructive" />
             <p className="text-sm text-destructive">Erro ao carregar mentoria</p>
             <p className="text-xs text-muted-foreground">{(error as any)?.message || "Erro desconhecido"}</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                setIsError(false);
+                onClose();
+              }}
+              className="mt-2"
+            >
+              Fechar
+            </Button>
           </div>
         ) : !impl ? (
           <div className="flex flex-col items-center justify-center h-40 space-y-2">
