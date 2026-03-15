@@ -66,12 +66,13 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
         ref={ref} 
         className={cn(sheetVariants({ side }), className)} 
         onInteractOutside={(e) => {
-          // Prevenir fechamento ao clicar fora apenas se onInteractOutside não for fornecido
-          // ou se retornar false
+          // Se onInteractOutside foi fornecido, usar ele (pode prevenir ou permitir)
           if (onInteractOutside) {
             onInteractOutside(e);
+          } else {
+            // Por padrão, PREVENIR fechamento ao clicar fora
+            e.preventDefault();
           }
-          // Por padrão, permitir fechamento ao clicar fora
         }}
         {...props}
       >
