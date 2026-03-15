@@ -482,6 +482,63 @@ export function useUpdateInstallmentReceipt() {
   });
 }
 
+/** Desmarca uma parcela como paga e decrementa paid_amount na implementação */
+export function useUnmarkInstallmentPaid() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      installmentId,
+      amount,
+      implementationId,
+      paymentMethod,
+    }: {
+      installmentId: string;
+      amount: number;
+      implementationId: string;
+      paymentMethod?: "pix" | "perfectpay";
+    }) => {
+      // 1. Get current paid_amount
+      const { data: implData } = await (supabase as any)
+        .from("implementations")
+        .select("paid_amount")
+        .eq("id", implementationId)
+        .single();
+
+      // 2. Calcula valor a subtrair (com desconto de 10% se foi PIX)
+      let amountToSubtract = amount;
+      if (paymentMethod === "pix") {
+        amountToSubtract = Math.round(amount * 0.9 * 100) / 100; // 10% desconto
+      }
+
+      // 3. Update installment status to pending
+      const { error: instErr } = await (supabase as any)
+        .from("charge_installments")
+        .update({ 
+          status: "pending", 
+          paid_at: null,
+          receipt_url: null, // Remove comprovante ao desmarcar
+        })
+        .eq("id", installmentId);
+      if (instErr) throw instErr;
+
+      // 4. Update paid_amount (subtrai o valor)
+      const newPaidAmount = Math.max(0, (implData?.paid_amount || 0) - amountToSubtract);
+      const { error: implErr } = await (supabase as any)
+        .from("implementations")
+        .update({ paid_amount: newPaidAmount })
+        .eq("id", implementationId);
+      if (implErr) throw implErr;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["implementation", vars.implementationId] });
+      qc.invalidateQueries({ queryKey: ["implementation-detail"] });
+      qc.invalidateQueries({ queryKey: ["implementations"] });
+      qc.invalidateQueries({ queryKey: ["charges"] });
+      qc.invalidateQueries({ queryKey: ["project-revenue-total"] });
+    },
+  });
+}
+
 export function useUpdateStepStatus() {
   const qc = useQueryClient();
   return useMutation({

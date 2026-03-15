@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   useImplementationDetail, useUpdateStepStatus,
   useAddDocument, useAddNote, useUpdateImplementation, useDeleteImplementation, useAddStep,
-  useMarkInstallmentPaid, useUpdateInstallmentAmount, useUpdateInstallmentReceipt,
+  useMarkInstallmentPaid, useUpdateInstallmentAmount, useUpdateInstallmentReceipt, useUnmarkInstallmentPaid,
 } from "@/hooks/useImplementations";
 import type { ImplementationStep, ChargeInstallmentForImpl } from "@/hooks/useImplementations";
 import { format, parseISO, differenceInDays, isBefore, startOfDay, isSameDay } from "date-fns";
@@ -62,6 +62,7 @@ export function ImplementationDetailSheet({
   const updateImpl = useUpdateImplementation();
   const deleteImpl = useDeleteImplementation();
   const markPaid = useMarkInstallmentPaid();
+  const unmarkPaid = useUnmarkInstallmentPaid();
   const updateInstallmentAmount = useUpdateInstallmentAmount();
   const updateInstallmentReceipt = useUpdateInstallmentReceipt();
 
