@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useClientLtvList, useClientLtvKpis, type ClientLtv } from "@/hooks/useClientLtv";
 import { LtvBadge } from "@/components/shared/LtvBadge";
 import { ClientDetailSheet } from "@/components/clients/ClientDetailSheet";
@@ -205,6 +205,9 @@ export default function ClientesPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Enviar WhatsApp</DialogTitle>
+            <DialogDescription>
+              Envie uma mensagem via WhatsApp para este cliente.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div>

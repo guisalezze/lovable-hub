@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -314,7 +314,12 @@ export default function FinanceiroPage() {
               <Button size="sm" className="gap-2"><Plus className="h-4 w-4" />Gasto Manual</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>Novo Gasto Manual</DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle>Novo Gasto Manual</DialogTitle>
+                <DialogDescription>
+                  Adicione um novo gasto manual ao sistema.
+                </DialogDescription>
+              </DialogHeader>
               <div className="space-y-4 mt-2">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Valor (R$)</Label>

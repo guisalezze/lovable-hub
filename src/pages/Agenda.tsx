@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -470,6 +471,9 @@ function NewCallDialog({
             <Phone className="h-4 w-4 text-primary" />
             Nova Call
           </DialogTitle>
+          <DialogDescription>
+            Agende uma nova chamada com um lead.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div>
@@ -651,6 +655,9 @@ function NewTaskDialog({
             <CheckSquare className="h-4 w-4 text-primary" />
             Nova Tarefa
           </DialogTitle>
+          <DialogDescription>
+            Crie uma nova tarefa para acompanhar.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div>
@@ -810,10 +817,15 @@ function EditCallDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-2">
-              <Pencil className="h-4 w-4 text-primary" />
-              Editar Call
-            </DialogTitle>
+            <div>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="h-4 w-4 text-primary" />
+                Editar Call
+              </DialogTitle>
+              <DialogDescription>
+                Edite os detalhes da chamada agendada.
+              </DialogDescription>
+            </div>
             <Button
               size="sm"
               variant="ghost"

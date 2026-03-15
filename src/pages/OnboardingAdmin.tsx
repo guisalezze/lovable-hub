@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Plus, Copy, CheckCircle2, Clock, ExternalLink, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -139,7 +139,12 @@ export default function OnboardingAdminPage() {
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Novo Link de Onboarding</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Novo Link de Onboarding</DialogTitle>
+            <DialogDescription>
+              Crie um novo link de onboarding para novos usuários.
+            </DialogDescription>
+          </DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">Vincular a um lead (opcional)</label>
