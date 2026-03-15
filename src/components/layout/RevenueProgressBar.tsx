@@ -8,7 +8,7 @@ import {
   useProjectRevenueGoal,
   useSetProjectRevenueGoal,
 } from "@/hooks/useProjectRevenue";
-import { useProject } from "@/contexts/ProjectContext";
+import { useProject, type Project } from "@/contexts/ProjectContext";
 
 const fmtShort = (v: number) => {
   if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
@@ -27,6 +27,7 @@ export function RevenueProgressBar() {
 
   if (!currentProject) return null;
 
+  const isNutra = currentProject?.slug === "nutra";
   const total = revenue?.total ?? 0;
   const salesTotal = revenue?.sales ?? 0;
   const mentoriasTotal = revenue?.mentorias ?? 0;
@@ -63,9 +64,9 @@ export function RevenueProgressBar() {
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs space-y-1 p-2">
             <p>🛒 Vendas: {fmtShort(salesTotal)}</p>
-            <p>🎓 Mentorias: {fmtShort(mentoriasTotal)}</p>
+            {!isNutra && <p>🎓 Mentorias: {fmtShort(mentoriasTotal)}</p>}
             <p className="font-semibold border-t pt-1">Total: {fmtShort(total)}</p>
-            <p className="text-muted-foreground text-[10px]">Mês atual · atualiza em tempo real</p>
+            <p className="text-muted-foreground text-[10px]">Mês atual · {currentProject?.name} · tempo real</p>
           </TooltipContent>
         </Tooltip>
       </div>
