@@ -8,7 +8,7 @@ import {
   useProjectRevenueGoal,
   useSetProjectRevenueGoal,
 } from "@/hooks/useProjectRevenue";
-import { useProject, type Project } from "@/contexts/ProjectContext";
+import { useProject } from "@/contexts/ProjectContext";
 
 const fmtShort = (v: number) => {
   if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
@@ -16,6 +16,42 @@ const fmtShort = (v: number) => {
   return `R$ ${v.toFixed(0)}`;
 };
 
+/** Barra fina na borda inferior do header — renderizada com position absolute */
+export function RevenueBarStrip() {
+  const { currentProject } = useProject();
+  const { data: revenue, isLoading } = useProjectRevenueTotal();
+  const { data: goal = 0 } = useProjectRevenueGoal();
+
+  if (!currentProject || goal <= 0) return null;
+
+  const total = revenue?.total ?? 0;
+  const pct = Math.min(100, (total / goal) * 100);
+
+  const barColor =
+    pct >= 100
+      ? "bg-emerald-500"
+      : pct >= 70
+      ? "bg-primary"
+      : pct >= 40
+      ? "bg-yellow-400"
+      : "bg-destructive/80";
+
+  return (
+    <div
+      className="absolute bottom-0 left-0 right-0 h-[3px] bg-secondary/60 overflow-hidden"
+      aria-hidden
+    >
+      <div
+        className={`h-full ${barColor} transition-all duration-700 ease-out ${
+          isLoading ? "animate-pulse opacity-50" : ""
+        }`}
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
+/** Info inline no header: ícone + valores + edição de meta */
 export function RevenueProgressBar() {
   const { currentProject } = useProject();
   const { data: revenue } = useProjectRevenueTotal();
@@ -33,29 +69,19 @@ export function RevenueProgressBar() {
   const mentoriasTotal = revenue?.mentorias ?? 0;
   const pct = goal > 0 ? Math.min(100, Math.round((total / goal) * 100)) : 0;
 
-  const barColor =
-    pct >= 100
-      ? "bg-emerald-500"
-      : pct >= 70
-      ? "bg-primary"
-      : pct >= 40
-      ? "bg-yellow-500"
-      : "bg-destructive/70";
-
   const handleSave = () => {
-    const val = Number(input.replace(/\D/g, ""));
+    const val = Number(input.replace(/[^\d]/g, ""));
     if (val > 0) setGoal.mutate(val);
     setEditing(false);
   };
 
   return (
     <div className="flex items-center gap-2 flex-1 min-w-0 mx-3">
-      {/* Ícone + label */}
+      {/* Ícone + label + tooltip */}
       <div className="flex items-center gap-1.5 shrink-0">
         <Trophy className="h-3.5 w-3.5 text-yellow-500" />
         <span className="text-xs font-semibold text-foreground hidden sm:block">Faturamento</span>
 
-        {/* Tooltip de breakdown */}
         <Tooltip>
           <TooltipTrigger asChild>
             <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -66,12 +92,14 @@ export function RevenueProgressBar() {
             <p>🛒 Vendas: {fmtShort(salesTotal)}</p>
             {!isNutra && <p>🎓 Mentorias: {fmtShort(mentoriasTotal)}</p>}
             <p className="font-semibold border-t pt-1">Total: {fmtShort(total)}</p>
-            <p className="text-muted-foreground text-[10px]">Mês atual · {currentProject?.name} · tempo real</p>
+            <p className="text-muted-foreground text-[10px]">
+              Mês atual · {currentProject?.name} · tempo real
+            </p>
           </TooltipContent>
         </Tooltip>
       </div>
 
-      {/* Valores */}
+      {/* Valores + edição */}
       {editing ? (
         <div className="flex items-center gap-1 flex-1 min-w-0">
           <Input
@@ -103,17 +131,9 @@ export function RevenueProgressBar() {
           </span>
 
           {goal > 0 && (
-            <>
-              <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden min-w-[60px] max-w-[120px]">
-                <div
-                  className={`h-full ${barColor} rounded-full transition-all duration-700`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <span className="text-[10px] font-medium text-muted-foreground shrink-0 tabular-nums">
-                {pct}%
-              </span>
-            </>
+            <span className="text-[10px] font-medium text-muted-foreground shrink-0 tabular-nums">
+              {pct}%
+            </span>
           )}
 
           <Button

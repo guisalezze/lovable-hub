@@ -3,7 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { Menu, Moon, Sun } from "lucide-react";
 import { NotificationPopover } from "./NotificationPopover";
-import { RevenueProgressBar } from "./RevenueProgressBar";
+import { RevenueProgressBar, RevenueBarStrip } from "./RevenueProgressBar";
 import { Button } from "@/components/ui/button";
 
 export function AppLayout() {
@@ -44,7 +44,7 @@ export function AppLayout() {
     <div className="flex min-h-screen w-full bg-background">
       <AppSidebar open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        <header className="h-14 flex items-center border-b border-border px-4 shrink-0 gap-2">
+        <header className="h-14 flex items-center border-b border-border px-4 shrink-0 gap-2 relative">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-2 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
@@ -52,8 +52,11 @@ export function AppLayout() {
             <Menu className="h-5 w-5" />
           </button>
 
-          {/* Barra de faturamento — centro do header */}
+          {/* Info de faturamento — centro do header */}
           <RevenueProgressBar />
+
+          {/* Barra de progresso fina na borda inferior do header */}
+          <RevenueBarStrip />
 
           <div className="ml-auto flex items-center gap-1">
             <Button
