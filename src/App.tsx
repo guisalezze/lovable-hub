@@ -10,6 +10,7 @@ import { unlockAudio } from "@/lib/sounds";
 import { registerPushHandlers } from "@/lib/registerPushHandlers";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Leads from "./pages/Leads";
 import Produtos from "./pages/Produtos";
@@ -128,15 +129,35 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <div className="text-center space-y-4 max-w-md">
+        <div className="text-center space-y-4 max-w-md w-full">
+          <div className="text-5xl mb-4">⚠️</div>
           <h1 className="text-xl font-bold text-destructive">Erro ao carregar</h1>
-          <p className="text-sm text-muted-foreground">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-          >
-            Recarregar
-          </button>
+          <p className="text-sm text-muted-foreground break-words">{error}</p>
+          <div className="flex flex-col gap-2 mt-4">
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full px-4 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 font-medium"
+            >
+              Recarregar App
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  if ("serviceWorker" in navigator && "caches" in window) {
+                    const cacheNames = await caches.keys();
+                    await Promise.all(cacheNames.map(name => caches.delete(name)));
+                  }
+                  localStorage.clear();
+                  window.location.reload();
+                } catch {
+                  window.location.reload();
+                }
+              }}
+              className="w-full px-4 py-3 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 font-medium text-sm"
+            >
+              Limpar Cache e Recarregar
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -147,13 +168,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 }
 
 const App = () => (
-  // onClickCapture desbloqueia o AudioContext no iOS na primeira interação
-  <div onClickCapture={unlockAudio} onTouchStartCapture={unlockAudio} style={{ display: "contents" }}>
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner position="top-center" richColors closeButton />
-      <BrowserRouter>
+  <ErrorBoundary>
+    {/* onClickCapture desbloqueia o AudioContext no iOS na primeira interação */}
+    <div onClickCapture={unlockAudio} onTouchStartCapture={unlockAudio} style={{ display: "contents" }}>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner position="top-center" richColors closeButton />
+        <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/onboarding/:token" element={<Onboarding />} />
@@ -190,8 +212,9 @@ const App = () => (
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
-  </QueryClientProvider>
-  </div>
+    </QueryClientProvider>
+    </div>
+  </ErrorBoundary>
 );
 
 export default App;
