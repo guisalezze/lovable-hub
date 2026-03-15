@@ -18,7 +18,7 @@ import {
   FileText,
 } from "lucide-react";
 import { useProject, type Project } from "@/contexts/ProjectContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -227,14 +227,20 @@ function SidebarContent() {
 export function AppSidebar({ open, onToggle }: AppSidebarProps) {
   const isMobile = useIsMobile();
   const location = useLocation();
+  const prevPathnameRef = useRef(location.pathname);
 
-  // Fechar sidebar no mobile ao navegar
+  // Fechar sidebar no mobile APENAS quando navegar (pathname mudar)
   useEffect(() => {
-    if (isMobile && open) {
+    if (isMobile && open && location.pathname !== prevPathnameRef.current) {
+      // Pathname mudou = usuário navegou, então fechar o menu
+      prevPathnameRef.current = location.pathname;
       const timer = setTimeout(() => {
         onToggle();
-      }, 100); // Pequeno delay para animação
+      }, 300); // Delay maior para permitir animação de navegação
       return () => clearTimeout(timer);
+    } else if (location.pathname !== prevPathnameRef.current) {
+      // Atualizar ref mesmo se não fechar
+      prevPathnameRef.current = location.pathname;
     }
   }, [location.pathname, isMobile, open, onToggle]);
 
