@@ -17,6 +17,7 @@ import {
   useImplementationDetail, useUpdateStepStatus,
   useAddDocument, useAddNote, useUpdateImplementation, useDeleteImplementation, useAddStep,
   useMarkInstallmentPaid, useUpdateInstallmentAmount, useUpdateInstallmentReceipt, useUnmarkInstallmentPaid,
+  useUpdateEntryReceipt,
 } from "@/hooks/useImplementations";
 import type { ImplementationStep, ChargeInstallmentForImpl } from "@/hooks/useImplementations";
 import { format, parseISO, differenceInDays, isBefore, startOfDay, isSameDay } from "date-fns";
@@ -65,6 +66,7 @@ export function ImplementationDetailSheet({
   const unmarkPaid = useUnmarkInstallmentPaid();
   const updateInstallmentAmount = useUpdateInstallmentAmount();
   const updateInstallmentReceipt = useUpdateInstallmentReceipt();
+  const updateEntryReceipt = useUpdateEntryReceipt();
 
   const [noteText, setNoteText] = useState("");
   const [editingInstallmentId, setEditingInstallmentId] = useState<string | null>(null);
@@ -79,6 +81,9 @@ export function ImplementationDetailSheet({
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [receiptModalInstallmentId, setReceiptModalInstallmentId] = useState<string | null>(null);
   const [receiptModalIsPaid, setReceiptModalIsPaid] = useState(false);
+  const [receiptModalIsEntry, setReceiptModalIsEntry] = useState(false);
+  const [entryReceiptFile, setEntryReceiptFile] = useState<File | null>(null);
+  const [entryReceiptPreview, setEntryReceiptPreview] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editFields, setEditFields] = useState({
     client_name: "",
@@ -203,9 +208,61 @@ export function ImplementationDetailSheet({
             delete next[inst.id];
             return next;
           });
+          setReceiptModalOpen(false);
         }
       }
     );
+  }
+
+  function handleReceiptUpload(inst?: ChargeInstallmentForImpl) {
+    if (receiptModalIsEntry && charge && entryReceiptFile) {
+      // Upload comprovante de entrada
+      updateEntryReceipt.mutate(
+        {
+          chargeId: charge.id,
+          receiptFile: entryReceiptFile,
+          implementationId: implId,
+        },
+        {
+          onSuccess: () => {
+            toast.success("Comprovante de entrada atualizado!");
+            setEntryReceiptFile(null);
+            setEntryReceiptPreview(null);
+            setReceiptModalOpen(false);
+          },
+          onError: (err: any) => toast.error(err.message || "Erro ao atualizar comprovante"),
+        }
+      );
+    } else if (inst && receiptModalIsPaid && installmentReceiptFile[inst.id]) {
+      // Atualizar comprovante de parcela já paga
+      updateInstallmentReceipt.mutate(
+        {
+          installmentId: inst.id,
+          receiptFile: installmentReceiptFile[inst.id],
+          implementationId: implId,
+        },
+        {
+          onSuccess: () => {
+            toast.success("Comprovante atualizado!");
+            setInstallmentReceiptFile(prev => {
+              const next = { ...prev };
+              delete next[inst.id];
+              return next;
+            });
+            setInstallmentReceiptPreview(prev => {
+              const next = { ...prev };
+              delete next[inst.id];
+              return next;
+            });
+            setReceiptModalOpen(false);
+          },
+          onError: (err: any) => toast.error(err.message || "Erro ao atualizar comprovante"),
+        }
+      );
+    } else if (inst) {
+      // Marcar parcela como paga com comprovante
+      handleMarkInstallmentPaid(inst);
+    }
   }
 
   function handleInstallmentReceiptChange(instId: string, e: React.ChangeEvent<HTMLInputElement>) {
@@ -469,17 +526,53 @@ export function ImplementationDetailSheet({
                           </div>
                           <span className="text-sm font-bold text-emerald-600">{fmtCurrency(entryPaid)}</span>
                         </div>
-                        {/* Comprovante da entrada (se existir) */}
-                        {(charge as any).entry_receipt_url && (
-                          <div className="border rounded-md p-2 bg-secondary/30">
-                            <p className="text-[10px] text-muted-foreground mb-1.5 flex items-center gap-1">
-                              {(charge as any).entry_receipt_url.toLowerCase().endsWith('.pdf') ? (
-                                <FileText className="h-3 w-3" />
+                        {/* Comprovante da entrada */}
+                        <div className="border rounded-md p-2 bg-secondary/30">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                              {(charge as any).entry_receipt_url ? (
+                                <>
+                                  {(charge as any).entry_receipt_url.toLowerCase().endsWith('.pdf') ? (
+                                    <FileText className="h-3 w-3" />
+                                  ) : (
+                                    <Image className="h-3 w-3" />
+                                  )}
+                                  Comprovante PIX da entrada
+                                </>
                               ) : (
-                                <Image className="h-3 w-3" />
+                                <>
+                                  <Upload className="h-3 w-3" />
+                                  Adicionar comprovante da entrada
+                                </>
                               )}
-                              Comprovante PIX da entrada
                             </p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-xs px-2"
+                              onClick={() => {
+                                setReceiptModalIsEntry(true);
+                                setReceiptModalInstallmentId(null);
+                                setReceiptModalIsPaid(!!(charge as any).entry_receipt_url);
+                                setEntryReceiptFile(null);
+                                setEntryReceiptPreview(null);
+                                setReceiptModalOpen(true);
+                              }}
+                            >
+                              {(charge as any).entry_receipt_url ? (
+                                <>
+                                  <Pencil className="h-3 w-3 mr-1" />
+                                  Editar
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="h-3 w-3 mr-1" />
+                                  Adicionar
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                          {(charge as any).entry_receipt_url && (
                             <a href={(charge as any).entry_receipt_url} target="_blank" rel="noopener noreferrer" className="block">
                               {(charge as any).entry_receipt_url.toLowerCase().endsWith('.pdf') ? (
                                 <div className="flex items-center gap-2 p-3 bg-secondary/50 rounded">
@@ -493,8 +586,8 @@ export function ImplementationDetailSheet({
                                 <img src={(charge as any).entry_receipt_url} alt="Comprovante entrada" className="w-full h-32 object-contain rounded cursor-pointer hover:opacity-80 transition-opacity" />
                               )}
                             </a>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -894,10 +987,29 @@ export function ImplementationDetailSheet({
           })()}
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReceiptModalOpen(false)}>
+            <Button variant="outline" onClick={() => {
+              setReceiptModalOpen(false);
+              setReceiptModalIsEntry(false);
+              setEntryReceiptFile(null);
+              setEntryReceiptPreview(null);
+            }}>
               Cancelar
             </Button>
-            {receiptModalInstallmentId && (() => {
+            {receiptModalIsEntry ? (
+              <Button
+                onClick={() => handleReceiptUpload()}
+                disabled={!entryReceiptFile || updateEntryReceipt.isPending}
+              >
+                {updateEntryReceipt.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {receiptModalIsPaid ? "Atualizando..." : "Enviando..."}
+                  </>
+                ) : (
+                  receiptModalIsPaid ? "Atualizar comprovante" : "Adicionar comprovante"
+                )}
+              </Button>
+            ) : receiptModalInstallmentId && (() => {
               const inst = installments.find(i => i.id === receiptModalInstallmentId);
               if (!inst) return null;
               return (

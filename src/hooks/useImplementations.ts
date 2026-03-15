@@ -485,6 +485,48 @@ export function useUpdateInstallmentReceipt() {
   });
 }
 
+/** Atualiza o entry_receipt_url de uma charge */
+export function useUpdateEntryReceipt() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      chargeId,
+      receiptFile,
+      implementationId,
+    }: {
+      chargeId: string;
+      receiptFile: File;
+      implementationId: string;
+    }) => {
+      // 1. Upload comprovante
+      const fileExt = receiptFile.name.split(".").pop();
+      const fileName = `entry-receipt-${Date.now()}-${chargeId}.${fileExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("receipts")
+        .upload(fileName, receiptFile, { upsert: false });
+      
+      if (uploadError) throw uploadError;
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from("receipts")
+        .getPublicUrl(uploadData.path);
+      
+      // 2. Update entry_receipt_url
+      const { error: chargeErr } = await (supabase as any)
+        .from("charges")
+        .update({ entry_receipt_url: publicUrl })
+        .eq("id", chargeId);
+      if (chargeErr) throw chargeErr;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["implementation", vars.implementationId] });
+      qc.invalidateQueries({ queryKey: ["implementation-detail"] });
+      qc.invalidateQueries({ queryKey: ["implementations"] });
+      qc.invalidateQueries({ queryKey: ["charges"] });
+    },
+  });
+}
+
 /** Desmarca uma parcela como paga e decrementa paid_amount na implementação */
 export function useUnmarkInstallmentPaid() {
   const qc = useQueryClient();
