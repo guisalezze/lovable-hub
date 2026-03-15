@@ -99,7 +99,7 @@ export function ImplementationDetailSheet({
     ? [...charge.charge_installments].sort((a, b) => a.installment_number - b.installment_number)
     : [];
 
-  const daysLeft = impl ? differenceInDays(parseISO(impl.contract_end), new Date()) : 0;
+  const daysLeft = impl?.contract_end ? differenceInDays(parseISO(impl.contract_end), new Date()) : 0;
   const steps = (impl?.implementation_steps || []).sort((a, b) => a.order_index - b.order_index);
   const progress = steps.length > 0 ? Math.round(steps.filter(s => s.status === "done").length / steps.length * 100) : 0;
 
