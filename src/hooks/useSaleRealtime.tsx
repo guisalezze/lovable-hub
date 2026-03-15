@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { TrendingUp } from "lucide-react";
 
 /** Formata valor em BRL */
 function fmtBRL(value: number) {
@@ -27,10 +26,12 @@ function SaleToast({
       className="flex items-center gap-3 bg-[#18181b] border border-emerald-500/30 rounded-xl px-4 py-3 shadow-2xl shadow-emerald-500/10 cursor-pointer min-w-[280px] max-w-[340px]"
       onClick={onDismiss}
     >
-      {/* Ícone / Logo placeholder — substitua por <img src="/logo.png"> quando tiver a logo */}
-      <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-emerald-500/15 flex items-center justify-center border border-emerald-500/30">
-        <TrendingUp className="h-5 w-5 text-emerald-400" />
-      </div>
+      {/* Logo Solaryz */}
+      <img
+        src="/logo.png"
+        alt="Solaryz"
+        className="flex-shrink-0 w-9 h-9 rounded-lg object-cover"
+      />
 
       <div className="flex-1 min-w-0">
         <p className="text-xs font-semibold text-white leading-tight">

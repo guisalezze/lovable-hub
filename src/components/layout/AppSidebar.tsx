@@ -8,7 +8,6 @@ import {
   CheckSquare,
   Plug,
   Settings,
-  Zap,
   Users2,
   FileBarChart,
   ClipboardList,
@@ -144,9 +143,13 @@ export function AppSidebar({ open }: AppSidebarProps) {
       } shrink-0 border-r border-sidebar-border bg-sidebar transition-all duration-300 overflow-hidden flex flex-col h-screen sticky top-0`}
     >
       {/* Logo */}
-      <div className="h-14 flex items-center px-5 border-b border-sidebar-border shrink-0">
-        <Zap className="h-5 w-5 text-primary shrink-0" />
-        <span className="ml-2.5 font-bold text-foreground text-lg tracking-tight whitespace-nowrap">
+      <div className="h-14 flex items-center px-4 border-b border-sidebar-border shrink-0 gap-2.5">
+        <img
+          src="/logo.png"
+          alt="Solaryz"
+          className="h-8 w-8 rounded-lg object-cover shrink-0"
+        />
+        <span className="font-bold text-foreground text-lg tracking-tight whitespace-nowrap">
           Solaryz
         </span>
       </div>
@@ -206,9 +209,11 @@ export function AppSidebar({ open }: AppSidebarProps) {
       {/* Footer */}
       <div className="p-3 border-t border-sidebar-border">
         <div className="flex items-center gap-3 px-3 py-2">
-          <div className="h-7 w-7 rounded-full bg-primary/20 flex items-center justify-center">
-            <span className="text-xs font-semibold text-primary">S</span>
-          </div>
+          <img
+            src="/logo.png"
+            alt="Solaryz"
+            className="h-7 w-7 rounded-lg object-cover shrink-0"
+          />
           <div className="min-w-0">
             <p className="text-xs font-medium text-foreground truncate">Solaryz</p>
             <p className="text-[10px] text-muted-foreground truncate">
