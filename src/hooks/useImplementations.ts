@@ -89,7 +89,7 @@ export function useImplementations() {
   });
 }
 
-export function useImplementationDetail(id: string | null) {
+export function useImplementationDetail(id: string) {
   return useQuery({
     queryKey: ["implementation", id],
     queryFn: async () => {

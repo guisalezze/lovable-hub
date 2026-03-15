@@ -807,7 +807,7 @@ export function ImplementationDetailSheet({
               </TabsContent>
             </Tabs>
           </>
-        ) : null}
+        )}
       </SheetContent>
     </Sheet>
 
