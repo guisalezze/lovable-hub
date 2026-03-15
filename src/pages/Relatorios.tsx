@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, subDays, parseISO } from "date-fns";
@@ -14,7 +14,6 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 
 function useReportData(since: string, until: string) {
   return useQuery({
@@ -99,33 +98,272 @@ export default function RelatoriosPage() {
   const [since, setSince] = useState(format(subDays(new Date(), 29), "yyyy-MM-dd"));
   const [until, setUntil] = useState(format(new Date(), "yyyy-MM-dd"));
   const [exporting, setExporting] = useState(false);
-  const reportRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useReportData(since, until);
 
-  async function exportPDF() {
-    if (!reportRef.current) return;
+  function exportPDF() {
+    if (!data) return;
     setExporting(true);
     try {
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false,
-      });
-      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pageWidth - 20;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 10;
-      pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight - 20;
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight + 10;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight - 20;
+      const W = 210;
+      const MARGIN = 14;
+      const COL = W - MARGIN * 2;
+      let y = 0;
+
+      // ── helpers ──────────────────────────────────────────────
+      const addPage = () => { pdf.addPage(); y = MARGIN; };
+      const checkY = (needed: number) => { if (y + needed > 280) addPage(); };
+
+      const heading = (text: string, size = 13, bold = true) => {
+        checkY(10);
+        pdf.setFont("helvetica", bold ? "bold" : "normal");
+        pdf.setFontSize(size);
+        pdf.setTextColor(20, 20, 30);
+        pdf.text(text, MARGIN, y);
+        y += size * 0.5 + 2;
+      };
+
+      const sub = (text: string) => {
+        checkY(7);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8);
+        pdf.setTextColor(110, 110, 130);
+        pdf.text(text, MARGIN, y);
+        y += 5;
+      };
+
+      const kpiRow = (label: string, value: string, color: [number, number, number] = [20, 20, 30]) => {
+        checkY(8);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+        pdf.setTextColor(100, 100, 120);
+        pdf.text(label, MARGIN + 2, y);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(10);
+        pdf.setTextColor(...color);
+        pdf.text(value, MARGIN + 2, y + 5);
+        y += 12;
+      };
+
+      const divider = (color: [number, number, number] = [220, 220, 235]) => {
+        checkY(4);
+        pdf.setDrawColor(...color);
+        pdf.setLineWidth(0.3);
+        pdf.line(MARGIN, y, W - MARGIN, y);
+        y += 4;
+      };
+
+      const sectionBox = (title: string) => {
+        checkY(14);
+        pdf.setFillColor(245, 246, 252);
+        pdf.roundedRect(MARGIN, y, COL, 9, 2, 2, "F");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9);
+        pdf.setTextColor(50, 50, 80);
+        pdf.text(title.toUpperCase(), MARGIN + 3, y + 6);
+        y += 12;
+      };
+
+      // Mini bar chart (horizontal)
+      const miniBarChart = (items: { name: string; value: number }[], maxW = COL - 40) => {
+        const maxVal = Math.max(...items.map(i => i.value), 1);
+        items.slice(0, 10).forEach(item => {
+          checkY(7);
+          // label
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(8);
+          pdf.setTextColor(60, 60, 80);
+          const label = item.name.length > 28 ? item.name.slice(0, 26) + "…" : item.name;
+          pdf.text(label, MARGIN + 2, y + 4);
+          // bar
+          const barW = Math.max(2, (item.value / maxVal) * maxW);
+          pdf.setFillColor(99, 102, 241);
+          pdf.roundedRect(MARGIN + 2, y + 5, barW, 3, 1, 1, "F");
+          // value
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(7);
+          pdf.setTextColor(99, 102, 241);
+          pdf.text(fmt(item.value), MARGIN + 2 + barW + 2, y + 7.5);
+          y += 10;
+        });
+      };
+
+      // Mini line chart (area-like using dots + line)
+      const miniLineChart = (points: { date: string; revenue: number }[]) => {
+        if (points.length < 2) return;
+        const chartH = 30;
+        const chartW = COL;
+        checkY(chartH + 8);
+        const maxVal = Math.max(...points.map(p => p.revenue), 1);
+        const step = chartW / (points.length - 1);
+
+        // background
+        pdf.setFillColor(248, 249, 255);
+        pdf.rect(MARGIN, y, chartW, chartH, "F");
+
+        // gridlines
+        pdf.setDrawColor(220, 220, 235);
+        pdf.setLineWidth(0.2);
+        for (let g = 0; g <= 4; g++) {
+          const gy = y + chartH - (g / 4) * chartH;
+          pdf.line(MARGIN, gy, MARGIN + chartW, gy);
+        }
+
+        // area fill (simplified)
+        const pts = points.map((p, i) => ({
+          x: MARGIN + i * step,
+          y: y + chartH - (p.revenue / maxVal) * (chartH - 4) - 2,
+        }));
+
+        // draw line
+        pdf.setDrawColor(99, 102, 241);
+        pdf.setLineWidth(0.8);
+        for (let i = 0; i < pts.length - 1; i++) {
+          pdf.line(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y);
+        }
+
+        // dots
+        pts.forEach(p => {
+          pdf.setFillColor(99, 102, 241);
+          pdf.circle(p.x, p.y, 0.8, "F");
+        });
+
+        // x-axis labels (every few points)
+        pdf.setFontSize(6);
+        pdf.setTextColor(120, 120, 140);
+        const step2 = Math.max(1, Math.floor(points.length / 6));
+        points.forEach((p, i) => {
+          if (i % step2 === 0) {
+            try {
+              const label = format(parseISO(p.date), "dd/MM");
+              pdf.text(label, MARGIN + i * step - 3, y + chartH + 4);
+            } catch { /* skip */ }
+          }
+        });
+        y += chartH + 8;
+      };
+
+      // ── COVER / HEADER ──────────────────────────────────────
+      y = MARGIN;
+
+      // Header strip
+      pdf.setFillColor(99, 102, 241);
+      pdf.rect(0, 0, W, 28, "F");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(16);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("OpsCRM — Relatório de Performance", MARGIN, 12);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.setTextColor(200, 200, 235);
+      pdf.text(
+        `${format(parseISO(since), "d 'de' MMMM", { locale: ptBR })} até ${format(parseISO(until), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}`,
+        MARGIN, 19
+      );
+      pdf.text(`Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}`, MARGIN, 24);
+      y = 36;
+
+      // ── KPIs ────────────────────────────────────────────────
+      sectionBox("Indicadores Financeiros");
+
+      // 2-column KPI grid
+      const kpiLeft = [
+        { label: "Receita Total", value: fmt(data.revenue), color: [16, 185, 129] as [number,number,number] },
+        { label: "Lucro", value: fmt(data.profit), color: data.profit >= 0 ? [16, 185, 129] as [number,number,number] : [239, 68, 68] as [number,number,number] },
+        { label: "ROAS", value: data.roas > 0 ? `${data.roas.toFixed(2)}x` : "–", color: [99, 102, 241] as [number,number,number] },
+        { label: "Vendas Aprovadas", value: String(data.approvedCount), color: [16, 185, 129] as [number,number,number] },
+      ];
+      const kpiRight = [
+        { label: "Investimento", value: fmt(data.investment), color: [59, 130, 246] as [number,number,number] },
+        { label: "Novos Leads", value: String(data.leadsTotal), color: [59, 130, 246] as [number,number,number] },
+        { label: "Conversão", value: `${data.conversionRate.toFixed(1)}%`, color: [99, 102, 241] as [number,number,number] },
+        { label: "Reembolsos", value: String(data.refundCount), color: [239, 68, 68] as [number,number,number] },
+      ];
+
+      const startY = y;
+      kpiLeft.forEach(k => {
+        checkY(14);
+        pdf.setFillColor(248, 249, 255);
+        pdf.roundedRect(MARGIN, y, COL / 2 - 2, 11, 1.5, 1.5, "F");
+        pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(100, 100, 120);
+        pdf.text(k.label, MARGIN + 2, y + 4);
+        pdf.setFont("helvetica", "bold"); pdf.setFontSize(10); pdf.setTextColor(...k.color);
+        pdf.text(k.value, MARGIN + 2, y + 9.5);
+        y += 13;
+      });
+
+      y = startY;
+      kpiRight.forEach(k => {
+        checkY(14);
+        const rx = MARGIN + COL / 2 + 2;
+        pdf.setFillColor(248, 249, 255);
+        pdf.roundedRect(rx, y, COL / 2 - 2, 11, 1.5, 1.5, "F");
+        pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.setTextColor(100, 100, 120);
+        pdf.text(k.label, rx + 2, y + 4);
+        pdf.setFont("helvetica", "bold"); pdf.setFontSize(10); pdf.setTextColor(...k.color);
+        pdf.text(k.value, rx + 2, y + 9.5);
+        y += 13;
+      });
+
+      y += 4;
+      divider();
+
+      // ── RECEITA POR DIA ─────────────────────────────────────
+      if (data.dailyRevenue.length > 0) {
+        sectionBox("Receita por Dia");
+        miniLineChart(data.dailyRevenue);
+        divider();
       }
+
+      // ── RECEITA POR PRODUTO ──────────────────────────────────
+      if (data.productRevenue.length > 0) {
+        sectionBox("Receita por Produto");
+        miniBarChart(data.productRevenue.map(p => ({ name: p.name, value: p.revenue })));
+        divider();
+      }
+
+      // ── PERFORMANCE DA EQUIPE ────────────────────────────────
+      if (data.teamPerformance.length > 0) {
+        sectionBox("Performance da Equipe");
+        // Table header
+        checkY(8);
+        pdf.setFillColor(230, 230, 245);
+        pdf.rect(MARGIN, y, COL, 7, "F");
+        pdf.setFont("helvetica", "bold"); pdf.setFontSize(8); pdf.setTextColor(60, 60, 80);
+        pdf.text("Membro", MARGIN + 2, y + 5);
+        pdf.text("Tarefas", MARGIN + 80, y + 5);
+        pdf.text("Calls", MARGIN + 110, y + 5);
+        y += 8;
+        data.teamPerformance.forEach((p, i) => {
+          checkY(7);
+          pdf.setFillColor(i % 2 === 0 ? 252 : 248, i % 2 === 0 ? 252 : 248, 255);
+          pdf.rect(MARGIN, y, COL, 6.5, "F");
+          pdf.setFont("helvetica", "normal"); pdf.setFontSize(8.5); pdf.setTextColor(40, 40, 60);
+          pdf.text(p.name, MARGIN + 2, y + 4.5);
+          pdf.text(String(p.tasks), MARGIN + 80, y + 4.5);
+          pdf.text(String(p.calls), MARGIN + 110, y + 4.5);
+          y += 7;
+        });
+        divider();
+      }
+
+      // ── FOOTER ───────────────────────────────────────────────
+      checkY(10);
+      pdf.setFont("helvetica", "italic"); pdf.setFontSize(7.5); pdf.setTextColor(150, 150, 170);
+      pdf.text(
+        `Relatório gerado pelo OpsCRM · ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}`,
+        W / 2, y + 6, { align: "center" }
+      );
+
+      // Page numbers
+      const totalPages = (pdf as any).internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setFont("helvetica", "normal"); pdf.setFontSize(7); pdf.setTextColor(160, 160, 180);
+        pdf.text(`Página ${i} de ${totalPages}`, W - MARGIN, 290, { align: "right" });
+      }
+
       pdf.save(`relatorio_${since}_${until}.pdf`);
     } finally {
       setExporting(false);
@@ -160,8 +398,8 @@ export default function RelatoriosPage() {
         </div>
       </div>
 
-      {/* Report content for PDF capture */}
-      <div ref={reportRef} className="space-y-6">
+      {/* Report content */}
+      <div className="space-y-6">
         {/* Report header */}
         <div className="glass-card p-4 flex items-center justify-between">
           <div>
