@@ -89,10 +89,11 @@ export function useImplementations() {
   });
 }
 
-export function useImplementationDetail(id: string) {
+export function useImplementationDetail(id: string | null) {
   return useQuery({
     queryKey: ["implementation", id],
     queryFn: async () => {
+      if (!id) throw new Error("ID não fornecido");
       const [implRes, docsRes, notesRes] = await Promise.all([
         (supabase as any)
           .from("implementations")
