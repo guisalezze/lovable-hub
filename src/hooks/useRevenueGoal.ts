@@ -9,7 +9,7 @@ export function useRevenueGoal() {
         .from("app_settings")
         .select("value")
         .eq("key", "revenue_goal")
-        .single();
+        .maybeSingle();
       return data?.value ? Number(data.value) : 0;
     },
     staleTime: 60_000,
