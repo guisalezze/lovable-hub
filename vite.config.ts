@@ -82,6 +82,12 @@ export default defineConfig(({ mode }) => ({
           },
           {
             src: "/logo.png",
+            sizes: "1024x1024",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/logo.png",
             sizes: "192x192",
             type: "image/png",
             purpose: "maskable",
