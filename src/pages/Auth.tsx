@@ -6,8 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Zap } from "lucide-react";
 import { toast } from "sonner";
 
+/**
+ * Mapa de usernames curtos → email completo.
+ * Permite login com "guizz", "marilia" ou "kabul" no lugar do email.
+ */
+const USERNAME_MAP: Record<string, string> = {
+  guizz:   "salezzeguilherme@gmail.com",
+  marilia: "mariliacatarinne@gmail.com",
+  kabul:   "marcusv.castello@gmail.com",
+};
+
 export default function AuthPage() {
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -26,8 +36,28 @@ export default function AuthPage() {
     e.preventDefault();
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) toast.error("Email ou senha incorretos.");
+    // Resolver username → email (se não contiver @, busca no mapa)
+    const trimmed = login.trim().toLowerCase();
+    let resolvedEmail: string | null;
+
+    if (trimmed.includes("@")) {
+      resolvedEmail = trimmed;
+    } else {
+      resolvedEmail = USERNAME_MAP[trimmed] ?? null;
+    }
+
+    if (!resolvedEmail) {
+      toast.error("Usuário não encontrado. Use seu email ou username.");
+      setLoading(false);
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: resolvedEmail,
+      password,
+    });
+
+    if (error) toast.error("Email/usuário ou senha incorretos.");
     setLoading(false);
   }
 
@@ -46,11 +76,13 @@ export default function AuthPage() {
 
         <form onSubmit={handleSubmit} className="glass-card p-6 space-y-4">
           <Input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            placeholder="Email ou usuário (ex: guizz)"
+            value={login}
+            onChange={(e) => setLogin(e.target.value)}
             required
+            autoCapitalize="none"
+            autoCorrect="off"
             className="bg-secondary border-border"
           />
           <Input

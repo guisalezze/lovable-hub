@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
+import { unlockAudio } from "@/lib/sounds";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Index from "./pages/Index";
@@ -45,49 +46,40 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         if (error) {
           console.error('Erro ao obter sessão:', error);
         }
-        setSession(session);
-        setLoading(false);
-        
-        // Se não houver sessão, tentar restaurar do localStorage
-        if (!session && typeof window !== 'undefined') {
+
+        if (session) {
+          // Sessão ativa encontrada
+          setSession(session);
+        } else {
+          // Sem sessão ativa — tentar refresh do token antes de redirecionar
+          // IMPORTANTE: setLoading(false) só ocorre DEPOIS da tentativa de refresh
+          // para evitar redirect prematuro para /auth quando o token expirou
+          // mas o refresh_token ainda é válido
           try {
-            // Tentar refresh do token se houver refresh_token salvo
             const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
             if (!refreshError && refreshedSession) {
               setSession(refreshedSession);
+            } else {
+              setSession(null);
             }
-          } catch (e) {
-            console.error('Erro ao restaurar sessão:', e);
+          } catch {
+            setSession(null);
           }
         }
       } catch (error) {
         console.error('Erro ao verificar sessão:', error);
+        setSession(null);
+      } finally {
         setLoading(false);
       }
     };
 
     checkSession();
 
-    // Escutar mudanças de autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Escutar mudanças de autenticação (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setLoading(false);
-      
-      // Salvar sessão explicitamente no localStorage para PWA
-      if (session && typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('sb-auth-token', JSON.stringify({
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
-            expires_at: session.expires_at,
-          }));
-        } catch (e) {
-          console.error('Erro ao salvar sessão:', e);
-        }
-      } else if (!session && typeof window !== 'undefined') {
-        // Limpar sessão salva se não houver mais sessão
-        localStorage.removeItem('sb-auth-token');
-      }
     });
 
     return () => subscription.unsubscribe();
@@ -106,6 +98,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 }
 
 const App = () => (
+  // onClickCapture desbloqueia o AudioContext no iOS na primeira interação
+  <div onClickCapture={unlockAudio} onTouchStartCapture={unlockAudio} style={{ display: "contents" }}>
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -148,6 +142,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </div>
 );
 
 export default App;

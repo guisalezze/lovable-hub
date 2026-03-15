@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { playSaleSound } from "@/lib/sounds";
 
 /** Formata valor em BRL */
 function fmtBRL(value: number) {
@@ -67,6 +68,7 @@ function SaleToast({
 /** Mostra o toast de venda aprovada */
 function showSaleToast(amount: number, productName: string) {
   if (amount <= 0) return;
+  playSaleSound();
 
   toast.custom(
     (t) => (

@@ -8,12 +8,15 @@ import { NotificationPopover } from "./NotificationPopover";
 import { RevenueProgressBar, RevenueBarStrip } from "./RevenueProgressBar";
 import { Button } from "@/components/ui/button";
 import { useSaleRealtime } from "@/hooks/useSaleRealtime";
+import { useTaskRealtime } from "@/hooks/useTaskRealtime";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
 export function AppLayout() {
-  // Escuta Realtime e dispara toast a cada venda aprovada
+  // Escuta Realtime e dispara toast + som a cada venda aprovada
   useSaleRealtime();
+  // Escuta Realtime e dispara toast + som quando uma tarefa é atribuída ao usuário
+  useTaskRealtime();
 
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false); // Sempre fechado no mobile
