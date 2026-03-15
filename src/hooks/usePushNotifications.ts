@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-interface PushSubscription {
+// Tipagem auxiliar para o JSON da PushSubscription do browser
+interface PushSubscriptionJSON {
   endpoint: string;
+  expirationTime?: number | null;
   keys: {
     p256dh: string;
     auth: string;
@@ -52,19 +54,19 @@ export function usePushNotifications() {
   }
 
   /**
-   * Converte PushSubscription para formato que pode ser salvo no Supabase
+   * Converte PushSubscription do browser para formato que pode ser salvo no Supabase.
+   * Usa .toJSON() que retorna { endpoint, keys: { p256dh, auth } } como base64url strings.
    */
-  function subscriptionToObject(subscription: PushSubscription): {
+  function subscriptionToObject(subscription: globalThis.PushSubscription): {
     endpoint: string;
     p256dh: string;
     auth: string;
   } {
-    const key = subscription.keys.p256dh;
-    const auth = subscription.keys.auth;
+    const json = subscription.toJSON() as PushSubscriptionJSON;
     return {
-      endpoint: subscription.endpoint,
-      p256dh: key,
-      auth: auth,
+      endpoint: json.endpoint,
+      p256dh: json.keys?.p256dh ?? "",
+      auth: json.keys?.auth ?? "",
     };
   }
 
@@ -113,7 +115,7 @@ export function usePushNotifications() {
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
       });
 
-      const subscriptionData = subscriptionToObject(subscription as unknown as PushSubscription);
+      const subscriptionData = subscriptionToObject(subscription);
 
       // Salvar no Supabase
       const { data: { user } } = await supabase.auth.getUser();

@@ -4,6 +4,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const VAPID_PUBLIC_KEY = Deno.env.get("VITE_VAPID_PUBLIC_KEY") || "";
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") || "";
 
+// Headers CORS obrigatórios para chamadas do browser
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 interface PushSubscription {
   endpoint: string;
   p256dh_key: string;
@@ -70,13 +77,18 @@ async function createVapidHeaders(
 }
 
 serve(async (req) => {
+  // Responder ao preflight OPTIONS do CORS
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   try {
     const { userId, title, body, icon, data, tag } = await req.json();
 
     if (!userId || !title || !body) {
       return new Response(
         JSON.stringify({ error: "userId, title e body são obrigatórios" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -96,7 +108,7 @@ serve(async (req) => {
     if (subError || !subscription) {
       return new Response(
         JSON.stringify({ error: "Subscription não encontrada", details: subError }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -112,7 +124,7 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, message: "Notificação enviada" }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } catch (pushError: any) {
       // Se a subscription é inválida, remover do banco
@@ -125,13 +137,13 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ error: "Erro ao enviar push", details: pushError.message }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
   } catch (error: any) {
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
