@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { TeamManagement } from "@/components/settings/TeamManagement";
 import { ProjectAccessManager } from "@/components/settings/ProjectAccessManager";
 import { WhatsAppConfig } from "@/components/settings/WhatsAppConfig";
+import { PushNotificationsCard } from "@/components/settings/PushNotificationsCard";
 import { useGoogleAuth } from "@/hooks/useGoogleAuth";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -158,6 +159,7 @@ export default function ConfiguracoesPage() {
 
       {/* Minha Conta - visible to all authenticated users */}
       <GoogleConnectionCard />
+      <PushNotificationsCard />
 
       {loading ? (
         <div className="glass-card p-12 text-center">

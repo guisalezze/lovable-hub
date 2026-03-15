@@ -65,10 +65,53 @@ function SaleToast({
   );
 }
 
+/** Envia notificação push nativa (se o usuário tiver ativado) */
+async function sendPushNotification(amount: number, productName: string) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const formattedAmount = new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      minimumFractionDigits: 2,
+    }).format(amount);
+
+    await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        userId: user.id,
+        title: "Venda aprovada! 🎉",
+        body: `Valor: ${formattedAmount}${productName ? ` - ${productName}` : ""}`,
+        icon: "/logo.png",
+        tag: `sale-${Date.now()}`,
+        data: {
+          url: "/financeiro",
+          type: "sale",
+        },
+      }),
+    });
+  } catch (error) {
+    // Silenciosamente falha se push não estiver disponível
+    console.debug("Push notification não enviada:", error);
+  }
+}
+
 /** Mostra o toast de venda aprovada */
-function showSaleToast(amount: number, productName: string) {
+async function showSaleToast(amount: number, productName: string) {
   if (amount <= 0) return;
   playSaleSound();
+
+  // Enviar push notification (não bloqueia o toast)
+  sendPushNotification(amount, productName).catch(() => {});
 
   toast.custom(
     (t) => (
