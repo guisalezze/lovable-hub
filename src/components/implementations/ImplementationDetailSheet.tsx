@@ -384,12 +384,22 @@ export function ImplementationDetailSheet({
 
   return (
     <>
-    <Sheet open={open} onOpenChange={(v) => {
-      // Não fechar se houver erro - permite que o usuário veja a mensagem de erro
-      if (!v && !isError) {
-        onClose();
-      }
-    }} modal={true}>
+    <Sheet 
+      open={open} 
+      onOpenChange={(v) => {
+        console.log("🔄 Sheet onOpenChange chamado:", { v, isError, open });
+        // Não fechar se houver erro - permite que o usuário veja a mensagem de erro
+        if (!v) {
+          if (isError) {
+            console.log("⚠️ Tentativa de fechar bloqueada devido a erro");
+            return; // Não fechar se houver erro
+          }
+          console.log("✅ Fechando Sheet normalmente");
+          onClose();
+        }
+      }} 
+      modal={true}
+    >
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center h-40"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
