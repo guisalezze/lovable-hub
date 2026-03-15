@@ -66,24 +66,51 @@ export function useCopyItems(copyProjectId: string | undefined) {
 
   const create = useMutation({
     mutationFn: async (values: { type: string; title: string; content?: string }) => {
+      if (!copyProjectId) {
+        throw new Error("copy_project_id é obrigatório");
+      }
       const { data: { user } } = await supabase.auth.getUser();
+      
+      // Insert básico primeiro (sem structured_content para evitar problemas de tipo JSON)
       const { data, error } = await supabase
         .from("copy_items")
         .insert({
-          ...values,
-          copy_project_id: copyProjectId!,
+          type: values.type,
+          title: values.title || "",
+          content: values.content || "",
+          copy_project_id: copyProjectId,
           created_by: user?.id,
-          structured_content: defaultStructuredContent() as any,
+          is_validated: false,
+          sort_order: 0,
         })
         .select()
         .single();
-      if (error) throw error;
+        
+      if (error) {
+        console.error("Error creating copy item:", error);
+        throw error;
+      }
+
+      // Depois atualiza com structured_content (se a coluna existir)
+      try {
+        await (supabase as any)
+          .from("copy_items")
+          .update({ structured_content: defaultStructuredContent() })
+          .eq("id", data.id);
+      } catch (e) {
+        // Se a coluna não existir, ignora (migration pendente)
+        console.warn("Could not set structured_content:", e);
+      }
+
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["copy_items", copyProjectId] });
     },
-    onError: () => toast.error("Erro ao criar bloco"),
+    onError: (err: any) => {
+      console.error("Create copy item error:", err);
+      toast.error(err.message || "Erro ao criar bloco");
+    },
   });
 
   const updateContent = useMutation({
