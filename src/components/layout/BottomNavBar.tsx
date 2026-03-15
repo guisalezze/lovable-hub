@@ -18,6 +18,18 @@ const bottomNavItems: BottomNavItem[] = [
   { label: "Menu", icon: Menu, to: "#", project: "all" },
 ];
 
+// Para Nutra, substitui Leads por Meta Ads
+const getBottomNavItemsForProject = (projectSlug?: string): BottomNavItem[] => {
+  if (projectSlug === "nutra") {
+    return bottomNavItems.map(item => 
+      item.to === "/leads" 
+        ? { label: "Meta Ads", icon: BarChart3, to: "/nutra/meta-ads", project: "nutra" as const }
+        : item
+    ).filter(item => item.project === "all" || item.project === projectSlug);
+  }
+  return bottomNavItems.filter(item => item.project === "all" || item.project === projectSlug);
+};
+
 export function BottomNavBar({ onMenuClick }: { onMenuClick: () => void }) {
   const location = useLocation();
   const { currentProject } = useProject();
