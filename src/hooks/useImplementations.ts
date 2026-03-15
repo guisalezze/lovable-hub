@@ -401,13 +401,35 @@ export function useUpdateImplementation() {
       assigned_to: string | null;
       status: string;
     }>) => {
-      console.log("Atualizando mentoria:", { id, updates });
+      // Verificar se o usuário está autenticado
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        throw new Error("Usuário não autenticado. Faça login novamente.");
+      }
       
-      // Remove campos undefined para evitar problemas
-      const cleanUpdates = Object.fromEntries(
-        Object.entries(updates).filter(([_, v]) => v !== undefined)
-      );
+      console.log("Atualizando mentoria:", { 
+        id, 
+        updates,
+        userId: user.id,
+        userEmail: user.email 
+      });
       
+      // Remove campos undefined e null desnecessários para evitar problemas
+      const cleanUpdates: any = {};
+      for (const [key, value] of Object.entries(updates)) {
+        if (value !== undefined) {
+          // Converter strings vazias para null onde apropriado
+          if (value === "" && (key === "client_email" || key === "client_phone" || key === "description")) {
+            cleanUpdates[key] = null;
+          } else {
+            cleanUpdates[key] = value;
+          }
+        }
+      }
+      
+      console.log("Dados limpos para atualização:", cleanUpdates);
+      
+      // Tentar atualizar
       const { data, error } = await (supabase as any)
         .from("implementations")
         .update(cleanUpdates)
@@ -415,28 +437,52 @@ export function useUpdateImplementation() {
         .select();
         
       if (error) {
-        console.error("Erro ao atualizar mentoria:", {
-          error,
+        console.error("❌ ERRO DETALHADO ao atualizar mentoria:", {
+          error: JSON.stringify(error, null, 2),
           code: error.code,
           message: error.message,
           details: error.details,
           hint: error.hint,
           id,
-          updates: cleanUpdates,
+          cleanUpdates,
+          userId: user.id,
         });
         
-        // Erro 406 geralmente significa que a política RLS está bloqueando
-        if (error.code === "PGRST301" || error.message?.includes("406") || error.code === "42501") {
-          throw new Error("Permissão negada. Verifique se a política RLS foi atualizada. Erro: " + (error.message || error.code));
+        // Verificar se é erro de permissão
+        if (error.code === "PGRST301" || error.message?.includes("406") || error.code === "42501" || error.code === "PGRST116") {
+          throw new Error(`Permissão negada (${error.code}). A política RLS pode estar bloqueando. Verifique se a migration foi aplicada. Detalhes: ${error.message || error.hint || "sem detalhes"}`);
         }
         
-        throw new Error(error.message || `Erro ao atualizar mentoria (${error.code || "desconhecido"}). Verifique suas permissões.`);
+        // Verificar se é erro de validação
+        if (error.code === "23505" || error.message?.includes("unique")) {
+          throw new Error("Violação de constraint única. " + (error.message || ""));
+        }
+        
+        // Verificar se é erro de constraint
+        if (error.code === "23503" || error.message?.includes("foreign key")) {
+          throw new Error("Erro de referência. " + (error.message || ""));
+        }
+        
+        throw new Error(error.message || `Erro ao atualizar mentoria (${error.code || "desconhecido"}). Verifique o console para mais detalhes.`);
       }
       
       if (!data || data.length === 0) {
-        throw new Error("Nenhum registro foi atualizado. Verifique se o ID existe e se você tem permissão.");
+        console.warn("⚠️ Nenhum registro foi atualizado. Verificando se o registro existe...");
+        // Verificar se o registro existe
+        const { data: checkData, error: checkError } = await (supabase as any)
+          .from("implementations")
+          .select("id, client_name")
+          .eq("id", id)
+          .single();
+          
+        if (checkError || !checkData) {
+          throw new Error(`Registro não encontrado. ID: ${id}`);
+        }
+        
+        throw new Error("Nenhum registro foi atualizado. Verifique se você tem permissão para atualizar este registro.");
       }
       
+      console.log("✅ Mentoria atualizada com sucesso:", data);
       return data;
     },
     onSuccess: () => {
