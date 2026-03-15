@@ -32,9 +32,10 @@ interface NavItem {
 const educacionalItems: NavItem[] = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/" },
   { label: "Leads", icon: Users, to: "/leads" },
+  { label: "Meta Ads", icon: BarChart3, to: "/meta-ads" },
   { label: "Financeiro", icon: DollarSign, to: "/financeiro" },
   { label: "Cobranças", icon: Receipt, to: "/cobrancas" },
-  { label: "Implementações", icon: Briefcase, to: "/implementacoes" },
+  { label: "Mentorias", icon: Briefcase, to: "/implementacoes" },
   { label: "Clientes", icon: UserCheck, to: "/clientes" },
   { label: "Tarefas", icon: CheckSquare, to: "/tarefas" },
   { label: "Copies", icon: FileText, to: "/copies" },

@@ -8,11 +8,12 @@ export function useMetaAdAccounts() {
     queryKey: ["meta-ad-accounts", currentProject?.id],
     queryFn: async () => {
       if (!currentProject) return [];
+      // Tenta pelo project_id; se vazio, retorna qualquer conta ativa (contas sem project vinculado)
       const { data, error } = await supabase
         .from("meta_ad_accounts")
         .select("*")
-        .eq("project_id", currentProject.id)
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .or(`project_id.eq.${currentProject.id},project_id.is.null`);
       if (error) throw error;
       return data || [];
     },

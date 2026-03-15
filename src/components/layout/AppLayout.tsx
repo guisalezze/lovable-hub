@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { Menu, Moon, Sun } from "lucide-react";
 import { NotificationPopover } from "./NotificationPopover";
+import { RevenueProgressBar } from "./RevenueProgressBar";
 import { Button } from "@/components/ui/button";
 
 export function AppLayout() {
@@ -50,6 +51,9 @@ export function AppLayout() {
           >
             <Menu className="h-5 w-5" />
           </button>
+
+          {/* Barra de faturamento — centro do header */}
+          <RevenueProgressBar />
 
           <div className="ml-auto flex items-center gap-1">
             <Button

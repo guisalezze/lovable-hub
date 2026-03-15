@@ -97,6 +97,7 @@ const App = () => (
             <Route path="/implementacoes" element={<Implementacoes />} />
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/nutra/meta-ads" element={<MetaAds />} />
+            <Route path="/meta-ads" element={<MetaAds />} />
             <Route path="/copies" element={<Copies />} />
             <Route path="/copies/:id" element={<CopyProjectDetail />} />
           </Route>

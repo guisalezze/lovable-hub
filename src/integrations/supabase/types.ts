@@ -631,6 +631,7 @@ export type Database = {
           description: string | null
           id: string
           lead_id: string | null
+          paid_amount: number
           status: string
           total_value: number
           updated_at: string
@@ -648,6 +649,7 @@ export type Database = {
           description?: string | null
           id?: string
           lead_id?: string | null
+          paid_amount?: number
           status?: string
           total_value?: number
           updated_at?: string
@@ -665,6 +667,7 @@ export type Database = {
           description?: string | null
           id?: string
           lead_id?: string | null
+          paid_amount?: number
           status?: string
           total_value?: number
           updated_at?: string

@@ -38,6 +38,7 @@ export interface Implementation {
   contract_start: string;
   contract_end: string;
   total_value: number;
+  paid_amount: number;
   charge_id: string | null;
   assigned_to: string | null;
   status: "active" | "completed" | "paused" | "cancelled";
@@ -136,6 +137,23 @@ export function useCreateImplementation() {
       return impl;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["implementations"] }),
+  });
+}
+
+export function useUpdateImplementationPaidAmount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, paid_amount }: { id: string; paid_amount: number }) => {
+      const { error } = await (supabase as any)
+        .from("implementations")
+        .update({ paid_amount })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["implementations"] });
+      qc.invalidateQueries({ queryKey: ["project-revenue-total"] });
+    },
   });
 }
 

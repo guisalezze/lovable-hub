@@ -1,18 +1,19 @@
 import { useState, useMemo } from "react";
 import {
   Plus, Search, Clock, CheckCircle2, AlertTriangle,
-  User, DollarSign, ChevronRight,
+  User, DollarSign, ChevronRight, Pencil, Check, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useImplementations } from "@/hooks/useImplementations";
+import { useImplementations, useUpdateImplementationPaidAmount } from "@/hooks/useImplementations";
 import { ImplementationModal } from "@/components/implementations/ImplementationModal";
 import { ImplementationDetailSheet } from "@/components/implementations/ImplementationDetailSheet";
 import type { Implementation } from "@/hooks/useImplementations";
 import { LtvBadge } from "@/components/shared/LtvBadge";
 import { differenceInDays, parseISO, startOfDay, format } from "date-fns";
+import { toast } from "sonner";
 
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -44,6 +45,9 @@ function ImplementationCard({ impl, onClick }: { impl: Implementation; onClick: 
   const health = getImplHealth(impl);
   const doneSteps = impl.implementation_steps.filter(s => s.status === "done").length;
   const totalSteps = impl.implementation_steps.length;
+  const updatePaid = useUpdateImplementationPaidAmount();
+  const [editingPaid, setEditingPaid] = useState(false);
+  const [paidInput, setPaidInput] = useState("");
 
   const borderColor = {
     ok: "border-border",
@@ -81,9 +85,57 @@ function ImplementationCard({ impl, onClick }: { impl: Implementation; onClick: 
             </div>
           )}
         </div>
-        <div className="text-right shrink-0 ml-3">
-          <p className="text-sm font-bold text-foreground">{fmt(impl.total_value)}</p>
-          <p className="text-[10px] text-muted-foreground">total</p>
+        <div className="text-right shrink-0 ml-3 space-y-1">
+          <div>
+            <p className="text-sm font-bold text-foreground">{fmt(impl.total_value)}</p>
+            <p className="text-[10px] text-muted-foreground">contrato</p>
+          </div>
+          {/* Valor recebido editável */}
+          {editingPaid ? (
+            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+              <Input
+                type="number"
+                value={paidInput}
+                onChange={e => setPaidInput(e.target.value)}
+                className="h-6 text-xs w-20 px-1 bg-secondary"
+                placeholder="0"
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    updatePaid.mutate({ id: impl.id, paid_amount: Number(paidInput) || 0 }, {
+                      onSuccess: () => { toast.success("Valor recebido atualizado!"); setEditingPaid(false); },
+                      onError: (err: any) => toast.error(err.message),
+                    });
+                  }
+                  if (e.key === "Escape") setEditingPaid(false);
+                }}
+              />
+              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => {
+                updatePaid.mutate({ id: impl.id, paid_amount: Number(paidInput) || 0 }, {
+                  onSuccess: () => { toast.success("Valor recebido atualizado!"); setEditingPaid(false); },
+                  onError: (err: any) => toast.error(err.message),
+                });
+              }}>
+                <Check className="h-3 w-3 text-emerald-500" />
+              </Button>
+              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingPaid(false)}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 justify-end" onClick={e => e.stopPropagation()}>
+              <p className="text-xs font-medium text-emerald-600">{fmt(impl.paid_amount ?? 0)}</p>
+              <p className="text-[10px] text-muted-foreground">recebido</p>
+              <Button
+                size="sm" variant="ghost"
+                className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => { setPaidInput(String(impl.paid_amount ?? 0)); setEditingPaid(true); }}
+                title="Atualizar valor recebido"
+              >
+                <Pencil className="h-2.5 w-2.5" />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -164,13 +216,13 @@ export default function ImplementacoesPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Implementações</h1>
+          <h1 className="text-2xl font-bold text-foreground">Mentorias</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {activeCount} ativas · {fmt(totalRevenue)} em contratos
           </p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Nova Implementação
+          <Plus className="h-4 w-4 mr-1" /> Nova Mentoria
         </Button>
       </div>
 
