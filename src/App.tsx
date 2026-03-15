@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import { unlockAudio } from "@/lib/sounds";
+import { registerPushHandlers } from "@/lib/registerPushHandlers";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Index from "./pages/Index";
@@ -75,6 +76,11 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     };
 
     checkSession();
+
+    // Registrar handlers de push notifications
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      registerPushHandlers();
+    }
 
     // Escutar mudanças de autenticação (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
