@@ -14,6 +14,8 @@ import { LeadDetailModal } from "@/components/leads/LeadDetailModal";
 
 type LeadStatus = "novo" | "quase_comprou" | "comprou" | "perdido";
 
+type LeadSource = "meta_ads" | "organic" | "referral" | "whatsapp" | "other" | "manual";
+
 interface Lead {
   id: string;
   email: string;
@@ -26,7 +28,7 @@ interface Lead {
   last_sale_status_enum: string | null;
   last_billet_url: string | null;
   created_at: string;
-  source?: string | null;
+  source?: LeadSource | null;
   follow_up_at?: string | null;
   follow_up_note?: string | null;
 }
@@ -109,7 +111,7 @@ export default function LeadsPage() {
       );
     }
     if (productFilter !== "all") result = result.filter(l => l.last_product === productFilter);
-    if (sourceFilter !== "all") result = result.filter(l => (l as any).source === sourceFilter);
+    if (sourceFilter !== "all") result = result.filter(l => l.source === sourceFilter);
     if (showFollowUpOnly) {
       result = result.filter(l => l.follow_up_at && isSameDay(parseISO(l.follow_up_at), new Date()));
     }
@@ -219,7 +221,7 @@ export default function LeadsPage() {
                 </div>
                 <div className="space-y-2">
                   {colLeads.map((lead) => {
-                    const sourceInfo = SOURCE_OPTIONS.find(s => s.value === (lead as any).source);
+                    const sourceInfo = SOURCE_OPTIONS.find(s => s.value === lead.source);
                     return (
                       <div
                         key={lead.id}

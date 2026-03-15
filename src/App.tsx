@@ -29,6 +29,7 @@ import MetaCallback from "./pages/nutra/MetaCallback";
 import Copies from "./pages/Copies";
 import CopyProjectDetail from "./pages/CopyProjectDetail";
 import NotFound from "./pages/NotFound";
+// Inbox and Calls removed: Inbox is now a popover in the header; Calls was merged into Agenda
 
 const queryClient = new QueryClient();
 
