@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { format, addMonths, parseISO } from "date-fns";
 
 export interface ImplementationStep {
   id: string;
@@ -28,6 +29,26 @@ export interface ImplementationNote {
   profiles?: { full_name: string | null; email: string };
 }
 
+export interface ChargeInstallmentForImpl {
+  id: string;
+  charge_id: string;
+  installment_number: number;
+  due_date: string;
+  amount: number;
+  status: "pending" | "paid" | "overdue";
+  paid_at: string | null;
+}
+
+export interface ChargeForImpl {
+  id: string;
+  installments_count: number;
+  entry_paid: number;
+  installment_value: number;
+  total_ticket: number;
+  notes: string | null;
+  charge_installments: ChargeInstallmentForImpl[];
+}
+
 export interface Implementation {
   id: string;
   client_name: string;
@@ -45,7 +66,7 @@ export interface Implementation {
   created_at: string;
   implementation_steps: ImplementationStep[];
   profiles?: { full_name: string | null; email: string };
-  charges?: { id: string; installments_count: number; entry_paid: number } | null;
+  charges?: ChargeForImpl | null;
 }
 
 export function useImplementations() {
@@ -58,7 +79,7 @@ export function useImplementations() {
           *,
           implementation_steps(*),
           profiles:assigned_to(full_name, email),
-          charges:charge_id(id, installments_count, entry_paid)
+          charges:charge_id(id, installments_count, entry_paid, installment_value, total_ticket, notes, charge_installments(*))
         `)
         .order("contract_end", { ascending: true });
       if (error) throw error;
@@ -73,7 +94,11 @@ export function useImplementationDetail(id: string) {
     queryKey: ["implementation", id],
     queryFn: async () => {
       const [implRes, docsRes, notesRes] = await Promise.all([
-        (supabase as any).from("implementations").select(`*, implementation_steps(*), profiles:assigned_to(full_name, email), charges:charge_id(*)`).eq("id", id).single(),
+        (supabase as any)
+          .from("implementations")
+          .select(`*, implementation_steps(*), profiles:assigned_to(full_name, email), charges:charge_id(*, charge_installments(*))`)
+          .eq("id", id)
+          .single(),
         (supabase as any).from("implementation_documents").select("*, profiles:created_by(full_name, email)").eq("implementation_id", id).order("created_at", { ascending: false }),
         (supabase as any).from("implementation_notes").select("*, profiles:created_by(full_name, email)").eq("implementation_id", id).order("created_at", { ascending: false }),
       ]);
@@ -121,22 +146,92 @@ export function useCreateImplementation() {
         status: string;
       };
       steps: { title: string; description?: string; order_index: number }[];
+      charge?: {
+        entry_amount: number;
+        entry_method: string;
+        installments_count: number;
+        installment_method: string;
+        first_due_date: string;
+      } | null;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
+
+      // 1. Create implementation — paid_amount = entry já pago
+      const initialPaid = payload.charge?.entry_amount ?? 0;
       const { data: impl, error } = await (supabase as any)
         .from("implementations")
-        .insert({ ...payload.impl, created_by: user?.id })
+        .insert({ ...payload.impl, created_by: user?.id, paid_amount: initialPaid })
         .select()
         .single();
       if (error) throw error;
+
+      // 2. Create steps
       if (payload.steps.length > 0) {
         await (supabase as any).from("implementation_steps").insert(
           payload.steps.map(s => ({ ...s, implementation_id: impl.id, status: "pending" }))
         );
       }
+
+      // 3. Create charge if payment data provided
+      if (payload.charge) {
+        const { entry_amount, entry_method, installments_count, installment_method, first_due_date } = payload.charge;
+        const hasPayment = entry_amount > 0 || installments_count > 0;
+
+        if (hasPayment) {
+          const remaining = Math.max(0, payload.impl.total_value - entry_amount);
+          const installmentValue = installments_count > 0 ? remaining / installments_count : 0;
+
+          const chargeNotes = [
+            entry_amount > 0 ? `Entrada via ${entry_method === "pix" ? "Pix" : "PerfectPay"}` : "",
+            installments_count > 0 ? `${installments_count}x via ${installment_method === "pix" ? "Pix" : "PerfectPay"}` : "",
+          ].filter(Boolean).join(" · ");
+
+          const { data: charge, error: chargeErr } = await (supabase as any)
+            .from("charges")
+            .insert({
+              product_name: payload.impl.description || "Mentoria",
+              client_name: payload.impl.client_name,
+              client_phone: payload.impl.client_phone || null,
+              total_ticket: payload.impl.total_value,
+              entry_paid: entry_amount,
+              installments_count: installments_count,
+              installment_value: installmentValue,
+              assigned_to: payload.impl.assigned_to,
+              created_by: user?.id,
+              notes: chargeNotes || null,
+              status: "active",
+            })
+            .select()
+            .single();
+          if (chargeErr) throw chargeErr;
+
+          // Create installments
+          if (installments_count > 0 && first_due_date) {
+            const installments = Array.from({ length: installments_count }, (_, i) => ({
+              charge_id: charge.id,
+              installment_number: i + 1,
+              due_date: format(addMonths(parseISO(first_due_date), i), "yyyy-MM-dd"),
+              amount: Math.round(installmentValue * 100) / 100,
+              status: "pending",
+            }));
+            await (supabase as any).from("charge_installments").insert(installments);
+          }
+
+          // Link charge to implementation
+          await (supabase as any)
+            .from("implementations")
+            .update({ charge_id: charge.id })
+            .eq("id", impl.id);
+        }
+      }
+
       return impl;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["implementations"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["implementations"] });
+      qc.invalidateQueries({ queryKey: ["charges"] });
+      qc.invalidateQueries({ queryKey: ["project-revenue-total"] });
+    },
   });
 }
 
@@ -152,6 +247,49 @@ export function useUpdateImplementationPaidAmount() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["implementations"] });
+      qc.invalidateQueries({ queryKey: ["project-revenue-total"] });
+    },
+  });
+}
+
+/** Marca uma parcela como paga e incrementa paid_amount na implementação */
+export function useMarkInstallmentPaid() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      installmentId,
+      amount,
+      implementationId,
+    }: {
+      installmentId: string;
+      amount: number;
+      implementationId: string;
+    }) => {
+      // 1. Mark installment as paid
+      const { error: instErr } = await (supabase as any)
+        .from("charge_installments")
+        .update({ status: "paid", paid_at: new Date().toISOString() })
+        .eq("id", installmentId);
+      if (instErr) throw instErr;
+
+      // 2. Get current paid_amount
+      const { data: implData } = await (supabase as any)
+        .from("implementations")
+        .select("paid_amount")
+        .eq("id", implementationId)
+        .single();
+
+      // 3. Update paid_amount += installment.amount
+      const { error: implErr } = await (supabase as any)
+        .from("implementations")
+        .update({ paid_amount: (implData?.paid_amount || 0) + amount })
+        .eq("id", implementationId);
+      if (implErr) throw implErr;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["implementation", vars.implementationId] });
+      qc.invalidateQueries({ queryKey: ["implementations"] });
+      qc.invalidateQueries({ queryKey: ["charges"] });
       qc.invalidateQueries({ queryKey: ["project-revenue-total"] });
     },
   });
@@ -184,7 +322,6 @@ export function useDeleteImplementation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      // Delete related data first
       await Promise.all([
         (supabase as any).from("implementation_steps").delete().eq("implementation_id", id),
         (supabase as any).from("implementation_documents").delete().eq("implementation_id", id),

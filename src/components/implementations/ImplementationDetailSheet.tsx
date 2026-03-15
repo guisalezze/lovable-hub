@@ -5,18 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   CheckCircle2, Circle, Clock, Plus, ExternalLink,
   FileText, Link2, Video, Table2, File, Loader2,
-  Pencil, Trash2, Save, X,
+  Pencil, Trash2, Save, X, CreditCard, AlertTriangle, Check,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   useImplementationDetail, useUpdateStepStatus,
   useAddDocument, useAddNote, useUpdateImplementation, useDeleteImplementation, useAddStep,
+  useMarkInstallmentPaid,
 } from "@/hooks/useImplementations";
-import type { ImplementationStep } from "@/hooks/useImplementations";
-import { format, parseISO, differenceInDays } from "date-fns";
+import type { ImplementationStep, ChargeInstallmentForImpl } from "@/hooks/useImplementations";
+import { format, parseISO, differenceInDays, isBefore, startOfDay, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { LtvBadge } from "@/components/shared/LtvBadge";
@@ -35,6 +37,19 @@ const STEP_STATUS_CONFIG = {
   done: { label: "Concluído", icon: CheckCircle2, color: "text-emerald-500" },
 };
 
+function fmtCurrency(v: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
+
+function installmentStatusInfo(inst: ChargeInstallmentForImpl) {
+  const today = startOfDay(new Date());
+  const due = startOfDay(parseISO(inst.due_date));
+  if (inst.status === "paid") return { label: "Pago", color: "text-emerald-500", bg: "bg-emerald-500/10" };
+  if (isBefore(due, today)) return { label: "Atrasado", color: "text-destructive", bg: "bg-destructive/10" };
+  if (isSameDay(due, today)) return { label: "Vence hoje", color: "text-yellow-500", bg: "bg-yellow-500/10" };
+  return { label: "Pendente", color: "text-muted-foreground", bg: "bg-secondary" };
+}
+
 export function ImplementationDetailSheet({
   implId, open, onClose,
 }: { implId: string; open: boolean; onClose: () => void }) {
@@ -45,6 +60,7 @@ export function ImplementationDetailSheet({
   const addNote = useAddNote();
   const updateImpl = useUpdateImplementation();
   const deleteImpl = useDeleteImplementation();
+  const markPaid = useMarkInstallmentPaid();
 
   const [noteText, setNoteText] = useState("");
   const [docTitle, setDocTitle] = useState("");
@@ -55,6 +71,8 @@ export function ImplementationDetailSheet({
   const [editing, setEditing] = useState(false);
   const [editFields, setEditFields] = useState({
     client_name: "",
+    client_email: "",
+    client_phone: "",
     description: "",
     contract_start: "",
     contract_end: "",
@@ -67,16 +85,28 @@ export function ImplementationDetailSheet({
   const impl = data?.implementation;
   const documents = data?.documents || [];
   const notes = data?.notes || [];
+  const charge = impl?.charges ?? null;
+  const installments = charge
+    ? [...charge.charge_installments].sort((a, b) => a.installment_number - b.installment_number)
+    : [];
 
-  const fmtCurrency = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const daysLeft = impl ? differenceInDays(parseISO(impl.contract_end), new Date()) : 0;
   const steps = (impl?.implementation_steps || []).sort((a, b) => a.order_index - b.order_index);
   const progress = steps.length > 0 ? Math.round(steps.filter(s => s.status === "done").length / steps.length * 100) : 0;
+
+  // Pagamento summary
+  const entryPaid = charge ? Number(charge.entry_paid) : 0;
+  const paidInstallmentsSum = installments.filter(i => i.status === "paid").reduce((s, i) => s + Number(i.amount), 0);
+  const totalReceived = impl?.paid_amount ?? 0;
+  const totalContract = impl?.total_value ?? 0;
+  const paymentPct = totalContract > 0 ? Math.min(100, (totalReceived / totalContract) * 100) : 0;
 
   function startEditing() {
     if (!impl) return;
     setEditFields({
       client_name: impl.client_name,
+      client_email: impl.client_email || "",
+      client_phone: impl.client_phone || "",
       description: impl.description || "",
       contract_start: impl.contract_start,
       contract_end: impl.contract_end,
@@ -90,20 +120,22 @@ export function ImplementationDetailSheet({
     updateImpl.mutate({
       id: implId,
       client_name: editFields.client_name,
+      client_email: editFields.client_email || null,
+      client_phone: editFields.client_phone || null,
       description: editFields.description || null,
       contract_start: editFields.contract_start,
       contract_end: editFields.contract_end,
       total_value: editFields.total_value,
       status: editFields.status,
     }, {
-      onSuccess: () => { toast.success("Implementação atualizada"); setEditing(false); },
+      onSuccess: () => { toast.success("Mentoria atualizada"); setEditing(false); },
       onError: () => toast.error("Erro ao atualizar"),
     });
   }
 
   function handleDelete() {
     deleteImpl.mutate(implId, {
-      onSuccess: () => { toast.success("Implementação excluída"); onClose(); },
+      onSuccess: () => { toast.success("Mentoria excluída"); onClose(); },
       onError: () => toast.error("Erro ao excluir"),
     });
   }
@@ -132,6 +164,13 @@ export function ImplementationDetailSheet({
     });
   }
 
+  function handleMarkInstallmentPaid(inst: ChargeInstallmentForImpl) {
+    markPaid.mutate(
+      { installmentId: inst.id, amount: Number(inst.amount), implementationId: implId },
+      { onSuccess: () => toast.success("Parcela marcada como paga! Faturamento atualizado.") }
+    );
+  }
+
   return (
     <Sheet open={open} onOpenChange={v => !v && onClose()}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
@@ -142,8 +181,24 @@ export function ImplementationDetailSheet({
             <SheetHeader>
               {editing ? (
                 <div className="space-y-3">
-                  <Input value={editFields.client_name} onChange={e => setEditFields(p => ({ ...p, client_name: e.target.value }))} placeholder="Nome do cliente" />
-                  <Textarea value={editFields.description} onChange={e => setEditFields(p => ({ ...p, description: e.target.value }))} placeholder="Descrição" rows={2} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Nome do cliente</label>
+                      <Input value={editFields.client_name} onChange={e => setEditFields(p => ({ ...p, client_name: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Email</label>
+                      <Input value={editFields.client_email} onChange={e => setEditFields(p => ({ ...p, client_email: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">WhatsApp</label>
+                    <Input value={editFields.client_phone} onChange={e => setEditFields(p => ({ ...p, client_phone: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Descrição</label>
+                    <Textarea value={editFields.description} onChange={e => setEditFields(p => ({ ...p, description: e.target.value }))} rows={2} />
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-xs text-muted-foreground">Início</label>
@@ -188,6 +243,9 @@ export function ImplementationDetailSheet({
                       <SheetTitle>{impl.client_name}</SheetTitle>
                       {impl.client_email && <LtvBadge email={impl.client_email} size="md" />}
                       {impl.description && <p className="text-sm text-muted-foreground mt-1">{impl.description}</p>}
+                      {impl.client_phone && (
+                        <p className="text-xs text-muted-foreground mt-0.5">📱 {impl.client_phone}</p>
+                      )}
                     </div>
                     <p className="text-lg font-bold text-foreground shrink-0">{fmtCurrency(impl.total_value)}</p>
                   </div>
@@ -204,9 +262,9 @@ export function ImplementationDetailSheet({
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Excluir implementação?</AlertDialogTitle>
+                          <AlertDialogTitle>Excluir mentoria?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Isso excluirá permanentemente a implementação de "{impl.client_name}" e todas as etapas, documentos e notas associadas.
+                            Isso excluirá permanentemente a mentoria de "{impl.client_name}" e todas as etapas, documentos e notas associadas.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -243,10 +301,17 @@ export function ImplementationDetailSheet({
             <Tabs defaultValue="steps" className="mt-6">
               <TabsList className="w-full">
                 <TabsTrigger value="steps" className="flex-1">Etapas</TabsTrigger>
+                <TabsTrigger value="pagamentos" className="flex-1 relative">
+                  Pagamentos
+                  {charge && installments.some(i => i.status !== "paid") && (
+                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-yellow-500" />
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="notes" className="flex-1">Notas</TabsTrigger>
-                <TabsTrigger value="docs" className="flex-1">Documentos</TabsTrigger>
+                <TabsTrigger value="docs" className="flex-1">Docs</TabsTrigger>
               </TabsList>
 
+              {/* ── Etapas ── */}
               <TabsContent value="steps" className="space-y-2 mt-4">
                 {steps.map(step => {
                   const config = STEP_STATUS_CONFIG[step.status];
@@ -297,6 +362,99 @@ export function ImplementationDetailSheet({
                 <p className="text-[11px] text-muted-foreground text-center pt-1">Clique em uma etapa para avançar o status</p>
               </TabsContent>
 
+              {/* ── Pagamentos ── */}
+              <TabsContent value="pagamentos" className="mt-4 space-y-4">
+                {/* Resumo recebido */}
+                <div className="bg-secondary/40 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground font-medium">Recebido</span>
+                    <span className="font-bold text-foreground">{fmtCurrency(totalReceived)} / {fmtCurrency(totalContract)}</span>
+                  </div>
+                  <Progress
+                    value={paymentPct}
+                    className={`h-2 ${paymentPct >= 100 ? "[&>div]:bg-emerald-500" : "[&>div]:bg-primary"}`}
+                  />
+                  <p className="text-[10px] text-muted-foreground text-right">{Math.round(paymentPct)}% do contrato recebido</p>
+                </div>
+
+                {charge ? (
+                  <div className="space-y-3">
+                    {/* Entrada */}
+                    {entryPaid > 0 && (
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                          <div>
+                            <p className="text-xs font-semibold text-foreground">Entrada</p>
+                            {charge.notes && <p className="text-[10px] text-muted-foreground">{charge.notes.split("·")[0]?.trim()}</p>}
+                          </div>
+                        </div>
+                        <span className="text-sm font-bold text-emerald-600">{fmtCurrency(entryPaid)}</span>
+                      </div>
+                    )}
+
+                    {/* Parcelas */}
+                    {installments.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Parcelas ({installments.filter(i => i.status === "paid").length}/{installments.length} pagas)
+                        </p>
+                        {installments.map(inst => {
+                          const info = installmentStatusInfo(inst);
+                          return (
+                            <div key={inst.id} className={`flex items-center justify-between p-2.5 rounded-lg border ${inst.status === "paid" ? "bg-emerald-500/5 border-emerald-500/20" : "bg-card border-border"}`}>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs text-muted-foreground w-6 shrink-0 text-right font-mono">{inst.installment_number}.</span>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-semibold text-foreground">{fmtCurrency(Number(inst.amount))}</p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    Venc. {format(parseISO(inst.due_date), "dd/MM/yyyy")}
+                                    {inst.paid_at && ` · Pago em ${format(parseISO(inst.paid_at), "dd/MM/yy")}`}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Badge className={`${info.bg} ${info.color} text-[9px] border-0`}>
+                                  {info.label}
+                                </Badge>
+                                {inst.status !== "paid" && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-emerald-500 hover:bg-emerald-500/10"
+                                    onClick={() => handleMarkInstallmentPaid(inst)}
+                                    disabled={markPaid.isPending}
+                                    title="Marcar como paga"
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {charge.notes && (
+                      <p className="text-[10px] text-muted-foreground bg-secondary/40 rounded px-2 py-1">
+                        <CreditCard className="h-3 w-3 inline mr-1" />
+                        {charge.notes}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 text-muted-foreground space-y-2">
+                    <CreditCard className="h-8 w-8 opacity-30" />
+                    <p className="text-sm">Nenhuma cobrança vinculada</p>
+                    <p className="text-xs text-center max-w-[200px]">
+                      Ao criar a mentoria, configure a entrada e o parcelamento para gerar a cobrança automaticamente.
+                    </p>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* ── Notas ── */}
               <TabsContent value="notes" className="space-y-4 mt-4">
                 <div className="flex gap-2">
                   <Input
@@ -330,6 +488,7 @@ export function ImplementationDetailSheet({
                 </div>
               </TabsContent>
 
+              {/* ── Documentos ── */}
               <TabsContent value="docs" className="space-y-4 mt-4">
                 {!addingDoc ? (
                   <Button variant="outline" size="sm" onClick={() => setAddingDoc(true)}>
