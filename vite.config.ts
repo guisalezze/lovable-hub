@@ -129,9 +129,6 @@ export default defineConfig(({ mode }) => ({
         // Sempre servir index.html como fallback de navegação (evita tela branca no PWA)
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/api\//, /^\/functions\//, /^\/supabase\//],
-        // Atualizar service worker imediatamente ao abrir o app
-        skipWaiting: true,
-        clientsClaim: true,
         // Handlers de push serão registrados dinamicamente no app
         runtimeCaching: [
           {

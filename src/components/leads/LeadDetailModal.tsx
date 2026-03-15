@@ -303,7 +303,6 @@ export function LeadDetailModal({ lead, open, onClose, onStatusChange }: LeadDet
   };
 
   return (
-    <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -588,13 +587,14 @@ export function LeadDetailModal({ lead, open, onClose, onStatusChange }: LeadDet
       </DialogContent>
     </Dialog>
 
-    {/* Dialog de criar call pre-preenchida com dados do lead */}
+    {/* Dialog de criar call pré-preenchida com dados do lead */}
     <CreateCallFromLeadDialog
       open={showCreateCall}
       onOpenChange={setShowCreateCall}
       leadEmail={lead.email}
       leadName={lead.full_name}
     />
-    </>
+  </>
   );
+}
 }
