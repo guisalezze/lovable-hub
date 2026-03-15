@@ -197,7 +197,8 @@ export default function ImplementacoesPage() {
   const activeCount = impls.filter(i => i.status === "active").length;
   const atRiskCount = impls.filter(i => ["warning", "danger"].includes(getImplHealth(i))).length;
   const completedCount = impls.filter(i => i.status === "completed").length;
-  const totalRevenue = impls.filter(i => i.status !== "cancelled").reduce((acc, i) => acc + i.total_value, 0);
+  // Receita = apenas o que foi pago (paid_amount), não o valor total
+  const totalRevenue = impls.filter(i => i.status !== "cancelled").reduce((acc, i) => acc + Number(i.paid_amount || 0), 0);
 
   const filtered = useMemo(() => {
     let result = impls;
