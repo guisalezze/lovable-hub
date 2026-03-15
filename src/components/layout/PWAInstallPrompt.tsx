@@ -97,22 +97,25 @@ export function PWAInstallPrompt() {
       return;
     }
 
-    // Android Chrome - usar prompt nativo
+    // Android Chrome - usar prompt nativo (instalação automática)
     if (deferredPrompt) {
       try {
+        // Mostrar prompt nativo do Chrome
         await deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
         
         if (outcome === "accepted") {
-          toast.success("App instalado com sucesso!");
+          toast.success("App instalado com sucesso! 🎉");
           setIsInstalled(true);
+        } else {
+          toast.info("Instalação cancelada");
         }
         
         setDeferredPrompt(null);
         setShowPrompt(false);
       } catch (error) {
         console.error("Erro ao instalar:", error);
-        toast.error("Erro ao instalar o app");
+        toast.error("Erro ao instalar o app. Tente novamente.");
       }
       return;
     }
