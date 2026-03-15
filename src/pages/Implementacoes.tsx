@@ -65,7 +65,11 @@ function ImplementationCard({ impl, onClick }: { impl: Implementation; onClick: 
 
   return (
     <div
-      onClick={onClick}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
       className={`glass-card p-5 cursor-pointer hover:shadow-md transition-all group border ${borderColor}`}
     >
       <div className="flex items-start justify-between mb-4">
