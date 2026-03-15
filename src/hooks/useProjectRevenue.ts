@@ -2,19 +2,16 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
-import { startOfMonth, endOfMonth, format } from "date-fns";
 
-/** Faturamento total do mês atual: vendas aprovadas + mentorias (paid_amount) — separado por projeto */
+/** Faturamento acumulado total: vendas aprovadas + mentorias (paid_amount) — separado por projeto */
 export function useProjectRevenueTotal() {
   const { currentProject } = useProject();
   const qc = useQueryClient();
 
-  const since = format(startOfMonth(new Date()), "yyyy-MM-dd");
-  const until = format(endOfMonth(new Date()), "yyyy-MM-dd");
   const isNutra = currentProject?.slug === "nutra";
 
   const query = useQuery({
-    queryKey: ["project-revenue-total", currentProject?.id, since, until],
+    queryKey: ["project-revenue-total", currentProject?.id],
     queryFn: async () => {
       if (!currentProject) return { sales: 0, mentorias: 0, total: 0 };
 
@@ -22,14 +19,12 @@ export function useProjectRevenueTotal() {
       let mentoriasTotal = 0;
 
       if (isNutra) {
-        // Nutra — tabela nutra_sales, filtrada por project_id
+        // Nutra — tabela nutra_sales, filtrada por project_id (acumulado total)
         const { data: nutraData } = await supabase
           .from("nutra_sales")
           .select("amount")
           .eq("project_id", currentProject.id)
-          .eq("status", "approved")
-          .gte("created_at", `${since}T00:00:00`)
-          .lte("created_at", `${until}T23:59:59`);
+          .eq("status", "approved");
 
         salesTotal = (nutraData || []).reduce(
           (acc, s) => acc + Number(s.amount || 0),
@@ -38,13 +33,11 @@ export function useProjectRevenueTotal() {
         // Nutra não tem mentorias
         mentoriasTotal = 0;
       } else {
-        // Educacional — tabela sales (exclusiva do projeto Educacional)
+        // Educacional — tabela sales (acumulado total, sem filtro de data)
         const { data: salesData } = await supabase
           .from("sales")
           .select("sale_amount")
-          .eq("sale_status_enum", "approved")
-          .gte("created_at", `${since}T00:00:00`)
-          .lte("created_at", `${until}T23:59:59`);
+          .eq("sale_status_enum", "approved");
 
         salesTotal = (salesData || []).reduce(
           (acc, s) => acc + Number(s.sale_amount || 0),
