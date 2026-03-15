@@ -33,21 +33,23 @@ async function generateSquareIcon() {
     const yOffset = Math.floor((size - metadata.height) / 2);
 
     // Criar imagem quadrada preenchendo 100% do espaço SEM áreas brancas
-    // Usar 'cover' para preencher todo o espaço, garantindo que não haja áreas vazias
-    await sharp(logoPath)
-      .resize(size, size, {
-        fit: 'cover', // Preenche 100% do espaço, cortando se necessário
-        position: 'center', // Centraliza o corte
-        withoutEnlargement: false // Permite aumentar se necessário
-      })
-      .extend({
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0,
-        background: { r: 0, g: 0, b: 0, alpha: 0 } // Garantir fundo transparente
-      })
-      .toFile(outputPath);
+    // Forçar resize para preencher completamente, esticando se necessário
+    const image = sharp(logoPath);
+    const { width, height } = await image.metadata();
+    
+    // Se a imagem já é quadrada, apenas garantir que está no tamanho certo
+    if (width === height && width === size) {
+      // Já está no tamanho certo, apenas copiar
+      await image.toFile(outputPath);
+    } else {
+      // Redimensionar forçando preenchimento completo (pode esticar)
+      await image
+        .resize(size, size, {
+          fit: 'fill', // Força preenchimento completo, esticando se necessário
+          kernel: sharp.kernel.lanczos3 // Melhor qualidade ao redimensionar
+        })
+        .toFile(outputPath);
+    }
 
     console.log(`✅ Ícone quadrado criado: ${outputPath}`);
     console.log(`\n📝 Próximos passos:`);
