@@ -54,7 +54,7 @@ function installmentStatusInfo(inst: ChargeInstallmentForImpl) {
 export function ImplementationDetailSheet({
   implId, open, onClose,
 }: { implId: string; open: boolean; onClose: () => void }) {
-  const { data, isLoading, error } = useImplementationDetail(implId);
+  const { data, isLoading, error } = useImplementationDetail(implId || "");
   const updateStep = useUpdateStepStatus();
   const addStepMut = useAddStep();
   const addDoc = useAddDocument();

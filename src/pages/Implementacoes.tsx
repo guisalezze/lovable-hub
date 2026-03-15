@@ -300,13 +300,11 @@ export default function ImplementacoesPage() {
 
       <ImplementationModal open={modalOpen} onClose={() => setModalOpen(false)} />
 
-      {selectedImpl && (
-        <ImplementationDetailSheet
-          implId={selectedImpl.id}
-          open={!!selectedImpl}
-          onClose={() => setSelectedImpl(null)}
-        />
-      )}
+      <ImplementationDetailSheet
+        implId={selectedImpl?.id || ""}
+        open={!!selectedImpl}
+        onClose={() => setSelectedImpl(null)}
+      />
     </div>
   );
 }

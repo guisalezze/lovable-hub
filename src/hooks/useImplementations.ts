@@ -93,7 +93,9 @@ export function useImplementationDetail(id: string) {
   return useQuery({
     queryKey: ["implementation", id],
     queryFn: async () => {
-      if (!id) throw new Error("ID não fornecido");
+      if (!id || id === "") {
+        return { implementation: null, documents: [], notes: [] };
+      }
       const [implRes, docsRes, notesRes] = await Promise.all([
         (supabase as any)
           .from("implementations")
