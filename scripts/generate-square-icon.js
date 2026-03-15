@@ -32,11 +32,12 @@ async function generateSquareIcon() {
     const xOffset = Math.floor((size - metadata.width) / 2);
     const yOffset = Math.floor((size - metadata.height) / 2);
 
-    // Criar imagem quadrada com fundo transparente
+    // Criar imagem quadrada preenchendo 100% do espaço
+    // Usar 'cover' para preencher todo o espaço, cortando se necessário
     await sharp(logoPath)
       .resize(size, size, {
-        fit: 'contain',
-        background: { r: 0, g: 0, b: 0, alpha: 0 } // Fundo transparente
+        fit: 'cover', // Preenche 100% do espaço, pode cortar partes
+        position: 'center' // Centraliza o corte
       })
       .toFile(outputPath);
 
