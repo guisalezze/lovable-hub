@@ -939,9 +939,13 @@ export function ImplementationDetailSheet({
                 : (receiptModalIsPaid ? "Editar comprovante" : "Adicionar comprovante")}
             </DialogTitle>
             <DialogDescription>
-              {receiptModalIsPaid 
-                ? "Faça upload de uma nova imagem ou PDF para substituir o comprovante atual."
-                : "Faça upload do comprovante de pagamento (imagem ou PDF)."}
+              {receiptModalIsEntry
+                ? (receiptModalIsPaid 
+                  ? "Faça upload de uma nova imagem ou PDF para substituir o comprovante de entrada atual."
+                  : "Faça upload do comprovante de pagamento de entrada (imagem ou PDF).")
+                : (receiptModalIsPaid 
+                  ? "Faça upload de uma nova imagem ou PDF para substituir o comprovante atual."
+                  : "Faça upload do comprovante de pagamento (imagem ou PDF).")}
             </DialogDescription>
           </DialogHeader>
           
