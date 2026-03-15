@@ -30,6 +30,7 @@ export default defineConfig(({ mode }) => ({
         start_url: "/",
         scope: "/",
         id: "/",
+        prefer_related_applications: false,
         icons: [
           {
             src: "/logo.png",

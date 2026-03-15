@@ -118,10 +118,19 @@ export function PWAInstallPrompt() {
     }
 
     // Fallback: instruções para instalação manual
-    toast.info(
-      "Para instalar: No Chrome Android, toque no menu (⋮) > 'Adicionar à tela inicial'. No Safari iOS, toque em Compartilhar > 'Adicionar à Tela de Início'.",
-      { duration: 8000 }
-    );
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    
+    if (isAndroid) {
+      toast.info(
+        "Para instalar no Android: 1) Toque nos 3 pontinhos (⋮) no canto superior direito 2) Procure 'Instalar app' ou 'Adicionar à tela inicial' 3) Se não aparecer, o site precisa estar em HTTPS e ter sido visitado algumas vezes",
+        { duration: 12000 }
+      );
+    } else {
+      toast.info(
+        "Para instalar: No Chrome Android, toque no menu (⋮) > 'Adicionar à tela inicial'. No Safari iOS, toque em Compartilhar > 'Adicionar à Tela de Início'.",
+        { duration: 8000 }
+      );
+    }
     setShowPrompt(false);
   };
 
@@ -139,7 +148,7 @@ export function PWAInstallPrompt() {
           ) : isIOS && isSafari ? (
             <p className="text-xs text-muted-foreground">Toque em Compartilhar (□↑) {'>'} Adicionar à Tela de Início</p>
           ) : (
-            <p className="text-xs text-muted-foreground">Adicione à tela inicial para acesso rápido</p>
+            <p className="text-xs text-muted-foreground">Toque nos 3 pontinhos (⋮) {'>'} Instalar app</p>
           )}
         </div>
         <div className="flex gap-2">
