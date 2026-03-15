@@ -387,13 +387,19 @@ export function ImplementationDetailSheet({
     <Sheet 
       open={open} 
       onOpenChange={(v) => {
-        console.log("🔄 Sheet onOpenChange chamado:", { v, isError, open });
-        // Só fechar se explicitamente solicitado e não houver erro
-        if (!v && !isError) {
+        console.log("🔄 Sheet onOpenChange chamado:", { v, isError, open, editing });
+        // Só permitir fechar se não houver erro e não estiver editando
+        if (!v) {
+          if (isError) {
+            console.log("⚠️ Tentativa de fechar bloqueada devido a erro");
+            return; // Não fechar se houver erro
+          }
+          if (editing) {
+            console.log("⚠️ Tentativa de fechar bloqueada - está editando");
+            return; // Não fechar se estiver editando
+          }
           console.log("✅ Fechando Sheet normalmente");
           onClose();
-        } else if (!v && isError) {
-          console.log("⚠️ Tentativa de fechar bloqueada devido a erro");
         }
       }} 
       modal={true}
@@ -486,7 +492,10 @@ export function ImplementationDetailSheet({
                     <Button size="sm" onClick={handleSaveEdit} disabled={updateImpl.isPending} className="gap-1">
                       <Save className="h-3.5 w-3.5" /> Salvar
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(false)} className="gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => {
+                      setEditing(false);
+                      setIsError(false);
+                    }} className="gap-1">
                       <X className="h-3.5 w-3.5" /> Cancelar
                     </Button>
                   </div>
