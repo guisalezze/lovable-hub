@@ -287,6 +287,27 @@ export function ImplementationDetailSheet({
     }
   }
 
+  function handleEntryReceiptChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const isImage = file.type.startsWith("image/");
+    const isPdf = file.type === "application/pdf";
+    if (!isImage && !isPdf) {
+      toast.error("Apenas imagens e PDF são permitidos");
+      return;
+    }
+    setEntryReceiptFile(file);
+    if (isImage) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setEntryReceiptPreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setEntryReceiptPreview(file.name);
+    }
+  }
+
   if (!open) return null;
 
   return (
