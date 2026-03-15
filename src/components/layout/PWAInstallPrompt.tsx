@@ -20,13 +20,19 @@ export function PWAInstallPrompt() {
       return;
     }
 
-    // Verificar se está em modo standalone (PWA instalado)
-    if (window.navigator.standalone === true) {
+    // Verificar se está em modo standalone (PWA instalado - iOS)
+    if ((window.navigator as any).standalone === true) {
       setIsInstalled(true);
       return;
     }
 
-    // Escutar evento beforeinstallprompt
+    // Verificar se está em mobile
+    const isMobile = window.innerWidth <= 768;
+    if (!isMobile) {
+      return; // Não mostrar em desktop
+    }
+
+    // Escutar evento beforeinstallprompt (Chrome/Edge)
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
@@ -38,10 +44,17 @@ export function PWAInstallPrompt() {
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
+    // Mostrar prompt manual mesmo sem beforeinstallprompt (para iOS Safari, etc)
+    setTimeout(() => {
+      if (!deferredPrompt && !isInstalled) {
+        setShowPrompt(true);
+      }
+    }, 5000);
+
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     };
-  }, []);
+  }, [deferredPrompt, isInstalled]);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) {

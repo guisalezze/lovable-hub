@@ -16,7 +16,7 @@ export function AppLayout() {
   useSaleRealtime();
 
   const isMobile = useIsMobile();
-  const [sidebarOpen, setSidebarOpen] = useState(!isMobile); // Fechado por padrão no mobile
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Sempre fechado no mobile
   const [dark, setDark] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("theme");
@@ -29,10 +29,12 @@ export function AppLayout() {
 
   // Ajustar estado da sidebar quando mudar de mobile para desktop
   useEffect(() => {
-    if (!isMobile && !sidebarOpen) {
-      setSidebarOpen(true);
+    if (!isMobile) {
+      setSidebarOpen(true); // Abrir automaticamente no desktop
+    } else {
+      setSidebarOpen(false); // Garantir fechado no mobile
     }
-  }, [isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isMobile]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);

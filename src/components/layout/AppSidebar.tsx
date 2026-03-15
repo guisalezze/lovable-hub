@@ -240,7 +240,7 @@ export function AppSidebar({ open, onToggle }: AppSidebarProps) {
       <Sheet open={open} onOpenChange={onToggle}>
         <SheetContent 
           side="left" 
-          className="sidebar-fullscreen w-full max-w-full p-0 bg-sidebar text-sidebar-foreground [&>button]:hidden"
+          className="sidebar-fullscreen w-full max-w-full p-0 bg-sidebar text-sidebar-foreground [&>button]:hidden z-[90]"
         >
           <div className="flex h-full w-full flex-col">
             <SidebarContent />
