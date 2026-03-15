@@ -37,7 +37,7 @@ export function BottomNavBar({ onMenuClick }: { onMenuClick: () => void }) {
   const visibleItems = getBottomNavItemsForProject(currentProject?.slug);
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 h-16 bg-background border-t border-border z-50 md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 h-16 bg-background/95 backdrop-blur-sm border-t border-border z-[100] md:hidden safe-area-inset-bottom">
       <div className="flex items-center justify-around h-full px-2">
         {visibleItems.map((item) => {
           if (item.to === "#") {

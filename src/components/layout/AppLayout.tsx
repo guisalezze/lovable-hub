@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { BottomNavBar } from "./BottomNavBar";
+import { PWAInstallPrompt } from "./PWAInstallPrompt";
 import { Menu, Moon, Sun } from "lucide-react";
 import { NotificationPopover } from "./NotificationPopover";
 import { RevenueProgressBar, RevenueBarStrip } from "./RevenueProgressBar";
@@ -101,6 +102,9 @@ export function AppLayout() {
       
       {/* Bottom Navigation Bar - apenas no mobile */}
       {isMobile && <BottomNavBar onMenuClick={() => setSidebarOpen(true)} />}
+      
+      {/* PWA Install Prompt */}
+      <PWAInstallPrompt />
     </div>
   );
 }

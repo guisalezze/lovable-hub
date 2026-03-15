@@ -232,6 +232,11 @@
   color: hsl(var(--foreground));
 }
 
+/* Safe area para iPhone com notch */
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 /* Sheet em tela cheia no mobile */
 @media (max-width: 768px) {
   [data-sidebar="sidebar"][data-mobile="true"],

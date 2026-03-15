@@ -28,6 +28,8 @@ export default defineConfig(({ mode }) => ({
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
+        scope: "/",
+        id: "/",
         icons: [
           {
             src: "/logo.png",
