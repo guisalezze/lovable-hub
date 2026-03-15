@@ -143,11 +143,11 @@ export function AppSidebar({ open }: AppSidebarProps) {
       } shrink-0 border-r border-sidebar-border bg-sidebar transition-all duration-300 overflow-hidden flex flex-col h-screen sticky top-0`}
     >
       {/* Logo */}
-      <div className="h-14 flex items-center px-4 border-b border-sidebar-border shrink-0 gap-2.5">
+      <div className="h-14 flex items-center px-4 border-b border-sidebar-border shrink-0 gap-3">
         <img
           src="/logo.png"
           alt="Solaryz"
-          className="h-8 w-8 rounded-lg object-cover shrink-0"
+          className="h-10 w-10 rounded-xl object-cover shrink-0"
         />
         <span className="font-bold text-foreground text-lg tracking-tight whitespace-nowrap">
           Solaryz
@@ -212,7 +212,7 @@ export function AppSidebar({ open }: AppSidebarProps) {
           <img
             src="/logo.png"
             alt="Solaryz"
-            className="h-7 w-7 rounded-lg object-cover shrink-0"
+            className="h-9 w-9 rounded-xl object-cover shrink-0"
           />
           <div className="min-w-0">
             <p className="text-xs font-medium text-foreground truncate">Solaryz</p>
