@@ -91,8 +91,6 @@ export function ImplementationDetailSheet({
     status: "active",
   });
 
-  if (!data && !isLoading) return null;
-
   const impl = data?.implementation;
   const documents = data?.documents || [];
   const notes = data?.notes || [];
