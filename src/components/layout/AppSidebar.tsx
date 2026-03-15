@@ -231,9 +231,12 @@ export function AppSidebar({ open, onToggle }: AppSidebarProps) {
   // Fechar sidebar no mobile ao navegar
   useEffect(() => {
     if (isMobile && open) {
-      onToggle();
+      const timer = setTimeout(() => {
+        onToggle();
+      }, 100); // Pequeno delay para animação
+      return () => clearTimeout(timer);
     }
-  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.pathname, isMobile, open, onToggle]);
 
   if (isMobile) {
     return (
