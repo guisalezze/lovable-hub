@@ -152,6 +152,7 @@ export function useCreateImplementation() {
         installments_count: number;
         installment_method: string;
         first_due_date: string;
+        entry_receipt_url?: string | null;
       } | null;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -235,6 +236,7 @@ export function useCreateImplementation() {
               assigned_to: payload.impl.assigned_to,
               created_by: user?.id,
               notes: chargeNotes || null,
+              entry_receipt_url: payload.charge?.entry_receipt_url || null,
               status: "active",
             })
             .select()
@@ -297,27 +299,54 @@ export function useMarkInstallmentPaid() {
       amount,
       implementationId,
       paymentMethod,
+      receiptFile,
     }: {
       installmentId: string;
       amount: number;
       implementationId: string;
       paymentMethod?: "pix" | "perfectpay";
+      receiptFile?: File | null;
     }) => {
-      // 1. Mark installment as paid
+      // 1. Upload comprovante (se for PIX e tiver arquivo)
+      let receiptUrl: string | null = null;
+      if (receiptFile && paymentMethod === "pix") {
+        try {
+          const fileExt = receiptFile.name.split(".").pop();
+          const fileName = `installment-receipt-${Date.now()}-${installmentId}.${fileExt}`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("receipts")
+            .upload(fileName, receiptFile, { upsert: false });
+          
+          if (uploadError) throw uploadError;
+          
+          const { data: { publicUrl } } = supabase.storage
+            .from("receipts")
+            .getPublicUrl(uploadData.path);
+          receiptUrl = publicUrl;
+        } catch (err: any) {
+          throw new Error("Erro ao fazer upload do comprovante: " + err.message);
+        }
+      }
+
+      // 2. Mark installment as paid
       const { error: instErr } = await (supabase as any)
         .from("charge_installments")
-        .update({ status: "paid", paid_at: new Date().toISOString() })
+        .update({ 
+          status: "paid", 
+          paid_at: new Date().toISOString(),
+          receipt_url: receiptUrl,
+        })
         .eq("id", installmentId);
       if (instErr) throw instErr;
 
-      // 2. Get current paid_amount and charge info
+      // 3. Get current paid_amount and charge info
       const { data: implData } = await (supabase as any)
         .from("implementations")
         .select("paid_amount, charge_id")
         .eq("id", implementationId)
         .single();
 
-      // 3. Aplica desconto de 10% se for PIX
+      // 4. Aplica desconto de 10% se for PIX
       let amountToAdd = amount;
       if (paymentMethod === "pix") {
         amountToAdd = Math.round(amount * 0.9 * 100) / 100; // 10% desconto
@@ -339,7 +368,7 @@ export function useMarkInstallmentPaid() {
         }
       }
 
-      // 4. Update paid_amount
+      // 5. Update paid_amount
       const { error: implErr } = await (supabase as any)
         .from("implementations")
         .update({ paid_amount: (implData?.paid_amount || 0) + amountToAdd })

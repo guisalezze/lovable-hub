@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   CheckCircle2, Circle, Clock, Plus, ExternalLink,
   FileText, Link2, Video, Table2, File, Loader2,
-  Pencil, Trash2, Save, X, CreditCard, AlertTriangle, Check,
+  Pencil, Trash2, Save, X, CreditCard, AlertTriangle, Check, Upload, Image,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -68,6 +68,8 @@ export function ImplementationDetailSheet({
   const [docType, setDocType] = useState("link");
   const [addingDoc, setAddingDoc] = useState(false);
   const [newStepTitle, setNewStepTitle] = useState("");
+  const [installmentReceiptFile, setInstallmentReceiptFile] = useState<{ [key: string]: File }>({});
+  const [installmentReceiptPreview, setInstallmentReceiptPreview] = useState<{ [key: string]: string }>({});
   const [editing, setEditing] = useState(false);
   const [editFields, setEditFields] = useState({
     client_name: "",
@@ -167,12 +169,15 @@ export function ImplementationDetailSheet({
   function handleMarkInstallmentPaid(inst: ChargeInstallmentForImpl) {
     // Detecta método de pagamento pelas notes da charge (Pix ou PerfectPay)
     const paymentMethod = charge?.notes?.toLowerCase().includes("pix") ? "pix" : "perfectpay";
+    const receiptFile = installmentReceiptFile[inst.id] || null;
+    
     markPaid.mutate(
       { 
         installmentId: inst.id, 
         amount: Number(inst.amount), 
         implementationId: implId,
         paymentMethod,
+        receiptFile,
       },
       { 
         onSuccess: () => {
@@ -180,9 +185,35 @@ export function ImplementationDetailSheet({
             ? "Parcela marcada como paga via Pix! Desconto de 10% aplicado (Marília)."
             : "Parcela marcada como paga! Faturamento atualizado.";
           toast.success(msg);
+          // Limpa o arquivo após sucesso
+          setInstallmentReceiptFile(prev => {
+            const next = { ...prev };
+            delete next[inst.id];
+            return next;
+          });
+          setInstallmentReceiptPreview(prev => {
+            const next = { ...prev };
+            delete next[inst.id];
+            return next;
+          });
         }
       }
     );
+  }
+
+  function handleInstallmentReceiptChange(instId: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Apenas imagens são permitidas");
+      return;
+    }
+    setInstallmentReceiptFile(prev => ({ ...prev, [instId]: file }));
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setInstallmentReceiptPreview(prev => ({ ...prev, [instId]: e.target?.result as string }));
+    };
+    reader.readAsDataURL(file);
   }
 
   return (
@@ -395,15 +426,29 @@ export function ImplementationDetailSheet({
                   <div className="space-y-3">
                     {/* Entrada */}
                     {entryPaid > 0 && (
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                          <div>
-                            <p className="text-xs font-semibold text-foreground">Entrada</p>
-                            {charge.notes && <p className="text-[10px] text-muted-foreground">{charge.notes.split("·")[0]?.trim()}</p>}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            <div>
+                              <p className="text-xs font-semibold text-foreground">Entrada</p>
+                              {charge.notes && <p className="text-[10px] text-muted-foreground">{charge.notes.split("·")[0]?.trim()}</p>}
+                            </div>
                           </div>
+                          <span className="text-sm font-bold text-emerald-600">{fmtCurrency(entryPaid)}</span>
                         </div>
-                        <span className="text-sm font-bold text-emerald-600">{fmtCurrency(entryPaid)}</span>
+                        {/* Comprovante da entrada (se existir) */}
+                        {(charge as any).entry_receipt_url && (
+                          <div className="border rounded-md p-2 bg-secondary/30">
+                            <p className="text-[10px] text-muted-foreground mb-1.5 flex items-center gap-1">
+                              <Image className="h-3 w-3" />
+                              Comprovante PIX da entrada
+                            </p>
+                            <a href={(charge as any).entry_receipt_url} target="_blank" rel="noopener noreferrer" className="block">
+                              <img src={(charge as any).entry_receipt_url} alt="Comprovante entrada" className="w-full h-32 object-contain rounded cursor-pointer hover:opacity-80 transition-opacity" />
+                            </a>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -415,35 +460,97 @@ export function ImplementationDetailSheet({
                         </p>
                         {installments.map(inst => {
                           const info = installmentStatusInfo(inst);
+                          const isPix = charge?.notes?.toLowerCase().includes("pix");
+                          const receiptPreview = installmentReceiptPreview[inst.id];
+                          const receiptUrl = (inst as any).receipt_url;
+                          const showReceiptUpload = inst.status !== "paid" && isPix;
+                          
                           return (
-                            <div key={inst.id} className={`flex items-center justify-between p-2.5 rounded-lg border ${inst.status === "paid" ? "bg-emerald-500/5 border-emerald-500/20" : "bg-card border-border"}`}>
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-xs text-muted-foreground w-6 shrink-0 text-right font-mono">{inst.installment_number}.</span>
-                                <div className="min-w-0">
-                                  <p className="text-xs font-semibold text-foreground">{fmtCurrency(Number(inst.amount))}</p>
-                                  <p className="text-[10px] text-muted-foreground">
-                                    Venc. {format(parseISO(inst.due_date), "dd/MM/yyyy")}
-                                    {inst.paid_at && ` · Pago em ${format(parseISO(inst.paid_at), "dd/MM/yy")}`}
-                                  </p>
+                            <div key={inst.id} className={`space-y-2 p-2.5 rounded-lg border ${inst.status === "paid" ? "bg-emerald-500/5 border-emerald-500/20" : "bg-card border-border"}`}>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-xs text-muted-foreground w-6 shrink-0 text-right font-mono">{inst.installment_number}.</span>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-foreground">{fmtCurrency(Number(inst.amount))}</p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                      Venc. {format(parseISO(inst.due_date), "dd/MM/yyyy")}
+                                      {inst.paid_at && ` · Pago em ${format(parseISO(inst.paid_at), "dd/MM/yy")}`}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <Badge className={`${info.bg} ${info.color} text-[9px] border-0`}>
+                                    {info.label}
+                                  </Badge>
+                                  {inst.status !== "paid" && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-emerald-500 hover:bg-emerald-500/10"
+                                      onClick={() => handleMarkInstallmentPaid(inst)}
+                                      disabled={markPaid.isPending}
+                                      title="Marcar como paga"
+                                    >
+                                      <Check className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <Badge className={`${info.bg} ${info.color} text-[9px] border-0`}>
-                                  {info.label}
-                                </Badge>
-                                {inst.status !== "paid" && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 text-emerald-500 hover:bg-emerald-500/10"
-                                    onClick={() => handleMarkInstallmentPaid(inst)}
-                                    disabled={markPaid.isPending}
-                                    title="Marcar como paga"
-                                  >
-                                    <Check className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                              </div>
+                              
+                              {/* Upload comprovante (se PIX e não paga) */}
+                              {showReceiptUpload && (
+                                <div className="space-y-1">
+                                  {receiptPreview ? (
+                                    <div className="relative border rounded-md p-2 bg-secondary/30">
+                                      <img src={receiptPreview} alt="Comprovante" className="w-full h-24 object-contain rounded" />
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute top-1 right-1 h-5 w-5"
+                                        onClick={() => {
+                                          setInstallmentReceiptFile(prev => {
+                                            const next = { ...prev };
+                                            delete next[inst.id];
+                                            return next;
+                                          });
+                                          setInstallmentReceiptPreview(prev => {
+                                            const next = { ...prev };
+                                            delete next[inst.id];
+                                            return next;
+                                          });
+                                        }}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <label className="flex items-center justify-center gap-1.5 border-2 border-dashed rounded-md p-2 cursor-pointer hover:bg-secondary/50 transition-colors text-[10px] text-muted-foreground">
+                                      <Upload className="h-3 w-3" />
+                                      <span>Comprovante PIX (opcional)</span>
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) => handleInstallmentReceiptChange(inst.id, e)}
+                                      />
+                                    </label>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {/* Exibir comprovante salvo (se paga e tiver) */}
+                              {inst.status === "paid" && receiptUrl && (
+                                <div className="border rounded-md p-2 bg-secondary/30">
+                                  <p className="text-[10px] text-muted-foreground mb-1.5 flex items-center gap-1">
+                                    <Image className="h-3 w-3" />
+                                    Comprovante PIX
+                                  </p>
+                                  <a href={receiptUrl} target="_blank" rel="noopener noreferrer" className="block">
+                                    <img src={receiptUrl} alt="Comprovante" className="w-full h-32 object-contain rounded cursor-pointer hover:opacity-80 transition-opacity" />
+                                  </a>
+                                </div>
+                              )}
                             </div>
                           );
                         })}

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash2, CreditCard, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash2, CreditCard, ChevronDown, ChevronUp, Upload, X, Image } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,8 @@ function fmt(v: number) {
 export function ImplementationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data: templates = [] } = useImplementationTemplates();
   const [showPayment, setShowPayment] = useState(true);
+  const [entryReceiptFile, setEntryReceiptFile] = useState<File | null>(null);
+  const [entryReceiptPreview, setEntryReceiptPreview] = useState<string | null>(null);
   const { data: profiles = [] } = useQuery({
     queryKey: ["profiles"],
     queryFn: async () => {
@@ -84,8 +86,31 @@ export function ImplementationModal({ open, onClose }: { open: boolean; onClose:
     }
   }
 
-  function onSubmit(data: FormData) {
+  async function onSubmit(data: FormData) {
     const hasPayment = data.entry_amount > 0 || data.installments_count > 0;
+    
+    // Upload do comprovante da entrada (se for PIX e tiver arquivo)
+    let entryReceiptUrl: string | null = null;
+    if (entryReceiptFile && data.entry_method === "pix") {
+      try {
+        const fileExt = entryReceiptFile.name.split(".").pop();
+        const fileName = `entry-receipt-${Date.now()}.${fileExt}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("receipts")
+          .upload(fileName, entryReceiptFile, { upsert: false });
+        
+        if (uploadError) throw uploadError;
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from("receipts")
+          .getPublicUrl(uploadData.path);
+        entryReceiptUrl = publicUrl;
+      } catch (err: any) {
+        toast.error("Erro ao fazer upload do comprovante: " + err.message);
+        return;
+      }
+    }
+
     create.mutate({
       impl: {
         client_name: data.client_name,
@@ -107,15 +132,31 @@ export function ImplementationModal({ open, onClose }: { open: boolean; onClose:
         installments_count: data.installments_count,
         installment_method: data.installment_method,
         first_due_date: data.first_due_date || format(addMonths(new Date(), 1), "yyyy-MM-dd"),
+        entry_receipt_url: entryReceiptUrl,
       } : null,
     }, {
       onSuccess: () => {
         toast.success("Mentoria criada!" + (hasPayment ? " Cobrança gerada automaticamente." : ""));
         form.reset();
+        setEntryReceiptFile(null);
+        setEntryReceiptPreview(null);
         onClose();
       },
       onError: (err: any) => toast.error(err.message || "Erro ao criar"),
     });
+  }
+
+  function handleEntryReceiptChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Apenas imagens são permitidas");
+      return;
+    }
+    setEntryReceiptFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setEntryReceiptPreview(e.target?.result as string);
+    reader.readAsDataURL(file);
   }
 
   return (
@@ -265,6 +306,41 @@ export function ImplementationModal({ open, onClose }: { open: boolean; onClose:
                       )} />
                     </div>
                   </div>
+                  
+                  {/* Upload comprovante entrada PIX */}
+                  {entryMethod === "pix" && entryAmount > 0 && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-muted-foreground">Comprovante PIX (opcional)</label>
+                      {entryReceiptPreview ? (
+                        <div className="relative border rounded-md p-2">
+                          <img src={entryReceiptPreview} alt="Comprovante" className="w-full h-32 object-contain rounded" />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute top-1 right-1 h-6 w-6"
+                            onClick={() => {
+                              setEntryReceiptFile(null);
+                              setEntryReceiptPreview(null);
+                            }}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-md p-3 cursor-pointer hover:bg-secondary/50 transition-colors">
+                          <Upload className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">Clique para fazer upload</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleEntryReceiptChange}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Parcelamento */}
