@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["logo.png", "favicon.ico"],
+      includeAssets: ["favicon.ico"], // logo.png removido (muito grande, será carregado sob demanda)
       manifest: {
         name: "Solaryz — CRM Multi-Projeto",
         short_name: "Solaryz",
