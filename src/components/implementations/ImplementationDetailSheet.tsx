@@ -579,7 +579,7 @@ export function ImplementationDetailSheet({
                                   <Badge className={`${info.bg} ${info.color} text-[9px] border-0`}>
                                     {info.label}
                                   </Badge>
-                                  {inst.status !== "paid" && (
+                                  {inst.status !== "paid" ? (
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -589,6 +589,35 @@ export function ImplementationDetailSheet({
                                       title="Marcar como paga"
                                     >
                                       <Check className="h-3.5 w-3.5" />
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                                      onClick={() => {
+                                        if (confirm("Tem certeza que deseja desmarcar esta parcela como paga? O valor será subtraído do faturamento.")) {
+                                          const paymentMethod = charge?.notes?.toLowerCase().includes("pix") ? "pix" : "perfectpay";
+                                          unmarkPaid.mutate(
+                                            {
+                                              installmentId: inst.id,
+                                              amount: Number(inst.amount),
+                                              implementationId: implId,
+                                              paymentMethod,
+                                            },
+                                            {
+                                              onSuccess: () => {
+                                                toast.success("Parcela desmarcada como paga. Faturamento atualizado.");
+                                              },
+                                              onError: (err: any) => toast.error(err.message || "Erro ao desmarcar parcela"),
+                                            }
+                                          );
+                                        }
+                                      }}
+                                      disabled={unmarkPaid.isPending}
+                                      title="Desmarcar como paga"
+                                    >
+                                      <XCircle className="h-3.5 w-3.5" />
                                     </Button>
                                   )}
                                 </div>
