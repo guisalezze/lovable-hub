@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -59,7 +59,7 @@ export function ImplementationDetailSheet({
   const { data, isLoading, error } = useImplementationDetail(implId || "");
   
   // Log quando o Sheet abre/fecha
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) {
       console.log("🔵 Sheet ABERTO para mentoria:", implId);
       setIsError(false); // Resetar erro ao abrir
@@ -69,7 +69,7 @@ export function ImplementationDetailSheet({
   }, [open, implId]);
   
   // Log quando há erro ao carregar
-  React.useEffect(() => {
+  useEffect(() => {
     if (error) {
       console.error("❌ ERRO ao carregar detalhes da mentoria:", {
         error,
