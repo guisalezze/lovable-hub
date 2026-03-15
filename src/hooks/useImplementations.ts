@@ -423,6 +423,23 @@ export function useDeleteImplementation() {
   });
 }
 
+export function useUpdateInstallmentAmount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ installmentId, amount }: { installmentId: string; amount: number }) => {
+      const { error } = await (supabase as any)
+        .from("charge_installments")
+        .update({ amount })
+        .eq("id", installmentId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["implementation-detail"] });
+      qc.invalidateQueries({ queryKey: ["charges"] });
+    },
+  });
+}
+
 export function useUpdateStepStatus() {
   const qc = useQueryClient();
   return useMutation({

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash2, CreditCard, ChevronDown, ChevronUp, Upload, X, Image } from "lucide-react";
+import { Plus, Trash2, CreditCard, ChevronDown, ChevronUp, Upload, X, Image, FileText } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -176,14 +176,21 @@ export function ImplementationModal({ open, onClose }: { open: boolean; onClose:
   function handleEntryReceiptChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Apenas imagens são permitidas");
+    const isImage = file.type.startsWith("image/");
+    const isPdf = file.type === "application/pdf";
+    if (!isImage && !isPdf) {
+      toast.error("Apenas imagens e PDF são permitidos");
       return;
     }
     setEntryReceiptFile(file);
-    const reader = new FileReader();
-    reader.onload = (e) => setEntryReceiptPreview(e.target?.result as string);
-    reader.readAsDataURL(file);
+    if (isImage) {
+      const reader = new FileReader();
+      reader.onload = (e) => setEntryReceiptPreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      // Para PDF, apenas mostrar o nome do arquivo
+      setEntryReceiptPreview(file.name);
+    }
   }
 
   return (
@@ -393,7 +400,17 @@ export function ImplementationModal({ open, onClose }: { open: boolean; onClose:
                       <label className="text-xs text-muted-foreground">Comprovante PIX (opcional)</label>
                       {entryReceiptPreview ? (
                         <div className="relative border rounded-md p-2">
-                          <img src={entryReceiptPreview} alt="Comprovante" className="w-full h-32 object-contain rounded" />
+                          {entryReceiptFile?.type === "application/pdf" ? (
+                            <div className="flex items-center gap-2 p-3 bg-secondary/30 rounded">
+                              <FileText className="h-8 w-8 text-muted-foreground" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-foreground truncate">{entryReceiptPreview}</p>
+                                <p className="text-[10px] text-muted-foreground">PDF selecionado</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <img src={entryReceiptPreview} alt="Comprovante" className="w-full h-32 object-contain rounded" />
+                          )}
                           <Button
                             type="button"
                             variant="ghost"
@@ -410,10 +427,10 @@ export function ImplementationModal({ open, onClose }: { open: boolean; onClose:
                       ) : (
                         <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-md p-3 cursor-pointer hover:bg-secondary/50 transition-colors">
                           <Upload className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">Clique para fazer upload</span>
+                          <span className="text-xs text-muted-foreground">Clique para fazer upload (imagem ou PDF)</span>
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/*,application/pdf"
                             className="hidden"
                             onChange={handleEntryReceiptChange}
                           />

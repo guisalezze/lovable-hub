@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   useImplementationDetail, useUpdateStepStatus,
   useAddDocument, useAddNote, useUpdateImplementation, useDeleteImplementation, useAddStep,
-  useMarkInstallmentPaid,
+  useMarkInstallmentPaid, useUpdateInstallmentAmount,
 } from "@/hooks/useImplementations";
 import type { ImplementationStep, ChargeInstallmentForImpl } from "@/hooks/useImplementations";
 import { format, parseISO, differenceInDays, isBefore, startOfDay, isSameDay } from "date-fns";
@@ -61,8 +61,11 @@ export function ImplementationDetailSheet({
   const updateImpl = useUpdateImplementation();
   const deleteImpl = useDeleteImplementation();
   const markPaid = useMarkInstallmentPaid();
+  const updateInstallmentAmount = useUpdateInstallmentAmount();
 
   const [noteText, setNoteText] = useState("");
+  const [editingInstallmentId, setEditingInstallmentId] = useState<string | null>(null);
+  const [editingInstallmentAmount, setEditingInstallmentAmount] = useState<string>("");
   const [docTitle, setDocTitle] = useState("");
   const [docUrl, setDocUrl] = useState("");
   const [docType, setDocType] = useState("link");
@@ -204,16 +207,23 @@ export function ImplementationDetailSheet({
   function handleInstallmentReceiptChange(instId: string, e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Apenas imagens são permitidas");
+    const isImage = file.type.startsWith("image/");
+    const isPdf = file.type === "application/pdf";
+    if (!isImage && !isPdf) {
+      toast.error("Apenas imagens e PDF são permitidos");
       return;
     }
     setInstallmentReceiptFile(prev => ({ ...prev, [instId]: file }));
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setInstallmentReceiptPreview(prev => ({ ...prev, [instId]: e.target?.result as string }));
-    };
-    reader.readAsDataURL(file);
+    if (isImage) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setInstallmentReceiptPreview(prev => ({ ...prev, [instId]: e.target?.result as string }));
+      };
+      reader.readAsDataURL(file);
+    } else {
+      // Para PDF, apenas mostrar o nome do arquivo
+      setInstallmentReceiptPreview(prev => ({ ...prev, [instId]: file.name }));
+    }
   }
 
   return (
@@ -441,11 +451,25 @@ export function ImplementationDetailSheet({
                         {(charge as any).entry_receipt_url && (
                           <div className="border rounded-md p-2 bg-secondary/30">
                             <p className="text-[10px] text-muted-foreground mb-1.5 flex items-center gap-1">
-                              <Image className="h-3 w-3" />
+                              {(charge as any).entry_receipt_url.toLowerCase().endsWith('.pdf') ? (
+                                <FileText className="h-3 w-3" />
+                              ) : (
+                                <Image className="h-3 w-3" />
+                              )}
                               Comprovante PIX da entrada
                             </p>
                             <a href={(charge as any).entry_receipt_url} target="_blank" rel="noopener noreferrer" className="block">
-                              <img src={(charge as any).entry_receipt_url} alt="Comprovante entrada" className="w-full h-32 object-contain rounded cursor-pointer hover:opacity-80 transition-opacity" />
+                              {(charge as any).entry_receipt_url.toLowerCase().endsWith('.pdf') ? (
+                                <div className="flex items-center gap-2 p-3 bg-secondary/50 rounded">
+                                  <FileText className="h-8 w-8 text-muted-foreground" />
+                                  <div>
+                                    <p className="text-xs font-medium text-foreground">Visualizar PDF</p>
+                                    <p className="text-[10px] text-muted-foreground">Clique para abrir</p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <img src={(charge as any).entry_receipt_url} alt="Comprovante entrada" className="w-full h-32 object-contain rounded cursor-pointer hover:opacity-80 transition-opacity" />
+                              )}
                             </a>
                           </div>
                         )}
@@ -468,10 +492,76 @@ export function ImplementationDetailSheet({
                           return (
                             <div key={inst.id} className={`space-y-2 p-2.5 rounded-lg border ${inst.status === "paid" ? "bg-emerald-500/5 border-emerald-500/20" : "bg-card border-border"}`}>
                               <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
                                   <span className="text-xs text-muted-foreground w-6 shrink-0 text-right font-mono">{inst.installment_number}.</span>
-                                  <div className="min-w-0">
-                                    <p className="text-xs font-semibold text-foreground">{fmtCurrency(Number(inst.amount))}</p>
+                                  <div className="min-w-0 flex-1">
+                                    {editingInstallmentId === inst.id ? (
+                                      <div className="flex items-center gap-1">
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={editingInstallmentAmount}
+                                          onChange={(e) => setEditingInstallmentAmount(e.target.value)}
+                                          className="h-7 text-xs w-24"
+                                          autoFocus
+                                        />
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-7 w-7"
+                                          onClick={() => {
+                                            const newAmount = parseFloat(editingInstallmentAmount);
+                                            if (!isNaN(newAmount) && newAmount > 0) {
+                                              updateInstallmentAmount.mutate(
+                                                { installmentId: inst.id, amount: newAmount },
+                                                {
+                                                  onSuccess: () => {
+                                                    setEditingInstallmentId(null);
+                                                    setEditingInstallmentAmount("");
+                                                    toast.success("Valor da parcela atualizado");
+                                                  },
+                                                  onError: (err: any) => toast.error(err.message || "Erro ao atualizar"),
+                                                }
+                                              );
+                                            } else {
+                                              toast.error("Valor inválido");
+                                            }
+                                          }}
+                                          disabled={updateInstallmentAmount.isPending}
+                                        >
+                                          <Save className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-7 w-7"
+                                          onClick={() => {
+                                            setEditingInstallmentId(null);
+                                            setEditingInstallmentAmount("");
+                                          }}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <p className="text-xs font-semibold text-foreground">{fmtCurrency(Number(inst.amount))}</p>
+                                        {inst.status !== "paid" && (
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-5 w-5 ml-1"
+                                            onClick={() => {
+                                              setEditingInstallmentId(inst.id);
+                                              setEditingInstallmentAmount(String(inst.amount));
+                                            }}
+                                            title="Editar valor"
+                                          >
+                                            <Pencil className="h-3 w-3" />
+                                          </Button>
+                                        )}
+                                      </>
+                                    )}
                                     <p className="text-[10px] text-muted-foreground">
                                       Venc. {format(parseISO(inst.due_date), "dd/MM/yyyy")}
                                       {inst.paid_at && ` · Pago em ${format(parseISO(inst.paid_at), "dd/MM/yy")}`}
@@ -502,7 +592,17 @@ export function ImplementationDetailSheet({
                                 <div className="space-y-1">
                                   {receiptPreview ? (
                                     <div className="relative border rounded-md p-2 bg-secondary/30">
-                                      <img src={receiptPreview} alt="Comprovante" className="w-full h-24 object-contain rounded" />
+                                      {installmentReceiptFile[inst.id]?.type === "application/pdf" ? (
+                                        <div className="flex items-center gap-2 p-2">
+                                          <FileText className="h-6 w-6 text-muted-foreground" />
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-medium text-foreground truncate">{receiptPreview}</p>
+                                            <p className="text-[10px] text-muted-foreground">PDF selecionado</p>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <img src={receiptPreview} alt="Comprovante" className="w-full h-24 object-contain rounded" />
+                                      )}
                                       <Button
                                         type="button"
                                         variant="ghost"
@@ -527,10 +627,10 @@ export function ImplementationDetailSheet({
                                   ) : (
                                     <label className="flex items-center justify-center gap-1.5 border-2 border-dashed rounded-md p-2 cursor-pointer hover:bg-secondary/50 transition-colors text-[10px] text-muted-foreground">
                                       <Upload className="h-3 w-3" />
-                                      <span>Comprovante PIX (opcional)</span>
+                                      <span>Comprovante PIX (opcional - imagem ou PDF)</span>
                                       <input
                                         type="file"
-                                        accept="image/*"
+                                        accept="image/*,application/pdf"
                                         className="hidden"
                                         onChange={(e) => handleInstallmentReceiptChange(inst.id, e)}
                                       />
@@ -543,11 +643,25 @@ export function ImplementationDetailSheet({
                               {inst.status === "paid" && receiptUrl && (
                                 <div className="border rounded-md p-2 bg-secondary/30">
                                   <p className="text-[10px] text-muted-foreground mb-1.5 flex items-center gap-1">
-                                    <Image className="h-3 w-3" />
+                                    {receiptUrl.toLowerCase().endsWith('.pdf') ? (
+                                      <FileText className="h-3 w-3" />
+                                    ) : (
+                                      <Image className="h-3 w-3" />
+                                    )}
                                     Comprovante PIX
                                   </p>
                                   <a href={receiptUrl} target="_blank" rel="noopener noreferrer" className="block">
-                                    <img src={receiptUrl} alt="Comprovante" className="w-full h-32 object-contain rounded cursor-pointer hover:opacity-80 transition-opacity" />
+                                    {receiptUrl.toLowerCase().endsWith('.pdf') ? (
+                                      <div className="flex items-center gap-2 p-3 bg-secondary/50 rounded">
+                                        <FileText className="h-8 w-8 text-muted-foreground" />
+                                        <div>
+                                          <p className="text-xs font-medium text-foreground">Visualizar PDF</p>
+                                          <p className="text-[10px] text-muted-foreground">Clique para abrir</p>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <img src={receiptUrl} alt="Comprovante" className="w-full h-32 object-contain rounded cursor-pointer hover:opacity-80 transition-opacity" />
+                                    )}
                                   </a>
                                 </div>
                               )}
