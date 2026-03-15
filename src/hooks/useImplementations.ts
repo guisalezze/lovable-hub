@@ -158,7 +158,11 @@ export function useCreateImplementation() {
 
       // 1. Create implementation
       // paid_amount só é incluído se a coluna existir (migration aplicada)
-      const initialPaid = payload.charge?.entry_amount ?? 0;
+      // Aplica desconto de 10% se entrada for via PIX
+      let initialPaid = payload.charge?.entry_amount ?? 0;
+      if (payload.charge?.entry_method === "pix" && initialPaid > 0) {
+        initialPaid = Math.round(initialPaid * 0.9 * 100) / 100; // 10% desconto
+      }
       const baseInsert: any = { ...payload.impl, created_by: user?.id };
 
       // Tenta primeiro com paid_amount; se falhar com PGRST204 (coluna não existe), tenta sem
@@ -202,10 +206,21 @@ export function useCreateImplementation() {
           const remaining = Math.max(0, payload.impl.total_value - entry_amount);
           const installmentValue = installments_count > 0 ? remaining / installments_count : 0;
 
-          const chargeNotes = [
-            entry_amount > 0 ? `Entrada via ${entry_method === "pix" ? "Pix" : "PerfectPay"}` : "",
-            installments_count > 0 ? `${installments_count}x via ${installment_method === "pix" ? "Pix" : "PerfectPay"}` : "",
-          ].filter(Boolean).join(" · ");
+          // Notas com desconto PIX (10% para Marília)
+          const notesParts: string[] = [];
+          if (entry_amount > 0) {
+            const entryNote = entry_method === "pix"
+              ? `Entrada via Pix (desconto 10% aplicado - Marília)`
+              : `Entrada via PerfectPay`;
+            notesParts.push(entryNote);
+          }
+          if (installments_count > 0) {
+            const instNote = installment_method === "pix"
+              ? `${installments_count}x via Pix (desconto 10% aplicado - Marília)`
+              : `${installments_count}x via PerfectPay`;
+            notesParts.push(instNote);
+          }
+          const chargeNotes = notesParts.join(" · ");
 
           const { data: charge, error: chargeErr } = await (supabase as any)
             .from("charges")
@@ -281,10 +296,12 @@ export function useMarkInstallmentPaid() {
       installmentId,
       amount,
       implementationId,
+      paymentMethod,
     }: {
       installmentId: string;
       amount: number;
       implementationId: string;
+      paymentMethod?: "pix" | "perfectpay";
     }) => {
       // 1. Mark installment as paid
       const { error: instErr } = await (supabase as any)
@@ -293,17 +310,39 @@ export function useMarkInstallmentPaid() {
         .eq("id", installmentId);
       if (instErr) throw instErr;
 
-      // 2. Get current paid_amount
+      // 2. Get current paid_amount and charge info
       const { data: implData } = await (supabase as any)
         .from("implementations")
-        .select("paid_amount")
+        .select("paid_amount, charge_id")
         .eq("id", implementationId)
         .single();
 
-      // 3. Update paid_amount += installment.amount
+      // 3. Aplica desconto de 10% se for PIX
+      let amountToAdd = amount;
+      if (paymentMethod === "pix") {
+        amountToAdd = Math.round(amount * 0.9 * 100) / 100; // 10% desconto
+        // Atualiza notes da charge para incluir info do desconto
+        if (implData?.charge_id) {
+          const { data: chargeData } = await (supabase as any)
+            .from("charges")
+            .select("notes")
+            .eq("id", implData.charge_id)
+            .single();
+          const currentNotes = chargeData?.notes || "";
+          const newNote = currentNotes.includes("desconto 10% aplicado - Marília")
+            ? currentNotes
+            : `${currentNotes ? currentNotes + " · " : ""}Parcela paga via Pix (desconto 10% aplicado - Marília)`;
+          await (supabase as any)
+            .from("charges")
+            .update({ notes: newNote })
+            .eq("id", implData.charge_id);
+        }
+      }
+
+      // 4. Update paid_amount
       const { error: implErr } = await (supabase as any)
         .from("implementations")
-        .update({ paid_amount: (implData?.paid_amount || 0) + amount })
+        .update({ paid_amount: (implData?.paid_amount || 0) + amountToAdd })
         .eq("id", implementationId);
       if (implErr) throw implErr;
     },

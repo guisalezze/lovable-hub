@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
 import { useMetaSpend } from "@/hooks/useMetaSpend";
-import { DollarSign, TrendingUp, Target, Wallet, Plus, Download, ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw, Link2, AlertCircle } from "lucide-react";
+import { DollarSign, TrendingUp, Target, Wallet, Plus, Download, ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw, Link2, AlertCircle, Trash2 } from "lucide-react";
 import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -449,7 +449,7 @@ export default function FinanceiroPage() {
           <h3 className="text-sm font-semibold text-foreground mb-3">Histórico de Gastos Manuais</h3>
           <div className="space-y-2">
             {allInvestments.map((inv: any) => (
-              <div key={inv.id} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
+              <div key={inv.id} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0 group">
                 <div className="flex items-center gap-3">
                   <BarChart2 className="h-4 w-4 text-muted-foreground" />
                   <div>
@@ -466,7 +466,27 @@ export default function FinanceiroPage() {
                     </p>
                   </div>
                 </div>
-                <span className="text-sm font-semibold text-blue-500">{fmtBRL(Number(inv.amount))}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-blue-500">{fmtBRL(Number(inv.amount))}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
+                    onClick={async () => {
+                      if (!confirm(`Excluir gasto "${inv.description || "Gasto manual"}" de ${fmtBRL(Number(inv.amount))}?`)) return;
+                      const { error } = await supabase.from("investments").delete().eq("id", inv.id);
+                      if (error) {
+                        toast.error("Erro ao excluir gasto");
+                      } else {
+                        toast.success("Gasto excluído!");
+                        qc.invalidateQueries({ queryKey: ["period-investments"] });
+                        qc.invalidateQueries({ queryKey: ["investments", "all"] });
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

@@ -165,9 +165,23 @@ export function ImplementationDetailSheet({
   }
 
   function handleMarkInstallmentPaid(inst: ChargeInstallmentForImpl) {
+    // Detecta método de pagamento pelas notes da charge (Pix ou PerfectPay)
+    const paymentMethod = charge?.notes?.toLowerCase().includes("pix") ? "pix" : "perfectpay";
     markPaid.mutate(
-      { installmentId: inst.id, amount: Number(inst.amount), implementationId: implId },
-      { onSuccess: () => toast.success("Parcela marcada como paga! Faturamento atualizado.") }
+      { 
+        installmentId: inst.id, 
+        amount: Number(inst.amount), 
+        implementationId: implId,
+        paymentMethod,
+      },
+      { 
+        onSuccess: () => {
+          const msg = paymentMethod === "pix" 
+            ? "Parcela marcada como paga via Pix! Desconto de 10% aplicado (Marília)."
+            : "Parcela marcada como paga! Faturamento atualizado.";
+          toast.success(msg);
+        }
+      }
     );
   }
 

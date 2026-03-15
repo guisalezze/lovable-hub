@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useProject } from "@/contexts/ProjectContext";
 import { format, subDays, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -15,11 +16,15 @@ import {
 } from "recharts";
 import jsPDF from "jspdf";
 
-function useReportData(since: string, until: string) {
+function useReportData(since: string, until: string, projectId: string | undefined) {
   return useQuery({
-    queryKey: ["report", since, until],
+    queryKey: ["report", since, until, projectId],
     queryFn: async () => {
-      const [salesRes, leadsRes, tasksRes, callsRes, invRes, teamRes] = await Promise.all([
+      // Investments filtrados por project_id
+      const invQuery = supabase.from("investments").select("amount, date").gte("date", since).lte("date", until);
+      const invRes = projectId ? invQuery.eq("project_id", projectId) : invQuery;
+
+      const [salesRes, leadsRes, tasksRes, callsRes, invResFinal, teamRes, mentoriasRes] = await Promise.all([
         supabase.from("sales").select("sale_amount, sale_status_enum, created_at, product_name")
           .gte("created_at", `${since}T00:00:00`).lte("created_at", `${until}T23:59:59`),
         supabase.from("leads").select("id, status, source, created_at")
@@ -28,20 +33,33 @@ function useReportData(since: string, until: string) {
           .gte("created_at", `${since}T00:00:00`).lte("created_at", `${until}T23:59:59`),
         supabase.from("calls").select("id, status, start_at")
           .gte("start_at", `${since}T00:00:00`).lte("start_at", `${until}T23:59:59`),
-        supabase.from("investments").select("amount, date").gte("date", since).lte("date", until),
+        invResFinal,
         supabase.from("profiles").select("id, full_name, email"),
+        // Mentorias: paid_amount filtrado por contract_start (só Educacional)
+        projectId ? (supabase as any).from("implementations").select("paid_amount, contract_start")
+          .gte("contract_start", since).lte("contract_start", until) : Promise.resolve({ data: [], error: null }),
       ]);
 
       const sales = salesRes.data || [];
       const leads = leadsRes.data || [];
       const tasks = tasksRes.data || [];
       const calls = callsRes.data || [];
-      const investments = invRes.data || [];
+      const investments = invResFinal.data || [];
       const profiles = teamRes.data || [];
+      
+      // Mentorias (só Educacional)
+      let mentoriasRevenue = 0;
+      try {
+        const mentorias = mentoriasRes.data || [];
+        mentoriasRevenue = mentorias.reduce((acc: number, m: any) => acc + Number(m.paid_amount || 0), 0);
+      } catch {
+        mentoriasRevenue = 0;
+      }
 
-      const revenue = sales
+      const salesRevenue = sales
         .filter(s => s.sale_status_enum === "approved")
         .reduce((acc, s) => acc + Number(s.sale_amount || 0), 0);
+      const revenue = salesRevenue + mentoriasRevenue;
       const investment = investments.reduce((acc, i) => acc + Number(i.amount), 0);
       const profit = revenue - investment;
       const roas = investment > 0 ? revenue / investment : 0;
@@ -52,12 +70,22 @@ function useReportData(since: string, until: string) {
       const conversionRate = leads.length > 0
         ? (leads.filter(l => l.status === "comprou").length / leads.length * 100) : 0;
 
-      // Revenue by day
+      // Revenue by day (vendas + mentorias)
       const revenueByDay: Record<string, number> = {};
       sales.filter(s => s.sale_status_enum === "approved").forEach(s => {
         const d = s.created_at.slice(0, 10);
         revenueByDay[d] = (revenueByDay[d] || 0) + Number(s.sale_amount || 0);
       });
+      // Mentorias por dia
+      try {
+        const mentorias = mentoriasRes.data || [];
+        mentorias.forEach((m: any) => {
+          if (m.contract_start) {
+            const d = m.contract_start.slice(0, 10);
+            revenueByDay[d] = (revenueByDay[d] || 0) + Number(m.paid_amount || 0);
+          }
+        });
+      } catch {}
       const dailyRevenue = Object.entries(revenueByDay)
         .map(([date, rev]) => ({ date, revenue: rev }))
         .sort((a, b) => a.date.localeCompare(b.date));
@@ -95,11 +123,12 @@ const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 export default function RelatoriosPage() {
+  const { currentProject } = useProject();
   const [since, setSince] = useState(format(subDays(new Date(), 29), "yyyy-MM-dd"));
   const [until, setUntil] = useState(format(new Date(), "yyyy-MM-dd"));
   const [exporting, setExporting] = useState(false);
 
-  const { data, isLoading } = useReportData(since, until);
+  const { data, isLoading } = useReportData(since, until, currentProject?.id);
 
   function exportPDF() {
     if (!data) return;
