@@ -232,6 +232,7 @@ export function ImplementationDetailSheet({
   }
 
   return (
+    <>
     <Sheet open={open} onOpenChange={v => !v && onClose()}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         {isLoading ? (
