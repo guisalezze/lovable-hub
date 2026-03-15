@@ -31,10 +31,25 @@ export function useDashboardKpis({ since, until }: DashboardFilters) {
       const refunded = sales?.filter((s) => s.sale_status_enum === "refunded" || s.sale_status_enum === "pre_refunded") || [];
       const chargebacks = sales?.filter((s) => s.sale_status_enum === "charged_back" || s.sale_status_enum === "pre_chargeback") || [];
 
-      const revenue = approved.reduce((sum, s) => sum + Number(s.sale_amount || 0), 0);
+      const salesRevenue = approved.reduce((sum, s) => sum + Number(s.sale_amount || 0), 0);
+
+      // Mentorias: paid_amount atribuído pela data de início do contrato (contract_start)
+      let mentoriasRevenue = 0;
+      try {
+        const { data: impls } = await (supabase as any)
+          .from("implementations")
+          .select("paid_amount")
+          .gte("contract_start", since)
+          .lte("contract_start", until);
+        mentoriasRevenue = (impls || []).reduce((sum: number, i: any) => sum + Number(i.paid_amount || 0), 0);
+      } catch {
+        mentoriasRevenue = 0;
+      }
 
       return {
-        revenue,
+        revenue: salesRevenue + mentoriasRevenue,
+        salesRevenue,
+        mentoriasRevenue,
         approvedCount: approved.length,
         pendingCount: pending.length,
         refundCount: refunded.length,
@@ -65,6 +80,23 @@ export function useDailyRevenue({ since, until }: DashboardFilters) {
           byDay[day] = (byDay[day] || 0) + Number(s.sale_amount || 0);
         }
       });
+
+      // Mentorias: atribuídas ao contract_start
+      try {
+        const { data: impls } = await (supabase as any)
+          .from("implementations")
+          .select("paid_amount, contract_start")
+          .gte("contract_start", since)
+          .lte("contract_start", until);
+        (impls || []).forEach((i: any) => {
+          if (i.contract_start && Number(i.paid_amount || 0) > 0) {
+            const day = format(parseISO(i.contract_start), "dd/MM");
+            byDay[day] = (byDay[day] || 0) + Number(i.paid_amount || 0);
+          }
+        });
+      } catch {
+        // paid_amount column may not exist yet — skip
+      }
 
       return Object.entries(byDay)
         .map(([date, receita]) => ({ date, receita }))
@@ -118,9 +150,21 @@ export function usePreviousPeriodKpis({ since, until }: DashboardFilters) {
       if (error) throw error;
 
       const approved = sales?.filter((s) => s.sale_status_enum === "approved") || [];
-      const revenue = approved.reduce((sum, s) => sum + Number(s.sale_amount || 0), 0);
+      const salesRevenue = approved.reduce((sum, s) => sum + Number(s.sale_amount || 0), 0);
 
-      return { previousRevenue: revenue };
+      let mentoriasRevenue = 0;
+      try {
+        const { data: impls } = await (supabase as any)
+          .from("implementations")
+          .select("paid_amount")
+          .gte("contract_start", prevSince)
+          .lte("contract_start", prevUntil);
+        mentoriasRevenue = (impls || []).reduce((sum: number, i: any) => sum + Number(i.paid_amount || 0), 0);
+      } catch {
+        mentoriasRevenue = 0;
+      }
+
+      return { previousRevenue: salesRevenue + mentoriasRevenue };
     },
     staleTime: 5 * 60 * 1000,
   });

@@ -41,6 +41,33 @@ function usePeriodSales(since: string, until: string) {
   });
 }
 
+/** Mentorias: paid_amount filtrado por contract_start (data de início da mentoria) */
+function usePeriodMentorias(since: string, until: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["period-mentorias", since, until],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("implementations")
+        .select("paid_amount, contract_start")
+        .gte("contract_start", since)
+        .lte("contract_start", until);
+      if (error) throw error;
+      const totalRevenue = (data || []).reduce((a: number, i: any) => a + Number(i.paid_amount || 0), 0);
+      const map: Record<string, number> = {};
+      (data || []).forEach((i: any) => {
+        if (i.contract_start) {
+          const d = i.contract_start.slice(0, 10);
+          map[d] = (map[d] || 0) + Number(i.paid_amount || 0);
+        }
+      });
+      const daily = Object.entries(map).map(([date, mentorias]) => ({ date, mentorias })).sort((a, b) => a.date.localeCompare(b.date));
+      return { totalRevenue, daily };
+    },
+    staleTime: 60_000,
+  });
+}
+
 function useNutraSalesRevenue(projectId: string | undefined, since: string, until: string) {
   return useQuery({
     queryKey: ["nutra-sales-revenue", projectId, since, until],
@@ -117,8 +144,16 @@ const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency"
 
 function exportCSV(chartData: any[], since: string, until: string) {
   const rows = [
-    ["Data", "Receita", "Investimento (Manual)", "Investimento (Ads)", "Lucro"],
-    ...chartData.map(d => [d.date, d.revenue.toFixed(2), d.investment.toFixed(2), d.adSpend.toFixed(2), d.profit.toFixed(2)]),
+    ["Data", "Vendas", "Mentorias", "Receita Total", "Investimento (Manual)", "Investimento (Ads)", "Lucro"],
+    ...chartData.map(d => [
+      d.date,
+      (d.vendas || 0).toFixed(2),
+      (d.mentorias || 0).toFixed(2),
+      ((d.vendas || 0) + (d.mentorias || 0)).toFixed(2),
+      d.investment.toFixed(2),
+      d.adSpend.toFixed(2),
+      d.profit.toFixed(2),
+    ]),
   ];
   const csv = rows.map(r => r.join(";")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -156,6 +191,10 @@ export default function FinanceiroPage() {
   const { data: nutraSalesData } = useNutraSalesRevenue(isNutra ? currentProject?.id : undefined, since, until);
   const { data: prevNutraSalesData } = useNutraSalesRevenue(isNutra ? currentProject?.id : undefined, prevSince, prevUntil);
 
+  // Mentorias (só Educacional): filtradas por contract_start
+  const { data: mentoriasData } = usePeriodMentorias(since, until, !isNutra);
+  const { data: prevMentoriasData } = usePeriodMentorias(prevSince, prevUntil, !isNutra);
+
   // Manual investments filtered by project
   const { data: invData } = usePeriodInvestments(currentProject?.id, since, until);
   const { data: prevInvData } = usePeriodInvestments(currentProject?.id, prevSince, prevUntil);
@@ -178,37 +217,53 @@ export default function FinanceiroPage() {
   const revenueData = isNutra ? nutraSalesData : salesData;
   const prevRevenueData = isNutra ? prevNutraSalesData : prevSalesData;
 
-  const totalRevenue = revenueData?.totalRevenue ?? 0;
+  const salesRevenue = revenueData?.totalRevenue ?? 0;
+  const mentoriasRevenue = !isNutra ? (mentoriasData?.totalRevenue ?? 0) : 0;
+  const totalRevenue = salesRevenue + mentoriasRevenue;
+
+  const prevSalesRevenue = prevRevenueData?.totalRevenue ?? 0;
+  const prevMentoriasRevenue = !isNutra ? (prevMentoriasData?.totalRevenue ?? 0) : 0;
+  const prevRevenue = prevSalesRevenue + prevMentoriasRevenue;
+
   const manualInvestment = invData?.total ?? 0;
   const totalInvestment = manualInvestment + adSpendTotal;
   const profit = totalRevenue - totalInvestment;
   const roas = totalInvestment > 0 ? (totalRevenue / totalInvestment).toFixed(1) : "—";
 
-  const prevRevenue = prevRevenueData?.totalRevenue ?? 0;
   const prevManualInvestment = prevInvData?.total ?? 0;
   const prevTotalInvestment = prevManualInvestment + prevAdSpendTotal;
   const prevProfit = prevRevenue - prevTotalInvestment;
 
   // Chart data
   const chartData = useMemo(() => {
-    const map: Record<string, { date: string; revenue: number; investment: number; adSpend: number; profit: number }> = {};
+    const map: Record<string, { date: string; vendas: number; mentorias: number; investment: number; adSpend: number; profit: number }> = {};
+
+    const ensure = (d: string) => {
+      if (!map[d]) map[d] = { date: d, vendas: 0, mentorias: 0, investment: 0, adSpend: 0, profit: 0 };
+    };
+
     (revenueData?.daily || []).forEach((d: any) => {
-      map[d.date] = { date: d.date, revenue: d.revenue, investment: 0, adSpend: 0, profit: 0 };
+      ensure(d.date);
+      map[d.date].vendas += d.revenue;
+    });
+    // Mentorias por dia (só Educacional)
+    (mentoriasData?.daily || []).forEach((d: any) => {
+      ensure(d.date);
+      map[d.date].mentorias += d.mentorias;
     });
     (invData?.daily || []).forEach((i: any) => {
-      if (!map[i.date]) map[i.date] = { date: i.date, revenue: 0, investment: 0, adSpend: 0, profit: 0 };
+      ensure(i.date);
       map[i.date].investment += i.amount;
     });
-    // Ad spend por dia (via edge function)
     metaDailySpend.forEach((d) => {
       if (!d.date) return;
-      if (!map[d.date]) map[d.date] = { date: d.date, revenue: 0, investment: 0, adSpend: 0, profit: 0 };
+      ensure(d.date);
       map[d.date].adSpend += d.adSpend;
     });
     return Object.values(map)
-      .map(d => ({ ...d, profit: d.revenue - d.investment - d.adSpend }))
+      .map(d => ({ ...d, profit: d.vendas + d.mentorias - d.investment - d.adSpend }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [revenueData, invData, metaDailySpend]);
+  }, [revenueData, mentoriasData, invData, metaDailySpend]);
 
   async function addInvestment() {
     const amount = parseFloat(investAmount);
@@ -306,6 +361,12 @@ export default function FinanceiroPage() {
           <div className="flex items-center gap-2 text-muted-foreground"><DollarSign className="h-4 w-4" /><span className="text-xs font-medium">Receita</span></div>
           <p className="text-xl font-bold text-foreground">{fmtBRL(totalRevenue)}</p>
           <DeltaBadge current={totalRevenue} previous={prevRevenue} />
+          {!isNutra && mentoriasRevenue > 0 && (
+            <div className="text-[10px] text-muted-foreground space-y-0.5 pt-1 border-t border-border/30">
+              <p>🛒 Vendas: {fmtShort(salesRevenue)}</p>
+              <p>🎓 Mentorias: {fmtShort(mentoriasRevenue)}</p>
+            </div>
+          )}
         </div>
         <div className="glass-card p-4 space-y-1">
           <div className="flex items-center justify-between">
@@ -369,7 +430,8 @@ export default function FinanceiroPage() {
               <YAxis tickFormatter={v => fmtShort(v)} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
               <Tooltip formatter={(v: number) => fmtBRL(v)} labelFormatter={d => { try { return format(parseISO(d as string), "dd/MM/yyyy"); } catch { return d; }}} />
               <Legend />
-              <Bar dataKey="revenue" name="Receita" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="vendas" name="Vendas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+              {!isNutra && <Bar dataKey="mentorias" name="Mentorias" fill="#a855f7" radius={[4, 4, 0, 0]} />}
               <Bar dataKey="investment" name="Gastos Manuais" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               <Bar dataKey="adSpend" name="Ads Spend" fill="#f59e0b" radius={[4, 4, 0, 0]} />
               <Line dataKey="profit" name="Lucro" stroke="#10b981" strokeWidth={2} dot={false} />
