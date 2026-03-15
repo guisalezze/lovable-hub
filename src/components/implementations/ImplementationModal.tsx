@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateImplementation, useImplementationTemplates } from "@/hooks/useImplementations";
+import { useClientSearch } from "@/hooks/useClientSearch";
 import { toast } from "sonner";
 import { format, addMonths } from "date-fns";
 
@@ -42,6 +43,14 @@ export function ImplementationModal({ open, onClose }: { open: boolean; onClose:
   const [showPayment, setShowPayment] = useState(true);
   const [entryReceiptFile, setEntryReceiptFile] = useState<File | null>(null);
   const [entryReceiptPreview, setEntryReceiptPreview] = useState<string | null>(null);
+  const [clientSearchQuery, setClientSearchQuery] = useState("");
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<{ email: string; full_name: string; phone: string | null } | null>(null);
+  
+  const { data: clientSuggestions = [] } = useClientSearch(
+    clientSearchQuery,
+    showClientSuggestions && clientSearchQuery.length >= 2
+  );
   const { data: profiles = [] } = useQuery({
     queryKey: ["profiles"],
     queryFn: async () => {
@@ -66,6 +75,21 @@ export function ImplementationModal({ open, onClose }: { open: boolean; onClose:
   });
 
   const { fields, replace, append, remove } = useFieldArray({ control: form.control, name: "steps" });
+
+  // Reset states when modal opens/closes
+  useEffect(() => {
+    if (open) {
+      setClientSearchQuery("");
+      setShowClientSuggestions(false);
+      setSelectedClient(null);
+    } else {
+      setClientSearchQuery("");
+      setShowClientSuggestions(false);
+      setSelectedClient(null);
+      setEntryReceiptFile(null);
+      setEntryReceiptPreview(null);
+    }
+  }, [open]);
 
   const totalValue = form.watch("total_value") || 0;
   const entryAmount = form.watch("entry_amount") || 0;
@@ -140,6 +164,9 @@ export function ImplementationModal({ open, onClose }: { open: boolean; onClose:
         form.reset();
         setEntryReceiptFile(null);
         setEntryReceiptPreview(null);
+        setSelectedClient(null);
+        setClientSearchQuery("");
+        setShowClientSuggestions(false);
         onClose();
       },
       onError: (err: any) => toast.error(err.message || "Erro ao criar"),
@@ -169,9 +196,62 @@ export function ImplementationModal({ open, onClose }: { open: boolean; onClose:
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
           {/* Dados do cliente */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 relative">
               <label className="text-xs font-medium text-muted-foreground">Nome do cliente *</label>
-              <Input {...form.register("client_name")} />
+              <div className="relative">
+                <Input
+                  {...form.register("client_name")}
+                  value={selectedClient?.full_name || form.watch("client_name") || ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    form.setValue("client_name", value);
+                    setClientSearchQuery(value);
+                    setShowClientSuggestions(true);
+                    if (selectedClient && value !== selectedClient.full_name) {
+                      setSelectedClient(null);
+                      form.setValue("client_email", "");
+                      form.setValue("client_phone", "");
+                    }
+                  }}
+                  onFocus={() => {
+                    if (clientSearchQuery.length >= 2) setShowClientSuggestions(true);
+                  }}
+                  onBlur={() => {
+                    // Delay para permitir clique na sugestão
+                    setTimeout(() => setShowClientSuggestions(false), 200);
+                  }}
+                  placeholder="Digite o nome do cliente..."
+                />
+                {showClientSuggestions && clientSuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                    {clientSuggestions.map((client) => (
+                      <button
+                        key={client.email}
+                        type="button"
+                        className="w-full text-left px-3 py-2 hover:bg-accent transition-colors text-sm"
+                        onClick={() => {
+                          setSelectedClient({
+                            email: client.email,
+                            full_name: client.full_name || "",
+                            phone: client.phone_formatted || client.phone_e164 || null,
+                          });
+                          form.setValue("client_name", client.full_name || "");
+                          form.setValue("client_email", client.email);
+                          form.setValue("client_phone", client.phone_formatted || client.phone_e164 || "");
+                          setClientSearchQuery("");
+                          setShowClientSuggestions(false);
+                        }}
+                      >
+                        <p className="font-medium">{client.full_name}</p>
+                        <p className="text-xs text-muted-foreground">{client.email}</p>
+                        {client.phone_formatted && (
+                          <p className="text-xs text-muted-foreground">{client.phone_formatted}</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               {form.formState.errors.client_name && <p className="text-xs text-destructive">{form.formState.errors.client_name.message}</p>}
             </div>
             <div className="space-y-1.5">
