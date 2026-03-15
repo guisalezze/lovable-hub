@@ -57,6 +57,29 @@ export function ImplementationDetailSheet({
 }: { implId: string; open: boolean; onClose: () => void }) {
   const [isError, setIsError] = useState(false);
   const { data, isLoading, error } = useImplementationDetail(implId || "");
+  
+  // Log quando o Sheet abre/fecha
+  React.useEffect(() => {
+    if (open) {
+      console.log("🔵 Sheet ABERTO para mentoria:", implId);
+      setIsError(false); // Resetar erro ao abrir
+    } else {
+      console.log("🔴 Sheet FECHADO");
+    }
+  }, [open, implId]);
+  
+  // Log quando há erro ao carregar
+  React.useEffect(() => {
+    if (error) {
+      console.error("❌ ERRO ao carregar detalhes da mentoria:", {
+        error,
+        implId,
+        message: (error as any)?.message,
+        code: (error as any)?.code,
+      });
+      setIsError(true);
+    }
+  }, [error, implId]);
   const updateStep = useUpdateStepStatus();
   const addStepMut = useAddStep();
   const addDoc = useAddDocument();
