@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "generate-icon": "node scripts/generate-square-icon.js"
+    "generate-icon": "node scripts/generate-square-icon.js",
+    "remove-white": "node scripts/remove-white-areas.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
