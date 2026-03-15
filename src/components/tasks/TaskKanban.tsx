@@ -78,14 +78,15 @@ export function TaskKanban({ tasks, onTaskClick, members, isOverdue }: Props) {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="overflow-x-auto pb-2 -mx-3 sm:mx-0 px-3 sm:px-0">
+      <div className="flex gap-3 sm:gap-4 min-w-max sm:min-w-0 sm:grid sm:grid-cols-1 md:sm:grid-cols-2 lg:sm:grid-cols-4">
       {columns.map((col) => {
         const colTasks = tasks.filter((t) => t.status === col.status);
         const isDropTarget = dragOverCol === col.status;
         return (
           <div
             key={col.status}
-            className={`min-h-[200px] rounded-xl transition-colors duration-150 p-2 -m-2 ${isDropTarget ? col.dropBg + " ring-2 ring-primary/30" : ""}`}
+            className={`min-w-[280px] sm:min-w-0 min-h-[200px] rounded-xl transition-colors duration-150 p-2 -m-2 ${isDropTarget ? col.dropBg + " ring-2 ring-primary/30" : ""}`}
             onDragOver={(e) => handleDragOver(e, col.status)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, col.status)}
@@ -165,6 +166,7 @@ export function TaskKanban({ tasks, onTaskClick, members, isOverdue }: Props) {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

@@ -143,32 +143,32 @@ export default function LeadsPage() {
   const hasFilters = search || productFilter !== "all" || valueFilter !== "all" || sourceFilter !== "all" || showFollowUpOnly;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Leads</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Leads</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             {leads.length} leads no total{hasFilters ? ` · ${filtered.length} filtrados` : ""}
           </p>
         </div>
-        <Button size="sm" className="gap-2"><Plus className="h-4 w-4" />Novo Lead</Button>
+        <Button size="sm" className="gap-2 w-full sm:w-auto"><Plus className="h-4 w-4" />Novo Lead</Button>
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
         <div className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar por nome ou email..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-card border-border" />
         </div>
         <Select value={productFilter} onValueChange={setProductFilter}>
-          <SelectTrigger className="h-8 text-xs w-[150px]"><SelectValue placeholder="Produto" /></SelectTrigger>
+          <SelectTrigger className="h-11 sm:h-10 text-xs sm:w-[150px] w-full"><SelectValue placeholder="Produto" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos produtos</SelectItem>
             {products.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={valueFilter} onValueChange={setValueFilter}>
-          <SelectTrigger className="h-8 text-xs w-[150px]"><SelectValue placeholder="Valor" /></SelectTrigger>
+          <SelectTrigger className="h-11 sm:h-10 text-xs sm:w-[150px] w-full"><SelectValue placeholder="Valor" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Qualquer valor</SelectItem>
             <SelectItem value="sem_venda">Sem venda</SelectItem>
@@ -178,7 +178,7 @@ export default function LeadsPage() {
           </SelectContent>
         </Select>
         <Select value={sourceFilter} onValueChange={setSourceFilter}>
-          <SelectTrigger className="h-8 text-xs w-[140px]"><SelectValue placeholder="Origem" /></SelectTrigger>
+          <SelectTrigger className="h-11 sm:h-10 text-xs sm:w-[140px] w-full"><SelectValue placeholder="Origem" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas origens</SelectItem>
             {SOURCE_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.icon} {s.label}</SelectItem>)}
@@ -187,7 +187,7 @@ export default function LeadsPage() {
         <Button
           variant={showFollowUpOnly ? "default" : "outline"}
           size="sm"
-          className="h-8 text-xs gap-1"
+          className="h-11 sm:h-10 text-xs gap-1 w-full sm:w-auto"
           onClick={() => setShowFollowUpOnly(!showFollowUpOnly)}
         >
           <Clock className="h-3 w-3" />
@@ -199,11 +199,11 @@ export default function LeadsPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-48" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 overflow-x-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 overflow-x-auto pb-2">
           {columns.map((col) => {
             const colLeads = getLeadsByStatus(col.status);
             const totalValor = colLeads.reduce((acc, l) => acc + Number(l.last_sale_amount ?? 0), 0);

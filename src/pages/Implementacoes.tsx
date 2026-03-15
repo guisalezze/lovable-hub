@@ -214,20 +214,20 @@ export default function ImplementacoesPage() {
   }, [impls, search, statusFilter]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Mentorias</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Mentorias</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             {activeCount} ativas · {fmt(totalRevenue)} em contratos
           </p>
         </div>
-        <Button onClick={() => setModalOpen(true)}>
+        <Button onClick={() => setModalOpen(true)} className="w-full sm:w-auto">
           <Plus className="h-4 w-4 mr-1" /> Nova Mentoria
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <div className="glass-card p-4">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">Ativas</p>
           <p className="text-2xl font-bold text-foreground mt-1">{activeCount}</p>
@@ -246,17 +246,17 @@ export default function ImplementacoesPage() {
         </div>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div className="relative w-full sm:w-auto">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             placeholder="Buscar..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="pl-9 bg-card border-border h-8 text-sm w-[200px]"
+            className="pl-9 bg-card border-border text-sm w-full sm:w-[200px]"
           />
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           {[
             { value: "all", label: "Todas" },
             { value: "active", label: "Ativas" },
@@ -268,7 +268,7 @@ export default function ImplementacoesPage() {
               key={f.value}
               variant={statusFilter === f.value ? "default" : "ghost"}
               size="sm"
-              className="h-7 text-xs"
+              className="h-11 sm:h-10 text-xs flex-1 sm:flex-initial"
               onClick={() => setStatusFilter(f.value)}
             >
               {f.label}
@@ -278,7 +278,7 @@ export default function ImplementacoesPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-52 rounded-lg" />)}
         </div>
       ) : filtered.length === 0 ? (
@@ -288,7 +288,7 @@ export default function ImplementacoesPage() {
           <Button variant="outline" onClick={() => setModalOpen(true)}>Criar primeira</Button>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {filtered.map(impl => (
             <ImplementationCard key={impl.id} impl={impl} onClick={() => setSelectedImpl(impl)} />
           ))}

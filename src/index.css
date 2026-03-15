@@ -144,6 +144,29 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     letter-spacing: var(--tracking-normal);
+    /* Melhorar scroll no mobile */
+    -webkit-overflow-scrolling: touch;
+    /* Prevenir zoom em inputs no iOS */
+    touch-action: manipulation;
+  }
+  
+  /* Melhorar toque no mobile */
+  button, a, [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Prevenir seleção acidental no mobile */
+  @media (max-width: 768px) {
+    * {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    input, textarea, [contenteditable] {
+      -webkit-user-select: text;
+      user-select: text;
+    }
   }
 }
 

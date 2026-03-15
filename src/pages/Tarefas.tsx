@@ -77,36 +77,36 @@ export default function TarefasPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">
             {currentProject?.icon} Tarefas · {currentProject?.name}
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{filteredTasks.length} tarefas</p>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{filteredTasks.length} tarefas</p>
         </div>
         <div className="flex items-center gap-2">
           <Tabs value={view} onValueChange={(v) => setView(v as ViewMode)}>
-            <TabsList className="h-8">
-              <TabsTrigger value="list" className="text-xs px-2"><LayoutList className="h-3.5 w-3.5 mr-1" />Lista</TabsTrigger>
-              <TabsTrigger value="kanban" className="text-xs px-2"><Kanban className="h-3.5 w-3.5 mr-1" />Kanban</TabsTrigger>
-              <TabsTrigger value="calendar" className="text-xs px-2"><CalendarDays className="h-3.5 w-3.5 mr-1" />Calendário</TabsTrigger>
+            <TabsList className="h-9 sm:h-8">
+              <TabsTrigger value="list" className="text-xs px-2"><LayoutList className="h-3.5 w-3.5 mr-1" /><span className="hidden sm:inline">Lista</span></TabsTrigger>
+              <TabsTrigger value="kanban" className="text-xs px-2"><Kanban className="h-3.5 w-3.5 mr-1" /><span className="hidden sm:inline">Kanban</span></TabsTrigger>
+              <TabsTrigger value="calendar" className="text-xs px-2"><CalendarDays className="h-3.5 w-3.5 mr-1" /><span className="hidden sm:inline">Calendário</span></TabsTrigger>
             </TabsList>
           </Tabs>
           <Button size="sm" onClick={handleNew} className="gap-1.5">
-            <Plus className="h-4 w-4" />Nova
+            <Plus className="h-4 w-4" /><span className="hidden sm:inline">Nova</span>
           </Button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
         {/* Quick Filters */}
-        <div className="flex gap-1">
-          <Button size="sm" variant={quickFilter === "all" ? "default" : "ghost"} className="text-xs h-7" onClick={() => setQuickFilter("all")}>
+        <div className="flex gap-1 sm:flex-row flex-wrap">
+          <Button size="sm" variant={quickFilter === "all" ? "default" : "ghost"} className="text-xs h-11 sm:h-10 flex-1 sm:flex-initial" onClick={() => setQuickFilter("all")}>
             Todas <Badge variant="secondary" className="ml-1 text-[10px] px-1">{tasks.length}</Badge>
           </Button>
-          <Button size="sm" variant={quickFilter === "mine" ? "default" : "ghost"} className="text-xs h-7" onClick={() => setQuickFilter("mine")}>
+          <Button size="sm" variant={quickFilter === "mine" ? "default" : "ghost"} className="text-xs h-11 sm:h-10 flex-1 sm:flex-initial" onClick={() => setQuickFilter("mine")}>
             Minhas <Badge variant="secondary" className="ml-1 text-[10px] px-1">{mineCount}</Badge>
           </Button>
-          <Button size="sm" variant={quickFilter === "overdue" ? "default" : "ghost"} className="text-xs h-7" onClick={() => setQuickFilter("overdue")}>
+          <Button size="sm" variant={quickFilter === "overdue" ? "default" : "ghost"} className="text-xs h-11 sm:h-10 flex-1 sm:flex-initial" onClick={() => setQuickFilter("overdue")}>
             Atrasadas <Badge variant="destructive" className="ml-1 text-[10px] px-1">{overdueCount}</Badge>
           </Button>
         </div>
@@ -118,7 +118,7 @@ export default function TarefasPage() {
             placeholder="Buscar tarefa..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-7 text-xs"
+            className="pl-8 text-xs"
           />
         </div>
 

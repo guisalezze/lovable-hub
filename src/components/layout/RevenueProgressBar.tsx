@@ -85,22 +85,22 @@ export function RevenueProgressBar() {
   const completedLevels = MILESTONES.slice(0, level - 1);
 
   return (
-    <div className="flex items-center gap-2 flex-1 min-w-0 mx-3">
+    <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0 mx-1 sm:mx-3">
       {/* Ícone + nível */}
-      <div className="flex items-center gap-1.5 shrink-0">
-        <Trophy className="h-3.5 w-3.5 text-yellow-500" />
-        <span className="text-[10px] font-bold text-yellow-500 hidden sm:block">
+      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        <Trophy className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-yellow-500" />
+        <span className="text-[9px] sm:text-[10px] font-bold text-yellow-500 hidden sm:block">
           Nv.{level}
         </span>
 
         {/* Popover de breakdown — abre instantaneamente ao clicar */}
         <Popover>
           <PopoverTrigger asChild>
-            <button className="text-muted-foreground hover:text-foreground transition-colors">
+            <button className="text-muted-foreground hover:text-foreground active:text-foreground transition-colors touch-manipulation p-1">
               <Info className="h-3 w-3" />
             </button>
           </PopoverTrigger>
-          <PopoverContent side="bottom" align="start" className="text-xs space-y-1.5 p-3 w-[220px]">
+          <PopoverContent side="bottom" align="start" className="text-xs space-y-1.5 p-3 w-[220px] sm:w-[260px]">
             {/* Níveis concluídos */}
             {completedLevels.length > 0 && (
               <div className="space-y-0.5 mb-1">
@@ -150,13 +150,13 @@ export function RevenueProgressBar() {
       </div>
 
       {/* Valores inline */}
-      <div className="flex items-center gap-2 flex-1 min-w-0">
-        <span className="text-xs font-bold text-foreground shrink-0 tabular-nums">
+      <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
+        <span className="text-[10px] sm:text-xs font-bold text-foreground shrink-0 tabular-nums">
           {fmtShort(total)}
-          <span className="text-muted-foreground font-normal"> / {fmtShort(current)}</span>
+          <span className="text-muted-foreground font-normal hidden sm:inline"> / {fmtShort(current)}</span>
         </span>
 
-        <span className="text-[10px] font-medium text-muted-foreground shrink-0 tabular-nums">
+        <span className="text-[9px] sm:text-[10px] font-medium text-muted-foreground shrink-0 tabular-nums hidden sm:block">
           {pct.toFixed(0)}%
         </span>
 

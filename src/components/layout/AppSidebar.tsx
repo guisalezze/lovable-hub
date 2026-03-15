@@ -18,8 +18,10 @@ import {
   FileText,
 } from "lucide-react";
 import { useProject, type Project } from "@/contexts/ProjectContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface NavItem {
   label: string;
@@ -124,7 +126,7 @@ interface AppSidebarProps {
   onToggle: () => void;
 }
 
-export function AppSidebar({ open }: AppSidebarProps) {
+function SidebarContent() {
   const { projects, currentProject, setCurrentProject } = useProject();
   const location = useLocation();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ educacional: true, nutra: true });
@@ -137,11 +139,7 @@ export function AppSidebar({ open }: AppSidebarProps) {
   };
 
   return (
-    <aside
-      className={`${
-        open ? "w-60" : "w-0 -ml-px"
-      } shrink-0 border-r border-sidebar-border bg-sidebar transition-all duration-300 overflow-hidden flex flex-col h-screen sticky top-0`}
-    >
+    <>
       {/* Logo */}
       <div className="h-16 flex items-center px-4 border-b border-sidebar-border shrink-0 gap-3">
         <img
@@ -222,6 +220,39 @@ export function AppSidebar({ open }: AppSidebarProps) {
           </div>
         </div>
       </div>
+    </>
+  );
+}
+
+export function AppSidebar({ open, onToggle }: AppSidebarProps) {
+  const isMobile = useIsMobile();
+  const location = useLocation();
+
+  // Fechar sidebar no mobile ao navegar
+  useEffect(() => {
+    if (isMobile && open) {
+      onToggle();
+    }
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (isMobile) {
+    return (
+      <Sheet open={open} onOpenChange={onToggle}>
+        <SheetContent side="left" className="w-[280px] p-0 bg-sidebar text-sidebar-foreground [&>button]:hidden">
+          <SidebarContent />
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  return (
+    <aside
+      className={cn(
+        "shrink-0 border-r border-sidebar-border bg-sidebar transition-all duration-300 overflow-hidden flex flex-col h-screen sticky top-0",
+        open ? "w-60" : "w-0 -ml-px"
+      )}
+    >
+      <SidebarContent />
     </aside>
   );
 }
