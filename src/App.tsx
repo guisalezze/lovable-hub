@@ -38,14 +38,65 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
-    });
+    // Verificar sessão imediatamente ao carregar
+    const checkSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Erro ao obter sessão:', error);
+        }
+        setSession(session);
+        setLoading(false);
+        
+        // Se não houver sessão, tentar restaurar do localStorage
+        if (!session && typeof window !== 'undefined') {
+          const storedSession = localStorage.getItem('sb-auth-token');
+          if (storedSession) {
+            try {
+              const parsed = JSON.parse(storedSession);
+              if (parsed?.access_token) {
+                // Tentar restaurar sessão
+                const { data: { session: restoredSession } } = await supabase.auth.setSession({
+                  access_token: parsed.access_token,
+                  refresh_token: parsed.refresh_token,
+                });
+                if (restoredSession) {
+                  setSession(restoredSession);
+                }
+              }
+            } catch (e) {
+              console.error('Erro ao restaurar sessão:', e);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao verificar sessão:', error);
+        setLoading(false);
+      }
+    };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    checkSession();
+
+    // Escutar mudanças de autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       setLoading(false);
+      
+      // Salvar sessão explicitamente no localStorage para PWA
+      if (session && typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('sb-auth-token', JSON.stringify({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            expires_at: session.expires_at,
+          }));
+        } catch (e) {
+          console.error('Erro ao salvar sessão:', e);
+        }
+      } else if (!session && typeof window !== 'undefined') {
+        // Limpar sessão salva se não houver mais sessão
+        localStorage.removeItem('sb-auth-token');
+      }
     });
 
     return () => subscription.unsubscribe();
