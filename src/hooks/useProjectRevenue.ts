@@ -45,14 +45,22 @@ export function useProjectRevenueTotal() {
         );
 
         // Mentorias/Implementações — paid_amount registrado (só Educacional)
-        const { data: implData } = await (supabase as any)
-          .from("implementations")
-          .select("paid_amount");
+        // Se a coluna ainda não existe (migration pendente), o erro é ignorado e mentoriasTotal = 0
+        try {
+          const { data: implData, error: implErr } = await (supabase as any)
+            .from("implementations")
+            .select("paid_amount");
 
-        mentoriasTotal = (implData || []).reduce(
-          (acc: number, i: any) => acc + Number(i.paid_amount || 0),
-          0
-        );
+          if (!implErr) {
+            mentoriasTotal = (implData || []).reduce(
+              (acc: number, i: any) => acc + Number(i.paid_amount ?? 0),
+              0
+            );
+          }
+        } catch (_) {
+          // Coluna não existe ainda — ignora
+          mentoriasTotal = 0;
+        }
       }
 
       return {

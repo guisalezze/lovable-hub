@@ -156,13 +156,35 @@ export function useCreateImplementation() {
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // 1. Create implementation — paid_amount = entry já pago
+      // 1. Create implementation
+      // paid_amount só é incluído se a coluna existir (migration aplicada)
       const initialPaid = payload.charge?.entry_amount ?? 0;
-      const { data: impl, error } = await (supabase as any)
+      const baseInsert: any = { ...payload.impl, created_by: user?.id };
+
+      // Tenta primeiro com paid_amount; se falhar com PGRST204 (coluna não existe), tenta sem
+      let impl: any;
+      let firstErr: any;
+
+      const tryWithPaid = await (supabase as any)
         .from("implementations")
-        .insert({ ...payload.impl, created_by: user?.id, paid_amount: initialPaid })
+        .insert({ ...baseInsert, paid_amount: initialPaid })
         .select()
         .single();
+
+      if (tryWithPaid.error?.code === "PGRST204") {
+        // Coluna não existe ainda — insere sem paid_amount
+        const tryWithout = await (supabase as any)
+          .from("implementations")
+          .insert(baseInsert)
+          .select()
+          .single();
+        if (tryWithout.error) throw tryWithout.error;
+        impl = tryWithout.data;
+      } else if (tryWithPaid.error) {
+        throw tryWithPaid.error;
+      } else {
+        impl = tryWithPaid.data;
+      }
       if (error) throw error;
 
       // 2. Create steps
