@@ -5,6 +5,7 @@ import { useCopyFiles } from "@/hooks/useCopyFiles";
 import { useCopyProjects } from "@/hooks/useCopyProjects";
 import { useProject } from "@/contexts/ProjectContext";
 import { CopyItemBlock } from "@/components/copies/CopyItemBlock";
+import { CopyBlockModal } from "@/components/copies/CopyBlockModal";
 import { CopyFileUpload } from "@/components/copies/CopyFileUpload";
 import { CopyVersionsDrawer } from "@/components/copies/CopyVersionsDrawer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,9 +42,11 @@ export default function CopyProjectDetail() {
   const { data: files, isLoading: filesLoading, upload, remove: removeFile } = useCopyFiles(id);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [versionsItemId, setVersionsItemId] = useState<string | undefined>();
+  const [modalMode, setModalMode] = useState<"criativo" | "ml-lead" | null>(null);
 
   const criativos = items?.filter((i) => i.type === "criativo") || [];
-  const ofertas = items?.filter((i) => i.type === "oferta") || [];
+  // MicroLead / Lead — includes old "oferta" type for backward compat
+  const mlLeads = items?.filter((i) => i.type === "microlead" || i.type === "lead" || i.type === "oferta") || [];
 
   const handleStructuredSave = (
     itemId: string,
@@ -53,16 +56,25 @@ export default function CopyProjectDetail() {
     updateStructured.mutate({ id: itemId, structured_content: structured, translated_content: translated });
   };
 
-  const renderItems = (type: string, list: typeof criativos) => (
+  const handleCreate = (type: string, title: string) => {
+    create.mutate(
+      { type, title },
+      { onSuccess: () => setModalMode(null) }
+    );
+  };
+
+  const renderItems = (mode: "criativo" | "ml-lead", list: typeof criativos) => {
+    const buttonLabel = mode === "criativo" ? "Novo Criativo" : "Nova ML/L";
+    return (
     <div className="space-y-4">
       <div className="flex justify-end">
         <Button
           size="sm"
           variant="outline"
           className="gap-1.5"
-          onClick={() => create.mutate({ type, title: "" })}
+          onClick={() => setModalMode(mode)}
         >
-          <Plus className="h-3.5 w-3.5" /> Novo Bloco
+          <Plus className="h-3.5 w-3.5" /> {buttonLabel}
         </Button>
       </div>
       {itemsLoading ? (
@@ -87,6 +99,7 @@ export default function CopyProjectDetail() {
       )}
     </div>
   );
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -110,7 +123,7 @@ export default function CopyProjectDetail() {
       <Tabs defaultValue="criativos">
         <TabsList>
           <TabsTrigger value="criativos">Criativos ({criativos.length})</TabsTrigger>
-          <TabsTrigger value="oferta">Oferta ({ofertas.length})</TabsTrigger>
+          <TabsTrigger value="ml-lead">MicroLead / Lead ({mlLeads.length})</TabsTrigger>
           <TabsTrigger value="referencias">Referências ({files?.length || 0})</TabsTrigger>
         </TabsList>
 
@@ -118,8 +131,8 @@ export default function CopyProjectDetail() {
           {renderItems("criativo", criativos)}
         </TabsContent>
 
-        <TabsContent value="oferta" className="mt-4">
-          {renderItems("oferta", ofertas)}
+        <TabsContent value="ml-lead" className="mt-4">
+          {renderItems("ml-lead", mlLeads)}
         </TabsContent>
 
         <TabsContent value="referencias" className="mt-4">
@@ -176,6 +189,17 @@ export default function CopyProjectDetail() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Creation Modal */}
+      {modalMode && (
+        <CopyBlockModal
+          open={!!modalMode}
+          mode={modalMode}
+          onOpenChange={(o) => !o && setModalMode(null)}
+          onCreate={handleCreate}
+          isLoading={create.isPending}
+        />
+      )}
 
       <CopyFileUpload
         open={uploadOpen}
