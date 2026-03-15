@@ -1,6 +1,6 @@
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { Button } from "@/components/ui/button";
-import { Bell, BellOff, Loader2, ShoppingCart, ClipboardList } from "lucide-react";
+import { Bell, BellOff, Loader2, ShoppingCart, ClipboardList, AlertCircle, Copy } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { showSaleToast } from "@/hooks/useSaleRealtime";
 import { showTaskToast, getProfileName } from "@/hooks/useTaskRealtime";
@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useState } from "react";
 
 export function PushNotificationsCard() {
-  const { isSupported, permission, isSubscribed, isLoading, subscribe, unsubscribe } = usePushNotifications();
+  const { isSupported, permission, isSubscribed, isLoading, lastError, subscribe, unsubscribe } = usePushNotifications();
   const [testingSale, setTestingSale] = useState(false);
   const [testingTask, setTestingTask] = useState(false);
 
@@ -94,6 +94,24 @@ export function PushNotificationsCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Erro detalhado — visível no mobile sem precisar do console */}
+        {lastError && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+            <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-destructive">Erro ao ativar</p>
+              <p className="text-xs text-destructive/80 mt-0.5 break-words">{lastError}</p>
+            </div>
+            <button
+              onClick={() => { navigator.clipboard?.writeText(lastError); toast.success("Copiado!"); }}
+              className="shrink-0 text-destructive/60 hover:text-destructive"
+              title="Copiar erro"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
         {permission === "denied" ? (
           <div className="space-y-2">
             <p className="text-sm text-destructive">

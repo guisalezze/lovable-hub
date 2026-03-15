@@ -17,8 +17,11 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico"], // logo.png removido (muito grande, será carregado sob demanda)
+      includeAssets: ["favicon.ico"],
       manifest: {
         name: "Solaryz — CRM Multi-Projeto",
         short_name: "Solaryz",
@@ -123,51 +126,9 @@ export default defineConfig(({ mode }) => ({
           },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,mp3}"],
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB para incluir logo.png (2.23 MB)
-        // Sempre servir index.html como fallback de navegação (evita tela branca no PWA)
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api\//, /^\/functions\//, /^\/supabase\//],
-        // Handlers de push serão registrados dinamicamente no app
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/.*\/index\.html$/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "html-cache",
-              expiration: {
-                maxEntries: 1,
-                maxAgeSeconds: 0, // Sempre buscar nova versão do HTML
-              },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "supabase-api-cache",
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60, // 1 hora
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/.*\.supabase\.storage\/.*/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "supabase-storage-cache",
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 dias
-              },
-            },
-          },
-        ],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
       devOptions: {
         enabled: false, // Desabilitar em desenvolvimento (habilitar apenas em produção)

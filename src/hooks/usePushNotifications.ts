@@ -25,6 +25,7 @@ export function usePushNotifications() {
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   // Verificar suporte e permissão atual
   useEffect(() => {
@@ -85,6 +86,7 @@ export function usePushNotifications() {
     }
 
     setIsLoading(true);
+    setLastError(null);
 
     try {
       // Solicitar permissão
@@ -92,7 +94,9 @@ export function usePushNotifications() {
         const result = await Notification.requestPermission();
         setPermission(result);
         if (result !== "granted") {
-          toast.error("Permissão de notificações negada.");
+          const msg = "Permissão de notificações negada pelo sistema.";
+          setLastError(msg);
+          toast.error(msg);
           setIsLoading(false);
           return;
         }
@@ -104,7 +108,9 @@ export function usePushNotifications() {
       // Verificar se VAPID key está configurada
       const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
       if (!vapidPublicKey) {
-        toast.error("Push notifications não estão configuradas. Contate o administrador.");
+        const msg = "Chave VAPID não configurada. Contate o administrador.";
+        setLastError(msg);
+        toast.error(msg);
         setIsLoading(false);
         return;
       }
@@ -137,20 +143,22 @@ export function usePushNotifications() {
 
       if (error) {
         console.error("Erro ao salvar subscription:", error);
-        toast.error("Erro ao ativar notificações.");
-        // Desfazer subscription se falhar ao salvar
+        const msg = `Erro ao salvar no servidor: ${error.message || JSON.stringify(error)}`;
+        setLastError(msg);
+        toast.error(msg);
         await subscription.unsubscribe();
       } else {
         setIsSubscribed(true);
+        setLastError(null);
         toast.success("Notificações push ativadas!");
       }
     } catch (error: any) {
       console.error("Erro ao registrar push:", error);
-      if (error.name === "NotAllowedError") {
-        toast.error("Permissão de notificações negada.");
-      } else {
-        toast.error("Erro ao ativar notificações push.");
-      }
+      const msg = error.name === "NotAllowedError"
+        ? "Permissão negada pelo sistema operacional."
+        : `Erro: ${error.name} — ${error.message}`;
+      setLastError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -191,6 +199,7 @@ export function usePushNotifications() {
     permission,
     isSubscribed,
     isLoading,
+    lastError,
     subscribe,
     unsubscribe,
   };
