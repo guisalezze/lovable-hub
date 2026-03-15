@@ -913,7 +913,9 @@ export function ImplementationDetailSheet({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {receiptModalIsPaid ? "Editar comprovante" : "Adicionar comprovante"}
+              {receiptModalIsEntry 
+                ? (receiptModalIsPaid ? "Editar comprovante de entrada" : "Adicionar comprovante de entrada")
+                : (receiptModalIsPaid ? "Editar comprovante" : "Adicionar comprovante")}
             </DialogTitle>
             <DialogDescription>
               {receiptModalIsPaid 
@@ -922,7 +924,54 @@ export function ImplementationDetailSheet({
             </DialogDescription>
           </DialogHeader>
           
-          {receiptModalInstallmentId && (() => {
+          {receiptModalIsEntry ? (
+            <div className="space-y-4 py-4">
+              {entryReceiptPreview ? (
+                <div className="relative border rounded-md p-3 bg-secondary/30">
+                  {entryReceiptFile?.type === "application/pdf" ? (
+                    <div className="flex items-center gap-3 p-3">
+                      <FileText className="h-10 w-10 text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{entryReceiptPreview}</p>
+                        <p className="text-xs text-muted-foreground">PDF selecionado</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <img src={entryReceiptPreview} alt="Preview" className="w-full max-h-48 object-contain rounded" />
+                      <p className="text-xs text-muted-foreground text-center">Preview do comprovante</p>
+                    </div>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-2 right-2 h-6 w-6"
+                    onClick={() => {
+                      setEntryReceiptFile(null);
+                      setEntryReceiptPreview(null);
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-lg p-6 cursor-pointer hover:bg-secondary/50 transition-colors">
+                  <Upload className="h-8 w-8 text-muted-foreground" />
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-foreground">Clique para selecionar arquivo</p>
+                    <p className="text-xs text-muted-foreground mt-1">Imagem ou PDF (máx. 10MB)</p>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    onChange={handleEntryReceiptChange}
+                  />
+                </label>
+              )}
+            </div>
+          ) : receiptModalInstallmentId && (() => {
             const inst = installments.find(i => i.id === receiptModalInstallmentId);
             if (!inst) return null;
             const receiptPreview = installmentReceiptPreview[inst.id];
