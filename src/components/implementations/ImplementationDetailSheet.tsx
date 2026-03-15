@@ -388,19 +388,26 @@ export function ImplementationDetailSheet({
       open={open} 
       onOpenChange={(v) => {
         console.log("🔄 Sheet onOpenChange chamado:", { v, isError, open });
-        // Não fechar se houver erro - permite que o usuário veja a mensagem de erro
-        if (!v) {
-          if (isError) {
-            console.log("⚠️ Tentativa de fechar bloqueada devido a erro");
-            return; // Não fechar se houver erro
-          }
+        // Só fechar se explicitamente solicitado e não houver erro
+        if (!v && !isError) {
           console.log("✅ Fechando Sheet normalmente");
           onClose();
+        } else if (!v && isError) {
+          console.log("⚠️ Tentativa de fechar bloqueada devido a erro");
         }
       }} 
       modal={true}
     >
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent 
+        className="w-full sm:max-w-lg overflow-y-auto"
+        onInteractOutside={(e) => {
+          // Prevenir fechamento ao clicar no overlay quando há erro ou está editando
+          if (isError || editing) {
+            console.log("⚠️ Bloqueando fechamento ao clicar fora (erro ou editando)");
+            e.preventDefault();
+          }
+        }}
+      >
         {isLoading ? (
           <div className="flex items-center justify-center h-40"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
         ) : error ? (
