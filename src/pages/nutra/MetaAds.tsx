@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { format, subDays } from "date-fns";
-import { RefreshCw, Play, Pause, Settings2, BarChart3 } from "lucide-react";
+import { RefreshCw, Play, Pause, Settings2, BarChart3, AlertTriangle, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useMetaAdAccounts, useMetaAdCampaigns, useSyncMetaAds, useMetaAction } from "@/hooks/useMetaAds";
-import { MetaOAuthButton } from "@/components/nutra/MetaOAuthButton";
+import { useMetaAdAccounts, useMetaAdCampaigns, useSyncMetaAds, useMetaAction, useMetaConnection } from "@/hooks/useMetaAds";
 import { MetaRulesDialog } from "@/components/nutra/MetaRulesDialog";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
@@ -18,9 +18,13 @@ export default function MetaAdsPage() {
   const [until, setUntil] = useState(format(new Date(), "yyyy-MM-dd"));
   const [rulesOpen, setRulesOpen] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const { data: accounts = [], isLoading: accountsLoading } = useMetaAdAccounts();
+  const { data: connection, isLoading: connectionLoading } = useMetaConnection();
   const activeAccount = accounts[0];
+  // Conta conectada via legado (app_settings) mas ainda não migrada para meta_ad_accounts
+  const legacyConnected = !activeAccount && !accountsLoading && connection?.configured === true;
   const { data: campaigns = [], isLoading: campaignsLoading } = useMetaAdCampaigns(activeAccount?.id, since, until);
   const syncMutation = useSyncMetaAds();
   const actionMutation = useMetaAction();
@@ -92,14 +96,38 @@ export default function MetaAdsPage() {
         ))}
       </div>
 
-      {!activeAccount && !accountsLoading ? (
+      {legacyConnected ? (
+        /* Conta conectada via Integrações (legado) — pede para reconectar para habilitar gestão de campanhas */
+        <div className="glass-card p-8 space-y-4 border border-yellow-500/20">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-yellow-500 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h2 className="text-sm font-semibold text-foreground">
+                Conta conectada — reconexão necessária
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Sua conta <span className="font-medium text-foreground">{(connection as any)?.meta_ads_account_id || "Meta Ads"}</span> está configurada via Integrações.
+                Para habilitar a gestão de campanhas, salve novamente suas credenciais em <strong>Integrações</strong>.
+              </p>
+            </div>
+          </div>
+          <Button size="sm" onClick={() => navigate("/integracoes")} className="gap-2">
+            Ir para Integrações
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ) : !activeAccount && !accountsLoading && !connectionLoading ? (
+        /* Sem conta configurada */
         <div className="glass-card p-12 text-center space-y-4">
           <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto" />
           <h2 className="text-lg font-semibold text-foreground">Conecte sua conta Meta Ads</h2>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            Conecte uma conta de anúncios para visualizar métricas, gerenciar campanhas e criar regras automáticas.
+            Configure sua conta de anúncios no menu Integrações para visualizar métricas e gerenciar campanhas.
           </p>
-          <MetaOAuthButton />
+          <Button onClick={() => navigate("/integracoes")} className="gap-2">
+            Configurar em Integrações
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Button>
         </div>
       ) : (
         <div className="glass-card overflow-hidden">

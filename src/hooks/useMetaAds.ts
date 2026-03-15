@@ -2,6 +2,27 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
 
+/** Verifica se o projeto tem uma conta Meta Ads configurada (via meta_ad_accounts OU via app_settings legado) */
+export function useMetaConnection() {
+  const { currentProject } = useProject();
+  return useQuery({
+    queryKey: ["meta-connection", currentProject?.id],
+    queryFn: async () => {
+      if (!currentProject) return { configured: false, account_id: null, account_name: null };
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return { configured: false, account_id: null, account_name: null };
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-ads-config?project_id=${currentProject.id}`,
+        { headers: { Authorization: `Bearer ${session.access_token}` } }
+      );
+      if (!res.ok) return { configured: false, account_id: null, account_name: null };
+      return res.json() as Promise<{ configured: boolean; meta_ads_account_id: string | null; account_name: string | null }>;
+    },
+    enabled: !!currentProject,
+    staleTime: 30_000,
+  });
+}
+
 export function useMetaAdAccounts() {
   const { currentProject } = useProject();
   return useQuery({
