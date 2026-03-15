@@ -126,7 +126,7 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,mp3}"],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB para incluir logo.png (2.23 MB)
-        importScripts: ['/sw-push.js'], // Injeta handlers de push no service worker
+        // Handlers de push serão registrados dinamicamente no app
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
