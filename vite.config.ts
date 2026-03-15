@@ -97,9 +97,8 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       devOptions: {
-        enabled: true, // Habilitar em desenvolvimento para testar PWA
+        enabled: false, // Desabilitar em desenvolvimento (habilitar apenas em produção)
       },
-      injectRegister: "auto", // Registrar automaticamente o service worker
     }),
   ].filter(Boolean),
   resolve: {
