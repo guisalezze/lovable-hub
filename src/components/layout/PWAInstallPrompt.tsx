@@ -137,7 +137,7 @@ export function PWAInstallPrompt() {
           {isIOS && !isSafari ? (
             <p className="text-xs text-muted-foreground">⚠️ Use o Safari para instalar no iOS</p>
           ) : isIOS && isSafari ? (
-            <p className="text-xs text-muted-foreground">Toque em Compartilhar (□↑) > Adicionar à Tela de Início</p>
+            <p className="text-xs text-muted-foreground">Toque em Compartilhar (□↑) {'>'} Adicionar à Tela de Início</p>
           ) : (
             <p className="text-xs text-muted-foreground">Adicione à tela inicial para acesso rápido</p>
           )}
