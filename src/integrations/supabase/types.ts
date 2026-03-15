@@ -317,6 +317,8 @@ export type Database = {
           id: string
           is_validated: boolean
           sort_order: number
+          structured_content: Json | null
+          translated_content: Json | null
           tags: string[] | null
           title: string
           type: string
@@ -330,6 +332,8 @@ export type Database = {
           id?: string
           is_validated?: boolean
           sort_order?: number
+          structured_content?: Json | null
+          translated_content?: Json | null
           tags?: string[] | null
           title?: string
           type?: string
@@ -343,6 +347,8 @@ export type Database = {
           id?: string
           is_validated?: boolean
           sort_order?: number
+          structured_content?: Json | null
+          translated_content?: Json | null
           tags?: string[] | null
           title?: string
           type?: string

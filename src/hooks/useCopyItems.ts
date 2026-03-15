@@ -2,12 +2,31 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+export interface CopyHook {
+  headline: string;
+  hook: string;
+}
+
+export interface StructuredContent {
+  hooks: CopyHook[];
+  body: string; // HTML string
+  cta: string;
+}
+
+export const defaultStructuredContent = (): StructuredContent => ({
+  hooks: [{ headline: "", hook: "" }],
+  body: "",
+  cta: "",
+});
+
 export interface CopyItem {
   id: string;
   copy_project_id: string;
   type: string;
   title: string;
   content: string;
+  structured_content: StructuredContent | null;
+  translated_content: StructuredContent | null;
   tags: string[];
   is_validated: boolean;
   sort_order: number;
@@ -37,7 +56,11 @@ export function useCopyItems(copyProjectId: string | undefined) {
         .eq("copy_project_id", copyProjectId!)
         .order("sort_order", { ascending: true });
       if (error) throw error;
-      return data as CopyItem[];
+      return (data as any[]).map((item) => ({
+        ...item,
+        structured_content: item.structured_content ?? null,
+        translated_content: item.translated_content ?? null,
+      })) as CopyItem[];
     },
   });
 
@@ -46,7 +69,12 @@ export function useCopyItems(copyProjectId: string | undefined) {
       const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from("copy_items")
-        .insert({ ...values, copy_project_id: copyProjectId!, created_by: user?.id })
+        .insert({
+          ...values,
+          copy_project_id: copyProjectId!,
+          created_by: user?.id,
+          structured_content: defaultStructuredContent() as any,
+        })
         .select()
         .single();
       if (error) throw error;
@@ -61,10 +89,8 @@ export function useCopyItems(copyProjectId: string | undefined) {
   const updateContent = useMutation({
     mutationFn: async ({ id, content }: { id: string; content: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      // Update item
       const { error } = await supabase.from("copy_items").update({ content }).eq("id", id);
       if (error) throw error;
-      // Create version
       await supabase.from("copy_item_versions").insert({
         copy_item_id: id,
         content,
@@ -76,8 +102,52 @@ export function useCopyItems(copyProjectId: string | undefined) {
     },
   });
 
+  /** Save structured_content and optionally translated_content */
+  const updateStructured = useMutation({
+    mutationFn: async ({
+      id,
+      structured_content,
+      translated_content,
+    }: {
+      id: string;
+      structured_content: StructuredContent;
+      translated_content?: StructuredContent | null;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const payload: any = { structured_content };
+      if (translated_content !== undefined) payload.translated_content = translated_content;
+
+      const { error } = await supabase
+        .from("copy_items")
+        .update(payload)
+        .eq("id", id);
+      if (error) throw error;
+
+      // Save a version snapshot (serialise structured content as JSON string)
+      await supabase.from("copy_item_versions").insert({
+        copy_item_id: id,
+        content: JSON.stringify(structured_content),
+        saved_by: user?.id,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["copy_items", copyProjectId] });
+      toast.success("Copy salva!");
+    },
+    onError: () => toast.error("Erro ao salvar copy"),
+  });
+
   const updateItem = useMutation({
-    mutationFn: async ({ id, ...values }: { id: string; title?: string; tags?: string[]; is_validated?: boolean }) => {
+    mutationFn: async ({
+      id,
+      ...values
+    }: {
+      id: string;
+      title?: string;
+      tags?: string[];
+      is_validated?: boolean;
+    }) => {
       const { error } = await supabase.from("copy_items").update(values).eq("id", id);
       if (error) throw error;
     },
@@ -99,7 +169,7 @@ export function useCopyItems(copyProjectId: string | undefined) {
     onError: () => toast.error("Erro ao remover bloco"),
   });
 
-  return { ...query, create, updateContent, updateItem, remove };
+  return { ...query, create, updateContent, updateStructured, updateItem, remove };
 }
 
 export function useCopyItemVersions(copyItemId: string | undefined) {
