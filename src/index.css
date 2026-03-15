@@ -231,3 +231,12 @@
   background: hsl(38 92% 48% / 0.20);
   color: hsl(var(--foreground));
 }
+
+/* Sheet em tela cheia no mobile */
+@media (max-width: 768px) {
+  [data-sidebar="sidebar"][data-mobile="true"],
+  .sidebar-fullscreen {
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+}
