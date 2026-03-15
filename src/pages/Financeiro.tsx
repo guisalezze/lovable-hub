@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
 import { useMetaAdAccounts, useMetaAdCampaigns } from "@/hooks/useMetaAds";
-import { DollarSign, TrendingUp, Target, Wallet, Plus, Download, ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw } from "lucide-react";
+import { DollarSign, TrendingUp, Target, Wallet, Plus, Download, ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw, Link2, AlertCircle } from "lucide-react";
 import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { format, subDays, parseISO, differenceInDays, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -133,6 +134,7 @@ function exportCSV(chartData: any[], since: string, until: string) {
 export default function FinanceiroPage() {
   const { currentProject } = useProject();
   const isNutra = currentProject?.slug === "nutra";
+  const navigate = useNavigate();
 
   const [since, setSince] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
   const [until, setUntil] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -303,9 +305,45 @@ export default function FinanceiroPage() {
           <DeltaBadge current={totalRevenue} previous={prevRevenue} />
         </div>
         <div className="glass-card p-4 space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground"><BarChart2 className="h-4 w-4" /><span className="text-xs font-medium">Ads Spend</span></div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <BarChart2 className="h-4 w-4" />
+              <span className="text-xs font-medium">Ads Spend</span>
+            </div>
+            {activeAccount ? (
+              <Badge
+                variant="secondary"
+                className="text-[9px] px-1.5 gap-0.5 cursor-pointer hover:bg-primary/20 transition-colors"
+                onClick={() => navigate(isNutra ? "/nutra/meta-ads" : "/integracoes")}
+                title={`Conta: ${activeAccount.account_name || activeAccount.account_id}`}
+              >
+                <Link2 className="h-2.5 w-2.5" />
+                Meta Ads
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1.5 gap-0.5 cursor-pointer border-destructive/40 text-destructive hover:bg-destructive/10"
+                onClick={() => navigate("/integracoes")}
+                title="Nenhuma conta Meta Ads conectada"
+              >
+                <AlertCircle className="h-2.5 w-2.5" />
+                Desconectado
+              </Badge>
+            )}
+          </div>
           <p className="text-xl font-bold text-foreground">{fmtBRL(adSpendTotal)}</p>
-          <DeltaBadge current={adSpendTotal} previous={prevAdSpendTotal} />
+          <div className="flex items-center gap-2 flex-wrap">
+            <DeltaBadge current={adSpendTotal} previous={prevAdSpendTotal} />
+            {activeAccount && (
+              <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+                {activeAccount.account_name || activeAccount.account_id}
+              </span>
+            )}
+            {!activeAccount && (
+              <span className="text-[10px] text-muted-foreground">Sem conta vinculada</span>
+            )}
+          </div>
         </div>
         <div className="glass-card p-4 space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground"><Wallet className="h-4 w-4" /><span className="text-xs font-medium">Gastos Manuais</span></div>
