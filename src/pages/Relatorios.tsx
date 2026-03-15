@@ -22,7 +22,7 @@ function useReportData(since: string, until: string, projectId: string | undefin
     queryFn: async () => {
       // Investments filtrados por project_id
       const invQuery = supabase.from("investments").select("amount, date").gte("date", since).lte("date", until);
-      const invRes = projectId ? invQuery.eq("project_id", projectId) : invQuery;
+      const invQueryFinal = projectId ? invQuery.eq("project_id", projectId) : invQuery;
 
       const [salesRes, leadsRes, tasksRes, callsRes, invResFinal, teamRes, mentoriasRes] = await Promise.all([
         supabase.from("sales").select("sale_amount, sale_status_enum, created_at, product_name")
@@ -33,12 +33,17 @@ function useReportData(since: string, until: string, projectId: string | undefin
           .gte("created_at", `${since}T00:00:00`).lte("created_at", `${until}T23:59:59`),
         supabase.from("calls").select("id, status, start_at")
           .gte("start_at", `${since}T00:00:00`).lte("start_at", `${until}T23:59:59`),
-        invResFinal,
+        invQueryFinal,
         supabase.from("profiles").select("id, full_name, email"),
         // Mentorias: paid_amount filtrado por contract_start (só Educacional)
         projectId ? (supabase as any).from("implementations").select("paid_amount, contract_start")
           .gte("contract_start", since).lte("contract_start", until) : Promise.resolve({ data: [], error: null }),
       ]);
+
+      // Verificar erros
+      if (salesRes.error) console.error("Sales error:", salesRes.error);
+      if (invResFinal.error) console.error("Investments error:", invResFinal.error);
+      if (mentoriasRes.error) console.error("Mentorias error:", mentoriasRes.error);
 
       const sales = salesRes.data || [];
       const leads = leadsRes.data || [];
@@ -60,9 +65,21 @@ function useReportData(since: string, until: string, projectId: string | undefin
         .filter(s => s.sale_status_enum === "approved")
         .reduce((acc, s) => acc + Number(s.sale_amount || 0), 0);
       const revenue = salesRevenue + mentoriasRevenue;
-      const investment = investments.reduce((acc, i) => acc + Number(i.amount), 0);
+      const investment = (investments || []).reduce((acc, i) => acc + Number(i.amount || 0), 0);
       const profit = revenue - investment;
       const roas = investment > 0 ? revenue / investment : 0;
+
+      // Debug logs
+      console.log("Relatório Debug:", {
+        projectId,
+        salesCount: sales.length,
+        salesRevenue,
+        mentoriasRevenue,
+        revenue,
+        investmentsCount: investments.length,
+        investment,
+        profit,
+      });
       const approvedCount = sales.filter(s => s.sale_status_enum === "approved").length;
       const refundCount = sales.filter(s =>
         s.sale_status_enum === "refunded" || s.sale_status_enum === "charged_back"
