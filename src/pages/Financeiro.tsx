@@ -3,13 +3,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
 import { useMetaAdAccounts, useMetaAdCampaigns } from "@/hooks/useMetaAds";
-import { DollarSign, TrendingUp, Target, Wallet, Plus, Download, ArrowUpRight, ArrowDownRight, BarChart2 } from "lucide-react";
+import { DollarSign, TrendingUp, Target, Wallet, Plus, Download, ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw } from "lucide-react";
 import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { format, subDays, parseISO, differenceInDays } from "date-fns";
+import { format, subDays, parseISO, differenceInDays, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { ProductGoalsSection } from "@/components/financeiro/ProductGoalsSection";
@@ -135,6 +138,8 @@ export default function FinanceiroPage() {
   const [until, setUntil] = useState(format(new Date(), "yyyy-MM-dd"));
   const [investAmount, setInvestAmount] = useState("");
   const [investDesc, setInvestDesc] = useState("");
+  const [investType, setInvestType] = useState<"unico" | "mensal">("unico");
+  const [investMonths, setInvestMonths] = useState("12");
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
 
@@ -203,15 +208,28 @@ export default function FinanceiroPage() {
   async function addInvestment() {
     const amount = parseFloat(investAmount);
     if (!amount || amount <= 0) return toast.error("Valor inválido");
-    const { error } = await supabase.from("investments").insert({
-      amount,
-      description: investDesc || null,
-      project_id: currentProject?.id || null,
-    });
+
+    const baseDate = new Date();
+    const rows = investType === "mensal"
+      ? Array.from({ length: Math.max(1, parseInt(investMonths) || 12) }, (_, i) => ({
+          amount,
+          description: investDesc ? `${investDesc} (mês ${i + 1}/${parseInt(investMonths) || 12})` : `Gasto mensal (mês ${i + 1})`,
+          project_id: currentProject?.id || null,
+          date: format(addMonths(baseDate, i), "yyyy-MM-dd"),
+        }))
+      : [{
+          amount,
+          description: investDesc || null,
+          project_id: currentProject?.id || null,
+        }];
+
+    const { error } = await supabase.from("investments").insert(rows);
     if (error) return toast.error("Erro ao salvar");
-    toast.success("Investimento registrado");
+    toast.success(investType === "mensal" ? `${rows.length} lançamentos mensais registrados!` : "Investimento registrado");
     setInvestAmount("");
     setInvestDesc("");
+    setInvestType("unico");
+    setInvestMonths("12");
     setOpen(false);
     qc.invalidateQueries({ queryKey: ["period-investments"] });
     qc.invalidateQueries({ queryKey: ["investments", "all"] });
@@ -237,10 +255,40 @@ export default function FinanceiroPage() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Novo Gasto Manual</DialogTitle></DialogHeader>
-              <div className="space-y-3 mt-2">
-                <Input placeholder="Valor (R$)" type="number" value={investAmount} onChange={(e) => setInvestAmount(e.target.value)} />
-                <Input placeholder="Descrição (opcional)" value={investDesc} onChange={(e) => setInvestDesc(e.target.value)} />
-                <Button onClick={addInvestment} className="w-full">Salvar</Button>
+              <div className="space-y-4 mt-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Valor (R$)</Label>
+                  <Input placeholder="0,00" type="number" value={investAmount} onChange={(e) => setInvestAmount(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Descrição (opcional)</Label>
+                  <Input placeholder="Ex: Ferramenta X, Equipe Y..." value={investDesc} onChange={(e) => setInvestDesc(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Tipo de gasto</Label>
+                  <Select value={investType} onValueChange={(v) => setInvestType(v as "unico" | "mensal")}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unico">Gasto único (pontual)</SelectItem>
+                      <SelectItem value="mensal">Gasto mensal (recorrente)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {investType === "mensal" && (
+                  <div className="space-y-1.5 animate-fade-in">
+                    <Label className="text-xs">Por quantos meses?</Label>
+                    <Input type="number" min={1} max={60} value={investMonths} onChange={(e) => setInvestMonths(e.target.value)} />
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <RefreshCw className="h-3 w-3" />
+                      Serão criados {parseInt(investMonths) || 12} lançamentos mensais a partir de hoje
+                    </p>
+                  </div>
+                )}
+                <Button onClick={addInvestment} className="w-full gap-2">
+                  {investType === "mensal" ? <><RefreshCw className="h-4 w-4" />Criar lançamentos mensais</> : "Salvar gasto"}
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -308,7 +356,14 @@ export default function FinanceiroPage() {
                 <div className="flex items-center gap-3">
                   <BarChart2 className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-sm text-foreground">{inv.description || "Gasto manual"}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-sm text-foreground">{inv.description || "Gasto manual"}</p>
+                      {inv.description?.includes("mês") && (
+                        <Badge variant="secondary" className="text-[9px] h-4 px-1.5 gap-0.5">
+                          <RefreshCw className="h-2.5 w-2.5" />mensal
+                        </Badge>
+                      )}
+                    </div>
                     <p className="text-[10px] text-muted-foreground">
                       {(() => { try { return format(parseISO(inv.date), "d 'de' MMM 'de' yyyy", { locale: ptBR }); } catch { return inv.date; }})()}
                     </p>

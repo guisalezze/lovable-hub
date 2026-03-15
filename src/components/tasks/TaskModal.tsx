@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateTask, useUpdateTask, useDeleteTask, useTeamMembers, type Task, type TaskStatus, type TaskPriority } from "@/hooks/useTasks";
+import { useProject } from "@/contexts/ProjectContext";
 import { toast } from "sonner";
 import { Plus, Trash2, CheckSquare } from "lucide-react";
 import {
@@ -33,6 +34,7 @@ interface Props {
 }
 
 export function TaskModal({ open, onOpenChange, task }: Props) {
+  const { currentProject } = useProject();
   const [title, setTitle] = useState(task?.title || "");
   const [description, setDescription] = useState(task?.description || "");
   const [status, setStatus] = useState<TaskStatus>(task?.status || "backlog");
@@ -68,7 +70,7 @@ export function TaskModal({ open, onOpenChange, task }: Props) {
         await updateTask.mutateAsync({ id: task.id, ...payload });
         toast.success("Tarefa atualizada");
       } else {
-        await createTask.mutateAsync(payload as any);
+        await createTask.mutateAsync({ ...payload, project_id: currentProject?.id || null } as any);
         toast.success("Tarefa criada");
       }
       onOpenChange(false);

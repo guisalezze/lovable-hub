@@ -14,8 +14,18 @@ import { ChargesHealthCard } from "@/components/dashboard/ChargesHealthCard";
 import { LtvSummaryCard } from "@/components/dashboard/LtvSummaryCard";
 import { useMetaSpend } from "@/hooks/useMetaSpend";
 import { useMetaCampaigns } from "@/hooks/useMetaCampaigns";
-import { useDashboardKpis, useDailyRevenue, useSalesByProduct, usePreviousPeriodKpis } from "@/hooks/useDashboardData";
+import {
+  useDashboardKpis,
+  useDailyRevenue,
+  useSalesByProduct,
+  usePreviousPeriodKpis,
+  useDashboardNutraKpis,
+  useDailyNutraRevenue,
+  useSalesByNutraProduct,
+  usePreviousPeriodNutraKpis,
+} from "@/hooks/useDashboardData";
 import { useRevenueGoal, useSetRevenueGoal } from "@/hooks/useRevenueGoal";
+import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -23,15 +33,37 @@ import { Badge } from "@/components/ui/badge";
 const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 const Dashboard = () => {
+  const { currentProject } = useProject();
+  const isNutra = currentProject?.slug === "nutra";
+
   const [since, setSince] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
   const [until, setUntil] = useState(format(new Date(), "yyyy-MM-dd"));
 
+  // Meta Ads — compartilhado
   const { data: spendData, isLoading: spendLoading, error: spendError } = useMetaSpend({ since, until });
   const { data: campaignData, isLoading: campaignLoading, error: campaignError } = useMetaCampaigns({ since, until });
-  const { data: kpis, isLoading: kpisLoading } = useDashboardKpis({ since, until });
-  const { data: dailyRevenue, isLoading: revenueLoading } = useDailyRevenue({ since, until });
-  const { data: salesByProduct, isLoading: productsLoading } = useSalesByProduct({ since, until });
-  const { data: prevKpis } = usePreviousPeriodKpis({ since, until });
+
+  // Educacional
+  const { data: eduKpis, isLoading: eduKpisLoading } = useDashboardKpis({ since, until });
+  const { data: eduDailyRevenue, isLoading: eduRevenueLoading } = useDailyRevenue({ since, until });
+  const { data: eduSalesByProduct, isLoading: eduProductsLoading } = useSalesByProduct({ since, until });
+  const { data: eduPrevKpis } = usePreviousPeriodKpis({ since, until });
+
+  // Nutra
+  const nutraProjectId = isNutra ? currentProject?.id : undefined;
+  const { data: nutraKpis, isLoading: nutraKpisLoading } = useDashboardNutraKpis({ since, until, projectId: nutraProjectId });
+  const { data: nutraDailyRevenue, isLoading: nutraRevenueLoading } = useDailyNutraRevenue({ since, until, projectId: nutraProjectId });
+  const { data: nutraSalesByProduct, isLoading: nutraProductsLoading } = useSalesByNutraProduct({ since, until, projectId: nutraProjectId });
+  const { data: nutraPrevKpis } = usePreviousPeriodNutraKpis({ since, until, projectId: nutraProjectId });
+
+  // Seleciona fonte correta
+  const kpis = isNutra ? nutraKpis : eduKpis;
+  const kpisLoading = isNutra ? nutraKpisLoading : eduKpisLoading;
+  const dailyRevenue = isNutra ? nutraDailyRevenue : eduDailyRevenue;
+  const revenueLoading = isNutra ? nutraRevenueLoading : eduRevenueLoading;
+  const salesByProduct = isNutra ? nutraSalesByProduct : eduSalesByProduct;
+  const productsLoading = isNutra ? nutraProductsLoading : eduProductsLoading;
+  const prevKpis = isNutra ? nutraPrevKpis : eduPrevKpis;
 
   const { data: revenueGoal = 0 } = useRevenueGoal();
   const setGoal = useSetRevenueGoal();
@@ -58,7 +90,9 @@ const Dashboard = () => {
     <div className="space-y-6 max-w-7xl">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            {currentProject?.icon} Dashboard · {currentProject?.name}
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">Visão geral da operação</p>
         </div>
         <PeriodSelector since={since} until={until} onChange={handlePeriodChange} />
@@ -142,31 +176,38 @@ const Dashboard = () => {
         isLoading={kpisLoading}
       />
 
-      {/* Zona 3 — Atividades do Dia */}
-      <div>
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Atividades do Dia</h2>
-        <OperationCards />
-      </div>
+      {/* Zona 3 — Atividades do Dia (apenas Educacional) */}
+      {!isNutra && (
+        <div>
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Atividades do Dia</h2>
+          <OperationCards />
+        </div>
+      )}
 
-      {/* Gráficos */}
+      {/* Gráficos — Meta Ads (compartilhado) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <InvestmentChart daily={spendData?.daily} isLoading={spendLoading} error={spendError} />
         <CampaignTable campaigns={campaignData?.campaigns} isLoading={campaignLoading} error={campaignError} />
       </div>
 
+      {/* Gráficos — Receita e Produtos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <RevenueChart data={dailyRevenue} isLoading={revenueLoading} />
         <SalesChart data={salesByProduct} isLoading={productsLoading} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <RecentLeads />
-        <ChargesHealthCard />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <LtvSummaryCard />
-      </div>
+      {/* Seções exclusivas do Educacional */}
+      {!isNutra && (
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <RecentLeads />
+            <ChargesHealthCard />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <LtvSummaryCard />
+          </div>
+        </>
+      )}
     </div>
   );
 };

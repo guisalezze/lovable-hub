@@ -12,6 +12,7 @@ import { TaskListView } from "@/components/tasks/TaskListView";
 import { TaskCalendarView } from "@/components/tasks/TaskCalendarView";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
+import { useProject } from "@/contexts/ProjectContext";
 import { isAfter, startOfDay, parseISO } from "date-fns";
 
 type ViewMode = "list" | "kanban" | "calendar";
@@ -23,6 +24,7 @@ export function isTaskOverdue(task: Task): boolean {
 }
 
 export default function TarefasPage() {
+  const { currentProject } = useProject();
   const [view, setView] = useState<ViewMode>("kanban");
   const [modalOpen, setModalOpen] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
@@ -32,7 +34,7 @@ export default function TarefasPage() {
   const [search, setSearch] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  const { data: tasks = [], isLoading } = useTasks();
+  const { data: tasks = [], isLoading } = useTasks({ projectId: currentProject?.id });
   const { data: members } = useTeamMembers();
 
   useEffect(() => {
@@ -75,7 +77,9 @@ export default function TarefasPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Tarefas</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            {currentProject?.icon} Tarefas · {currentProject?.name}
+          </h1>
           <p className="text-sm text-muted-foreground mt-0.5">{filteredTasks.length} tarefas</p>
         </div>
         <div className="flex items-center gap-2">

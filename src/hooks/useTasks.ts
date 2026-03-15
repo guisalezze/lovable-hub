@@ -23,12 +23,15 @@ export interface Task {
   project_id: string | null;
 }
 
-export function useTasks(filter?: { assignedToMe?: boolean; status?: TaskStatus; overdue?: boolean }) {
+export function useTasks(filter?: { assignedToMe?: boolean; status?: TaskStatus; overdue?: boolean; projectId?: string | null }) {
   return useQuery({
     queryKey: ["tasks", filter],
     queryFn: async () => {
       let query = supabase.from("tasks").select("*").order("created_at", { ascending: false }) as any;
 
+      if (filter?.projectId) {
+        query = query.eq("project_id", filter.projectId);
+      }
       if (filter?.assignedToMe) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) query = query.eq("assigned_to", user.id);
@@ -43,6 +46,7 @@ export function useTasks(filter?: { assignedToMe?: boolean; status?: TaskStatus;
       const { data } = await query;
       return (data as unknown as Task[]) || [];
     },
+    enabled: filter?.projectId !== undefined ? !!filter.projectId : true,
   });
 }
 
@@ -63,6 +67,7 @@ export function useCreateTask() {
         checklist: task.checklist || [],
         created_by: user?.id || null,
         owner_user_id: user?.id || null,
+        project_id: task.project_id || null,
       }).select("id").single();
       if (error) throw error;
 
