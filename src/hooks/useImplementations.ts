@@ -440,6 +440,48 @@ export function useUpdateInstallmentAmount() {
   });
 }
 
+/** Atualiza apenas o receipt_url de uma parcela (para parcelas já pagas) */
+export function useUpdateInstallmentReceipt() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      installmentId,
+      receiptFile,
+      implementationId,
+    }: {
+      installmentId: string;
+      receiptFile: File;
+      implementationId: string;
+    }) => {
+      // 1. Upload comprovante
+      const fileExt = receiptFile.name.split(".").pop();
+      const fileName = `installment-receipt-${Date.now()}-${installmentId}.${fileExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("receipts")
+        .upload(fileName, receiptFile, { upsert: false });
+      
+      if (uploadError) throw uploadError;
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from("receipts")
+        .getPublicUrl(uploadData.path);
+      
+      // 2. Update receipt_url
+      const { error: instErr } = await (supabase as any)
+        .from("charge_installments")
+        .update({ receipt_url: publicUrl })
+        .eq("id", installmentId);
+      if (instErr) throw instErr;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["implementation", vars.implementationId] });
+      qc.invalidateQueries({ queryKey: ["implementation-detail"] });
+      qc.invalidateQueries({ queryKey: ["implementations"] });
+      qc.invalidateQueries({ queryKey: ["charges"] });
+    },
+  });
+}
+
 export function useUpdateStepStatus() {
   const qc = useQueryClient();
   return useMutation({

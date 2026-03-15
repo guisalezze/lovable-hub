@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   useImplementationDetail, useUpdateStepStatus,
   useAddDocument, useAddNote, useUpdateImplementation, useDeleteImplementation, useAddStep,
-  useMarkInstallmentPaid, useUpdateInstallmentAmount,
+  useMarkInstallmentPaid, useUpdateInstallmentAmount, useUpdateInstallmentReceipt,
 } from "@/hooks/useImplementations";
 import type { ImplementationStep, ChargeInstallmentForImpl } from "@/hooks/useImplementations";
 import { format, parseISO, differenceInDays, isBefore, startOfDay, isSameDay } from "date-fns";
@@ -62,6 +63,7 @@ export function ImplementationDetailSheet({
   const deleteImpl = useDeleteImplementation();
   const markPaid = useMarkInstallmentPaid();
   const updateInstallmentAmount = useUpdateInstallmentAmount();
+  const updateInstallmentReceipt = useUpdateInstallmentReceipt();
 
   const [noteText, setNoteText] = useState("");
   const [editingInstallmentId, setEditingInstallmentId] = useState<string | null>(null);
@@ -73,6 +75,9 @@ export function ImplementationDetailSheet({
   const [newStepTitle, setNewStepTitle] = useState("");
   const [installmentReceiptFile, setInstallmentReceiptFile] = useState<{ [key: string]: File }>({});
   const [installmentReceiptPreview, setInstallmentReceiptPreview] = useState<{ [key: string]: string }>({});
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [receiptModalInstallmentId, setReceiptModalInstallmentId] = useState<string | null>(null);
+  const [receiptModalIsPaid, setReceiptModalIsPaid] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editFields, setEditFields] = useState({
     client_name: "",
@@ -587,82 +592,68 @@ export function ImplementationDetailSheet({
                                 </div>
                               </div>
                               
-                              {/* Upload comprovante (se PIX e não paga) */}
+                              {/* Botão para abrir modal de comprovante (se PIX e não paga) */}
                               {showReceiptUpload && (
-                                <div className="space-y-1">
-                                  {receiptPreview ? (
-                                    <div className="relative border rounded-md p-2 bg-secondary/30">
-                                      {installmentReceiptFile[inst.id]?.type === "application/pdf" ? (
-                                        <div className="flex items-center gap-2 p-2">
-                                          <FileText className="h-6 w-6 text-muted-foreground" />
-                                          <div className="flex-1 min-w-0">
-                                            <p className="text-xs font-medium text-foreground truncate">{receiptPreview}</p>
-                                            <p className="text-[10px] text-muted-foreground">PDF selecionado</p>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <img src={receiptPreview} alt="Comprovante" className="w-full h-24 object-contain rounded" />
-                                      )}
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="absolute top-1 right-1 h-5 w-5"
-                                        onClick={() => {
-                                          setInstallmentReceiptFile(prev => {
-                                            const next = { ...prev };
-                                            delete next[inst.id];
-                                            return next;
-                                          });
-                                          setInstallmentReceiptPreview(prev => {
-                                            const next = { ...prev };
-                                            delete next[inst.id];
-                                            return next;
-                                          });
-                                        }}
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  ) : (
-                                    <label className="flex items-center justify-center gap-1.5 border-2 border-dashed rounded-md p-2 cursor-pointer hover:bg-secondary/50 transition-colors text-[10px] text-muted-foreground">
-                                      <Upload className="h-3 w-3" />
-                                      <span>Comprovante PIX (opcional - imagem ou PDF)</span>
-                                      <input
-                                        type="file"
-                                        accept="image/*,application/pdf"
-                                        className="hidden"
-                                        onChange={(e) => handleInstallmentReceiptChange(inst.id, e)}
-                                      />
-                                    </label>
-                                  )}
-                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full text-[10px] h-8"
+                                  onClick={() => openReceiptModal(inst, false)}
+                                >
+                                  <Upload className="h-3 w-3 mr-1" />
+                                  Adicionar comprovante
+                                </Button>
                               )}
                               
-                              {/* Exibir comprovante salvo (se paga e tiver) */}
-                              {inst.status === "paid" && receiptUrl && (
-                                <div className="border rounded-md p-2 bg-secondary/30">
-                                  <p className="text-[10px] text-muted-foreground mb-1.5 flex items-center gap-1">
-                                    {receiptUrl.toLowerCase().endsWith('.pdf') ? (
-                                      <FileText className="h-3 w-3" />
-                                    ) : (
-                                      <Image className="h-3 w-3" />
-                                    )}
-                                    Comprovante PIX
-                                  </p>
-                                  <a href={receiptUrl} target="_blank" rel="noopener noreferrer" className="block">
-                                    {receiptUrl.toLowerCase().endsWith('.pdf') ? (
-                                      <div className="flex items-center gap-2 p-3 bg-secondary/50 rounded">
-                                        <FileText className="h-8 w-8 text-muted-foreground" />
-                                        <div>
-                                          <p className="text-xs font-medium text-foreground">Visualizar PDF</p>
-                                          <p className="text-[10px] text-muted-foreground">Clique para abrir</p>
-                                        </div>
+                              {/* Exibir comprovante salvo (se paga) */}
+                              {inst.status === "paid" && (
+                                <div className="space-y-1.5">
+                                  {receiptUrl ? (
+                                    <div className="border rounded-md p-2 bg-secondary/30">
+                                      <div className="flex items-center justify-between mb-1.5">
+                                        <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                          {receiptUrl.toLowerCase().endsWith('.pdf') ? (
+                                            <FileText className="h-3 w-3" />
+                                          ) : (
+                                            <Image className="h-3 w-3" />
+                                          )}
+                                          Comprovante PIX
+                                        </p>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-5 w-5"
+                                          onClick={() => openReceiptModal(inst, true)}
+                                          title="Editar comprovante"
+                                        >
+                                          <Pencil className="h-3 w-3" />
+                                        </Button>
                                       </div>
-                                    ) : (
-                                      <img src={receiptUrl} alt="Comprovante" className="w-full h-32 object-contain rounded cursor-pointer hover:opacity-80 transition-opacity" />
-                                    )}
-                                  </a>
+                                      <a href={receiptUrl} target="_blank" rel="noopener noreferrer" className="block">
+                                        {receiptUrl.toLowerCase().endsWith('.pdf') ? (
+                                          <div className="flex items-center gap-2 p-3 bg-secondary/50 rounded">
+                                            <FileText className="h-8 w-8 text-muted-foreground" />
+                                            <div>
+                                              <p className="text-xs font-medium text-foreground">Visualizar PDF</p>
+                                              <p className="text-[10px] text-muted-foreground">Clique para abrir</p>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <img src={receiptUrl} alt="Comprovante" className="w-full h-32 object-contain rounded cursor-pointer hover:opacity-80 transition-opacity" />
+                                        )}
+                                      </a>
+                                    </div>
+                                  ) : (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="w-full text-[10px] h-8"
+                                      onClick={() => openReceiptModal(inst, true)}
+                                    >
+                                      <Upload className="h-3 w-3 mr-1" />
+                                      Adicionar comprovante
+                                    </Button>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -777,5 +768,111 @@ export function ImplementationDetailSheet({
         ) : null}
       </SheetContent>
     </Sheet>
+
+      {/* Modal de upload de comprovante */}
+      <Dialog open={receiptModalOpen} onOpenChange={setReceiptModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {receiptModalIsPaid ? "Editar comprovante" : "Adicionar comprovante"}
+            </DialogTitle>
+            <DialogDescription>
+              {receiptModalIsPaid 
+                ? "Faça upload de uma nova imagem ou PDF para substituir o comprovante atual."
+                : "Faça upload do comprovante de pagamento (imagem ou PDF)."}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {receiptModalInstallmentId && (() => {
+            const inst = installments.find(i => i.id === receiptModalInstallmentId);
+            if (!inst) return null;
+            const receiptPreview = installmentReceiptPreview[inst.id];
+            const receiptFile = installmentReceiptFile[inst.id];
+            
+            return (
+              <div className="space-y-4 py-4">
+                {receiptPreview ? (
+                  <div className="relative border rounded-md p-3 bg-secondary/30">
+                    {receiptFile?.type === "application/pdf" ? (
+                      <div className="flex items-center gap-3 p-3">
+                        <FileText className="h-10 w-10 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{receiptPreview}</p>
+                          <p className="text-xs text-muted-foreground">PDF selecionado</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <img src={receiptPreview} alt="Preview" className="w-full max-h-48 object-contain rounded" />
+                        <p className="text-xs text-muted-foreground text-center">Preview do comprovante</p>
+                      </div>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-2 right-2 h-6 w-6"
+                      onClick={() => {
+                        setInstallmentReceiptFile(prev => {
+                          const next = { ...prev };
+                          delete next[inst.id];
+                          return next;
+                        });
+                        setInstallmentReceiptPreview(prev => {
+                          const next = { ...prev };
+                          delete next[inst.id];
+                          return next;
+                        });
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-lg p-6 cursor-pointer hover:bg-secondary/50 transition-colors">
+                    <Upload className="h-8 w-8 text-muted-foreground" />
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-foreground">Clique para selecionar arquivo</p>
+                      <p className="text-xs text-muted-foreground mt-1">Imagem ou PDF (máx. 10MB)</p>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      onChange={(e) => handleInstallmentReceiptChange(inst.id, e)}
+                    />
+                  </label>
+                )}
+              </div>
+            );
+          })()}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={closeReceiptModal}>
+              Cancelar
+            </Button>
+            {receiptModalInstallmentId && (() => {
+              const inst = installments.find(i => i.id === receiptModalInstallmentId);
+              if (!inst) return null;
+              return (
+                <Button
+                  onClick={() => handleReceiptUpload(inst)}
+                  disabled={!installmentReceiptFile[inst.id] || (receiptModalIsPaid ? updateInstallmentReceipt.isPending : markPaid.isPending)}
+                >
+                  {receiptModalIsPaid ? updateInstallmentReceipt.isPending : markPaid.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      {receiptModalIsPaid ? "Atualizando..." : "Processando..."}
+                    </>
+                  ) : (
+                    receiptModalIsPaid ? "Atualizar comprovante" : "Marcar como paga"
+                  )}
+                </Button>
+              );
+            })()}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
