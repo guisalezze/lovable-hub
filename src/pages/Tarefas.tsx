@@ -73,7 +73,7 @@ export default function TarefasPage() {
   };
 
   return (
-    <div className="space-y-4 max-w-7xl">
+    <div className="space-y-4 w-full max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>

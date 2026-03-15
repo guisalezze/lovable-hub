@@ -7,6 +7,7 @@ import { RevenueProgressBar, RevenueBarStrip } from "./RevenueProgressBar";
 import { Button } from "@/components/ui/button";
 import { useSaleRealtime } from "@/hooks/useSaleRealtime";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 export function AppLayout() {
   // Escuta Realtime e dispara toast a cada venda aprovada
@@ -54,9 +55,13 @@ export function AppLayout() {
   }, [handleKeyDown]);
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
+    <div className="flex min-h-screen w-full bg-background overflow-x-hidden">
+      {/* Sidebar: no mobile é Sheet (overlay), no desktop é aside fixo */}
       <AppSidebar open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
+      <main className={cn(
+        "flex flex-col min-h-screen overflow-hidden",
+        isMobile ? "w-full" : "flex-1"
+      )}>
         <header className="h-12 md:h-14 flex items-center border-b border-border px-2 sm:px-4 shrink-0 gap-1 sm:gap-2 relative">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}

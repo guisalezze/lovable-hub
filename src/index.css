@@ -141,9 +141,15 @@
   * {
     @apply border-border;
   }
-  body {
+  html, body {
     @apply bg-background text-foreground font-sans antialiased;
     letter-spacing: var(--tracking-normal);
+    /* Prevenir scroll horizontal */
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+  }
+  body {
     /* Melhorar scroll no mobile */
     -webkit-overflow-scrolling: touch;
     /* Prevenir zoom em inputs no iOS */
