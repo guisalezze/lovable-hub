@@ -87,13 +87,13 @@ const Dashboard = () => {
   const goalBarColor = goalPct >= 100 ? "bg-emerald-500" : goalPct >= 70 ? "bg-primary" : goalPct >= 40 ? "bg-yellow-500" : "bg-destructive";
 
   return (
-    <div className="space-y-6 max-w-7xl">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">
             {currentProject?.icon} Dashboard · {currentProject?.name}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Visão geral da operação</p>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">Visão geral da operação</p>
         </div>
         <PeriodSelector since={since} until={until} onChange={handlePeriodChange} />
       </div>
