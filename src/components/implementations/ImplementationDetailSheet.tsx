@@ -145,7 +145,8 @@ export function ImplementationDetailSheet({
     }, {
       onSuccess: () => { 
         toast.success("Mentoria atualizada"); 
-        setEditing(false); 
+        setEditing(false);
+        setIsError(false); // Limpar erro em caso de sucesso
       },
       onError: (error: any) => {
         console.error("Erro ao atualizar:", error);
