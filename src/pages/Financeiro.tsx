@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
-import { useMetaAdAccounts, useMetaAdCampaigns } from "@/hooks/useMetaAds";
+import { useMetaSpend } from "@/hooks/useMetaSpend";
 import { DollarSign, TrendingUp, Target, Wallet, Plus, Download, ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw, Link2, AlertCircle } from "lucide-react";
 import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { Button } from "@/components/ui/button";
@@ -161,14 +161,18 @@ export default function FinanceiroPage() {
   const { data: prevInvData } = usePeriodInvestments(currentProject?.id, prevSince, prevUntil);
   const { data: allInvestments = [] } = useAllInvestments(currentProject?.id);
 
-  // Meta Ad Spend from campaigns table
-  const { data: adAccounts = [] } = useMetaAdAccounts();
-  const activeAccount = adAccounts[0];
-  const { data: adCampaigns = [] } = useMetaAdCampaigns(activeAccount?.id, since, until);
-  const { data: prevAdCampaigns = [] } = useMetaAdCampaigns(activeAccount?.id, prevSince, prevUntil);
+  // Meta Ad Spend — mesma edge function usada no Dashboard (funciona para todos os projetos)
+  const { data: metaSpend, isLoading: metaSpendLoading } = useMetaSpend({ since, until });
+  const { data: prevMetaSpend } = useMetaSpend({ since: prevSince, until: prevUntil });
 
-  const adSpendTotal = adCampaigns.reduce((s: number, c: any) => s + Number(c.spend || 0), 0);
-  const prevAdSpendTotal = prevAdCampaigns.reduce((s: number, c: any) => s + Number(c.spend || 0), 0);
+  const adSpendTotal = metaSpend?.total_spend ?? 0;
+  const prevAdSpendTotal = prevMetaSpend?.total_spend ?? 0;
+  const metaConnected = !metaSpendLoading && (adSpendTotal > 0 || metaSpend !== undefined);
+  // Daily ad spend from edge function (date_start → date, spend_brl → adSpend)
+  const metaDailySpend: { date: string; adSpend: number }[] = (metaSpend?.daily || []).map((d: any) => ({
+    date: d.date_start?.slice(0, 10) || "",
+    adSpend: Number(d.spend_brl || d.spend_usd || 0),
+  }));
 
   // Use appropriate revenue source
   const revenueData = isNutra ? nutraSalesData : salesData;
@@ -195,17 +199,16 @@ export default function FinanceiroPage() {
       if (!map[i.date]) map[i.date] = { date: i.date, revenue: 0, investment: 0, adSpend: 0, profit: 0 };
       map[i.date].investment += i.amount;
     });
-    // Aggregate ad spend by date from campaigns
-    adCampaigns.forEach((c: any) => {
-      const d = c.date;
-      if (!d) return;
-      if (!map[d]) map[d] = { date: d, revenue: 0, investment: 0, adSpend: 0, profit: 0 };
-      map[d].adSpend += Number(c.spend || 0);
+    // Ad spend por dia (via edge function)
+    metaDailySpend.forEach((d) => {
+      if (!d.date) return;
+      if (!map[d.date]) map[d.date] = { date: d.date, revenue: 0, investment: 0, adSpend: 0, profit: 0 };
+      map[d.date].adSpend += d.adSpend;
     });
     return Object.values(map)
       .map(d => ({ ...d, profit: d.revenue - d.investment - d.adSpend }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [revenueData, invData, adCampaigns]);
+  }, [revenueData, invData, metaDailySpend]);
 
   async function addInvestment() {
     const amount = parseFloat(investAmount);
@@ -310,12 +313,15 @@ export default function FinanceiroPage() {
               <BarChart2 className="h-4 w-4" />
               <span className="text-xs font-medium">Ads Spend</span>
             </div>
-            {activeAccount ? (
+            {metaSpendLoading ? (
+              <Badge variant="secondary" className="text-[9px] px-1.5">
+                Carregando...
+              </Badge>
+            ) : metaConnected ? (
               <Badge
                 variant="secondary"
                 className="text-[9px] px-1.5 gap-0.5 cursor-pointer hover:bg-primary/20 transition-colors"
                 onClick={() => navigate(isNutra ? "/nutra/meta-ads" : "/integracoes")}
-                title={`Conta: ${activeAccount.account_name || activeAccount.account_id}`}
               >
                 <Link2 className="h-2.5 w-2.5" />
                 Meta Ads
@@ -325,7 +331,6 @@ export default function FinanceiroPage() {
                 variant="outline"
                 className="text-[9px] px-1.5 gap-0.5 cursor-pointer border-destructive/40 text-destructive hover:bg-destructive/10"
                 onClick={() => navigate("/integracoes")}
-                title="Nenhuma conta Meta Ads conectada"
               >
                 <AlertCircle className="h-2.5 w-2.5" />
                 Desconectado
@@ -335,14 +340,6 @@ export default function FinanceiroPage() {
           <p className="text-xl font-bold text-foreground">{fmtBRL(adSpendTotal)}</p>
           <div className="flex items-center gap-2 flex-wrap">
             <DeltaBadge current={adSpendTotal} previous={prevAdSpendTotal} />
-            {activeAccount && (
-              <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
-                {activeAccount.account_name || activeAccount.account_id}
-              </span>
-            )}
-            {!activeAccount && (
-              <span className="text-[10px] text-muted-foreground">Sem conta vinculada</span>
-            )}
           </div>
         </div>
         <div className="glass-card p-4 space-y-1">
