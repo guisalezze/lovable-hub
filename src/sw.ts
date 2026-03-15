@@ -47,14 +47,30 @@ registerRoute(
 // ══════════════════════════════════════════════════════════════════════════════
 
 self.addEventListener('push', (event) => {
+  console.log('[SW] Push event recebido', event);
+  
   let data: Record<string, any> = {};
 
   if (event.data) {
     try {
+      // Tentar processar como JSON (formato padrão do web-push)
       data = event.data.json();
-    } catch {
-      data = { title: event.data.text() || 'Nova notificação' };
+      console.log('[SW] Payload processado como JSON:', data);
+    } catch (jsonError) {
+      try {
+        // Se falhar, tentar como texto
+        const text = event.data.text();
+        console.log('[SW] Payload processado como texto:', text);
+        data = { title: text || 'Nova notificação' };
+      } catch (textError) {
+        // Se falhar tudo, usar dados padrão
+        console.warn('[SW] Erro ao processar payload:', jsonError, textError);
+        data = { title: 'Nova notificação' };
+      }
     }
+  } else {
+    console.warn('[SW] Push event sem dados');
+    data = { title: 'Nova notificação' };
   }
 
   const title = (data.title as string) || 'Solaryz';
@@ -68,7 +84,15 @@ self.addEventListener('push', (event) => {
     vibrate: [200, 100, 200],
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  console.log('[SW] Exibindo notificação:', title, options);
+
+  event.waitUntil(
+    self.registration.showNotification(title, options).then(() => {
+      console.log('[SW] Notificação exibida com sucesso');
+    }).catch((error) => {
+      console.error('[SW] Erro ao exibir notificação:', error);
+    })
+  );
 });
 
 self.addEventListener('notificationclick', (event) => {

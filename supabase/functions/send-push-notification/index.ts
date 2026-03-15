@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// @deno-types="https://esm.sh/@types/web-push@3.6.4/index.d.ts"
+import webpush from "https://esm.sh/web-push@4.0.0";
 
 const VAPID_PUBLIC_KEY = Deno.env.get("VITE_VAPID_PUBLIC_KEY") || "";
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") || "";
@@ -18,62 +20,79 @@ interface PushSubscription {
 }
 
 /**
- * Envia notificação push usando Web Push Protocol
+ * Converte chave base64url para Buffer (formato esperado pelo web-push)
  */
-async function sendPushNotification(
-  subscription: PushSubscription,
-  payload: { title: string; body: string; icon?: string; data?: any }
-) {
-  const vapidHeaders = await createVapidHeaders(
-    subscription.endpoint,
-    VAPID_PUBLIC_KEY,
-    VAPID_PRIVATE_KEY
-  );
-
-  const response = await fetch(subscription.endpoint, {
-    method: "POST",
-    headers: {
-      ...vapidHeaders,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      title: payload.title,
-      body: payload.body,
-      icon: payload.icon || "/logo.png",
-      badge: "/logo.png",
-      data: payload.data || {},
-      tag: payload.tag || "default",
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Push failed: ${response.status} ${text}`);
+function base64UrlToBuffer(base64url: string): Uint8Array {
+  // Adicionar padding se necessário
+  let base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+  while (base64.length % 4) {
+    base64 += "=";
   }
-
-  return response;
+  
+  // Converter base64 para bytes
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
 }
 
 /**
- * Cria headers VAPID para autenticação com o push service
+ * Envia notificação push usando Web Push Protocol com web-push library
  */
-async function createVapidHeaders(
-  endpoint: string,
-  publicKey: string,
-  privateKey: string
-): Promise<Record<string, string>> {
-  // Para simplificar, vamos usar uma biblioteca ou implementação básica
-  // Em produção, use uma biblioteca como 'web-push' do npm
-  // Por enquanto, retornamos headers básicos
-  const url = new URL(endpoint);
-  const audience = `${url.protocol}//${url.host}`;
+async function sendPushNotification(
+  subscription: PushSubscription,
+  payload: { title: string; body: string; icon?: string; data?: any; tag?: string }
+) {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+    throw new Error("VAPID keys não configuradas. Configure VITE_VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no Supabase.");
+  }
 
-  // Nota: Implementação completa de VAPID requer criptografia JWT
-  // Por enquanto, retornamos estrutura básica
-  // Em produção, use: npm install web-push e adapte para Deno
-  return {
-    Authorization: `vapid t=${Date.now()}, k=${publicKey}`,
+  // Converter subscription para formato esperado pelo web-push
+  const pushSubscription = {
+    endpoint: subscription.endpoint,
+    keys: {
+      p256dh: base64UrlToBuffer(subscription.p256dh_key),
+      auth: base64UrlToBuffer(subscription.auth_key),
+    },
   };
+
+  // Criar payload JSON
+  const notificationPayload = JSON.stringify({
+    title: payload.title,
+    body: payload.body,
+    icon: payload.icon || "/logo.png",
+    badge: "/logo.png",
+    data: payload.data || {},
+    tag: payload.tag || "default",
+  });
+
+  // Configurar VAPID details
+  const vapidDetails = {
+    subject: "mailto:support@solaryz.com", // Pode ser qualquer email válido
+    publicKey: VAPID_PUBLIC_KEY,
+    privateKey: VAPID_PRIVATE_KEY,
+  };
+
+  try {
+    // Enviar notificação usando web-push
+    await webpush.sendNotification(pushSubscription, notificationPayload, {
+      vapidDetails,
+    });
+
+    console.log(`[send-push-notification] Notificação enviada com sucesso para ${subscription.endpoint}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error(`[send-push-notification] Erro ao enviar:`, error);
+    
+    // Verificar se é erro de subscription inválida
+    if (error.statusCode === 410 || error.statusCode === 404 || error.message?.includes("Gone")) {
+      throw new Error("SUBSCRIPTION_INVALID");
+    }
+    
+    throw error;
+  }
 }
 
 serve(async (req) => {
@@ -92,6 +111,17 @@ serve(async (req) => {
       );
     }
 
+    // Verificar se VAPID keys estão configuradas
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+      return new Response(
+        JSON.stringify({ 
+          error: "VAPID keys não configuradas", 
+          details: "Configure VITE_VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no Supabase Secrets" 
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Criar cliente Supabase
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -106,8 +136,9 @@ serve(async (req) => {
       .single();
 
     if (subError || !subscription) {
+      console.error(`[send-push-notification] Subscription não encontrada para userId: ${userId}`, subError);
       return new Response(
-        JSON.stringify({ error: "Subscription não encontrada", details: subError }),
+        JSON.stringify({ error: "Subscription não encontrada", details: subError?.message }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -127,22 +158,37 @@ serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } catch (pushError: any) {
+      console.error(`[send-push-notification] Erro ao enviar push:`, pushError);
+      
       // Se a subscription é inválida, remover do banco
-      if (pushError.message?.includes("410") || pushError.message?.includes("Gone")) {
+      if (pushError.message === "SUBSCRIPTION_INVALID" || pushError.message?.includes("410") || pushError.message?.includes("Gone")) {
         await supabaseClient
           .from("push_subscriptions")
           .delete()
           .eq("user_id", userId);
+        
+        return new Response(
+          JSON.stringify({ 
+            error: "Subscription inválida e removida", 
+            details: "A subscription foi removida. O usuário precisa reativar as notificações." 
+          }),
+          { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       return new Response(
-        JSON.stringify({ error: "Erro ao enviar push", details: pushError.message }),
+        JSON.stringify({ 
+          error: "Erro ao enviar push", 
+          details: pushError.message || String(pushError),
+          statusCode: pushError.statusCode 
+        }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
   } catch (error: any) {
+    console.error(`[send-push-notification] Erro geral:`, error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message || String(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

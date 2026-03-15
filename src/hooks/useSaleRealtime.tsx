@@ -69,11 +69,17 @@ function SaleToast({
 async function sendPushNotification(amount: number, productName: string) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      console.debug("[useSaleRealtime] Sem usuário, push não enviado");
+      return;
+    }
 
     const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
+    if (!session) {
+      console.debug("[useSaleRealtime] Sem sessão, push não enviado");
+      return;
+    }
 
     const formattedAmount = new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -81,7 +87,8 @@ async function sendPushNotification(amount: number, productName: string) {
       minimumFractionDigits: 2,
     }).format(amount);
 
-    await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
+    console.log("[useSaleRealtime] Enviando push notification de venda...");
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -99,9 +106,18 @@ async function sendPushNotification(amount: number, productName: string) {
         },
       }),
     });
+
+    const result = await response.json();
+    
+    if (!response.ok) {
+      console.error("[useSaleRealtime] Erro ao enviar push:", result);
+      throw new Error(result.error || `HTTP ${response.status}`);
+    }
+    
+    console.log("[useSaleRealtime] Push notification enviada com sucesso");
   } catch (error) {
-    // Silenciosamente falha se push não estiver disponível
-    console.debug("Push notification não enviada:", error);
+    // Silenciosamente falha se push não estiver disponível (não queremos interromper o fluxo de venda)
+    console.debug("[useSaleRealtime] Push notification não enviada:", error);
   }
 }
 

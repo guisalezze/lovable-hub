@@ -16,11 +16,14 @@ export function PushNotificationsCard() {
   const handleTestSale = async () => {
     setTestingSale(true);
     try {
+      console.log("[PushNotificationsCard] Testando notificação de venda...");
       // Dispara o toast visual + som (e push nativo se inscrito)
       await showSaleToast(97, "Fature 10k");
+      console.log("[PushNotificationsCard] Toast de venda exibido com sucesso");
       toast.success("Notificação de venda disparada!", { duration: 2000 });
-    } catch (err) {
-      toast.error("Erro ao testar notificação de venda");
+    } catch (err: any) {
+      console.error("[PushNotificationsCard] Erro ao testar notificação de venda:", err);
+      toast.error(`Erro ao testar: ${err.message || String(err)}`);
     } finally {
       setTestingSale(false);
     }
@@ -29,18 +32,21 @@ export function PushNotificationsCard() {
   const handleTestTask = async () => {
     setTestingTask(true);
     try {
+      console.log("[PushNotificationsCard] Testando notificação de tarefa...");
       const { data: { user } } = await supabase.auth.getUser();
       const myName = user ? await getProfileName(user.id) : "Você";
 
       // Dispara o toast visual + som
       showTaskToast(myName, "Tarefa de teste — verificando notificações");
+      console.log("[PushNotificationsCard] Toast de tarefa exibido");
 
       // Envia push nativo se inscrito
       if (isSubscribed && user) {
         const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
+          console.log("[PushNotificationsCard] Enviando push nativo para Edge Function...");
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -55,12 +61,25 @@ export function PushNotificationsCard() {
               data: { url: "/tarefas", type: "task" },
             }),
           });
+
+          const result = await response.json();
+          console.log("[PushNotificationsCard] Resposta da Edge Function:", result);
+
+          if (!response.ok) {
+            throw new Error(result.error || `HTTP ${response.status}: ${result.details || result.message || "Erro desconhecido"}`);
+          }
+        } else {
+          console.warn("[PushNotificationsCard] Sem sessão, não foi possível enviar push nativo");
         }
+      } else {
+        console.log("[PushNotificationsCard] Usuário não está inscrito, apenas toast será exibido");
       }
 
       toast.success("Notificação de tarefa disparada!", { duration: 2000 });
-    } catch (err) {
-      toast.error("Erro ao testar notificação de tarefa");
+    } catch (err: any) {
+      console.error("[PushNotificationsCard] Erro ao testar notificação de tarefa:", err);
+      const errorMessage = err.message || err.details || String(err);
+      toast.error(`Erro ao testar: ${errorMessage}`);
     } finally {
       setTestingTask(false);
     }
