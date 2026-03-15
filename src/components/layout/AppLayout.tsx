@@ -5,8 +5,12 @@ import { Menu, Moon, Sun } from "lucide-react";
 import { NotificationPopover } from "./NotificationPopover";
 import { RevenueProgressBar, RevenueBarStrip } from "./RevenueProgressBar";
 import { Button } from "@/components/ui/button";
+import { useSaleRealtime } from "@/hooks/useSaleRealtime";
 
 export function AppLayout() {
+  // Escuta Realtime e dispara toast a cada venda aprovada
+  useSaleRealtime();
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [dark, setDark] = useState(() => {
     if (typeof window !== "undefined") {
