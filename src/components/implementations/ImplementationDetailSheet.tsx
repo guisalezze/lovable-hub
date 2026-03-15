@@ -894,7 +894,7 @@ export function ImplementationDetailSheet({
           })()}
           
           <DialogFooter>
-            <Button variant="outline" onClick={closeReceiptModal}>
+            <Button variant="outline" onClick={() => setReceiptModalOpen(false)}>
               Cancelar
             </Button>
             {receiptModalInstallmentId && (() => {
