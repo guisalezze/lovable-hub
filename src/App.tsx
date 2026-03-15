@@ -50,23 +50,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         
         // Se não houver sessão, tentar restaurar do localStorage
         if (!session && typeof window !== 'undefined') {
-          const storedSession = localStorage.getItem('sb-auth-token');
-          if (storedSession) {
-            try {
-              const parsed = JSON.parse(storedSession);
-              if (parsed?.access_token) {
-                // Tentar restaurar sessão
-                const { data: { session: restoredSession } } = await supabase.auth.setSession({
-                  access_token: parsed.access_token,
-                  refresh_token: parsed.refresh_token,
-                });
-                if (restoredSession) {
-                  setSession(restoredSession);
-                }
-              }
-            } catch (e) {
-              console.error('Erro ao restaurar sessão:', e);
+          try {
+            // Tentar refresh do token se houver refresh_token salvo
+            const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+            if (!refreshError && refreshedSession) {
+              setSession(refreshedSession);
             }
+          } catch (e) {
+            console.error('Erro ao restaurar sessão:', e);
           }
         }
       } catch (error) {
