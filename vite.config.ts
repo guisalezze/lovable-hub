@@ -126,8 +126,21 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,mp3}"],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB para incluir logo.png (2.23 MB)
+        // Não cachear index.html para evitar problemas de atualização
+        navigateFallback: null,
         // Handlers de push serão registrados dinamicamente no app
         runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/.*\/index\.html$/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "html-cache",
+              expiration: {
+                maxEntries: 1,
+                maxAgeSeconds: 0, // Sempre buscar nova versão do HTML
+              },
+            },
+          },
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
             handler: "NetworkFirst",

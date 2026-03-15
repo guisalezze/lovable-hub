@@ -38,63 +38,106 @@ const queryClient = new QueryClient();
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let mounted = true;
+
     // Verificar sessão imediatamente ao carregar
     const checkSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('Erro ao obter sessão:', error);
-        }
-
-        if (session) {
-          // Sessão ativa encontrada
-          setSession(session);
-        } else {
-          // Sem sessão ativa — tentar refresh do token antes de redirecionar
-          // IMPORTANTE: setLoading(false) só ocorre DEPOIS da tentativa de refresh
-          // para evitar redirect prematuro para /auth quando o token expirou
-          // mas o refresh_token ainda é válido
-          try {
-            const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
-            if (!refreshError && refreshedSession) {
-              setSession(refreshedSession);
-            } else {
-              setSession(null);
-            }
-          } catch {
-            setSession(null);
+          if (mounted) {
+            setError(error.message);
           }
         }
-      } catch (error) {
+
+        if (mounted) {
+          if (session) {
+            // Sessão ativa encontrada
+            setSession(session);
+            setError(null);
+          } else {
+            // Sem sessão ativa — tentar refresh do token antes de redirecionar
+            try {
+              const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+              if (mounted) {
+                if (!refreshError && refreshedSession) {
+                  setSession(refreshedSession);
+                  setError(null);
+                } else {
+                  setSession(null);
+                  setError(null); // Não é erro, apenas sem sessão
+                }
+              }
+            } catch (refreshErr) {
+              if (mounted) {
+                setSession(null);
+                setError(null);
+              }
+            }
+          }
+        }
+      } catch (error: any) {
         console.error('Erro ao verificar sessão:', error);
-        setSession(null);
+        if (mounted) {
+          setSession(null);
+          setError(error?.message || 'Erro desconhecido');
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     checkSession();
 
-    // Registrar handlers de push notifications
+    // Registrar handlers de push notifications (não bloqueia renderização)
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      registerPushHandlers();
+      registerPushHandlers().catch(err => {
+        console.warn('Erro ao registrar push handlers:', err);
+      });
     }
 
     // Escutar mudanças de autenticação (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
+      if (mounted) {
+        setSession(session);
+        setLoading(false);
+        setError(null);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="text-center space-y-4 max-w-md">
+          <h1 className="text-xl font-bold text-destructive">Erro ao carregar</h1>
+          <p className="text-sm text-muted-foreground">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Recarregar
+          </button>
+        </div>
       </div>
     );
   }
