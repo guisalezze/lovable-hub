@@ -11,12 +11,14 @@ import { toast } from "sonner";
 import { useGoogleAuth } from "@/hooks/useGoogleAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useMetaSpend } from "@/hooks/useMetaSpend";
+import { useProject } from "@/contexts/ProjectContext";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
 export default function IntegracoesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { currentProject } = useProject();
   const { isConnected, isLoading, connect, disconnect } = useGoogleAuth();
 
   // Meta Ads state
@@ -47,15 +49,16 @@ export default function IntegracoesPage() {
     }
   }, [searchParams, setSearchParams]);
 
-  // Load Meta Ads config
+  // Load Meta Ads config (per project)
   useEffect(() => {
+    if (!currentProject) return;
     async function loadConfig() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
 
         const res = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-ads-config`,
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-ads-config?project_id=${currentProject!.id}`,
           {
             headers: {
               Authorization: `Bearer ${session.access_token}`,
@@ -65,17 +68,12 @@ export default function IntegracoesPage() {
         );
         if (res.ok) {
           const config = await res.json();
-          const acctId = typeof config.meta_ads_account_id === "string"
-            ? config.meta_ads_account_id.replace(/^"|"$/g, "")
-            : "";
+          const acctId = config.meta_ads_account_id || "";
           if (acctId) setMetaAccountId(acctId);
           if (config.meta_ads_last_sync && config.meta_ads_last_sync !== "null") {
-            const syncVal = typeof config.meta_ads_last_sync === "string"
-              ? config.meta_ads_last_sync.replace(/^"|"$/g, "")
-              : "";
-            setMetaLastSync(syncVal);
+            setMetaLastSync(config.meta_ads_last_sync);
           }
-          setMetaConfigured(!!acctId && (config.has_token === true));
+          setMetaConfigured(!!config.configured);
         }
       } catch (e) {
         console.error("Failed to load meta config", e);
@@ -84,7 +82,7 @@ export default function IntegracoesPage() {
       }
     }
     loadConfig();
-  }, []);
+  }, [currentProject?.id]);
 
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/perfectpay-webhook`;
 
@@ -115,6 +113,7 @@ export default function IntegracoesPage() {
           body: JSON.stringify({
             account_id: metaAccountId.trim(),
             access_token: metaAccessToken.trim(),
+            project_id: currentProject?.id,
           }),
         }
       );

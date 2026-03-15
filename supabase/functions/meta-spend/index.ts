@@ -38,6 +38,7 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const since = url.searchParams.get("since");
     const until = url.searchParams.get("until");
+    const projectId = url.searchParams.get("project_id");
 
     if (!since || !until) {
       return new Response(JSON.stringify({ error: "Missing since/until params" }), {
@@ -46,16 +47,54 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Priority: env secrets > app_settings fallback
-    let accessToken = Deno.env.get("META_ADS_ACCESS_TOKEN") || "";
-    let accountId = Deno.env.get("META_ADS_ACCOUNT_ID") || "";
-
-    // Fallback: read from app_settings only for missing values
     const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    let accessToken = "";
+    let accountId = "";
+
+    // Priority 1: meta_ad_accounts table (project-specific)
+    if (projectId) {
+      const { data: account } = await serviceClient
+        .from("meta_ad_accounts")
+        .select("account_id, access_token")
+        .eq("project_id", projectId)
+        .eq("is_active", true)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (account?.account_id && account?.access_token) {
+        accountId = account.account_id;
+        accessToken = account.access_token;
+      }
+
+      // Priority 2: project-specific app_settings keys
+      if (!accessToken || !accountId) {
+        const { data: settings } = await serviceClient
+          .from("app_settings")
+          .select("key, value")
+          .in("key", [
+            `meta_ads_access_token_${projectId}`,
+            `meta_ads_account_id_${projectId}`,
+          ]);
+
+        for (const s of settings || []) {
+          const val = typeof s.value === "string" ? s.value : JSON.stringify(s.value);
+          const clean = val.replace(/^"|"$/g, "");
+          if (!accessToken && s.key === `meta_ads_access_token_${projectId}` && clean) accessToken = clean;
+          if (!accountId && s.key === `meta_ads_account_id_${projectId}` && clean) accountId = clean;
+        }
+      }
+    }
+
+    // Priority 3: env secrets (global fallback)
+    if (!accessToken) accessToken = Deno.env.get("META_ADS_ACCESS_TOKEN") || "";
+    if (!accountId) accountId = Deno.env.get("META_ADS_ACCOUNT_ID") || "";
+
+    // Priority 4: global app_settings (backward compat)
     if (!accessToken || !accountId) {
       const { data: settings } = await serviceClient
         .from("app_settings")
