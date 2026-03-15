@@ -401,11 +401,10 @@ export function ImplementationDetailSheet({
       <SheetContent 
         className="w-full sm:max-w-lg overflow-y-auto"
         onInteractOutside={(e) => {
-          // Prevenir fechamento ao clicar no overlay quando há erro ou está editando
-          if (isError || editing) {
-            console.log("⚠️ Bloqueando fechamento ao clicar fora (erro ou editando)");
-            e.preventDefault();
-          }
+          // SEMPRE prevenir fechamento ao clicar no overlay
+          // O Sheet só deve fechar pelo botão X ou Cancelar
+          console.log("⚠️ Bloqueando fechamento ao clicar fora do Sheet");
+          e.preventDefault();
         }}
       >
         {isLoading ? (
