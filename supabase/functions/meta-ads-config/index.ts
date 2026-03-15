@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
       const projectId = url.searchParams.get("project_id");
 
       if (projectId) {
-        // Return project-specific config from meta_ad_accounts table
+        // 1. Tenta buscar em meta_ad_accounts (novo sistema)
         const { data: account } = await serviceClient
           .from("meta_ad_accounts")
           .select("account_id, account_name, updated_at, is_active")
@@ -68,12 +68,102 @@ Deno.serve(async (req) => {
           .limit(1)
           .maybeSingle();
 
+        if (account?.account_id) {
+          return new Response(JSON.stringify({
+            meta_ads_account_id: account.account_id,
+            account_name: account.account_name || null,
+            meta_ads_last_sync: account.updated_at || null,
+            has_token: true,
+            configured: true,
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // 2. Fallback: checa app_settings global (legado) e auto-migra para meta_ad_accounts
+        const { data: legacySettings } = await serviceClient
+          .from("app_settings")
+          .select("key, value")
+          .in("key", ["meta_ads_account_id", "meta_ads_access_token", "meta_ads_last_sync"]);
+
+        const legacy: Record<string, string> = {};
+        for (const s of legacySettings || []) {
+          const val = typeof s.value === "string" ? s.value : JSON.stringify(s.value);
+          legacy[s.key] = val.replace(/^"|"$/g, "");
+        }
+
+        // Também checa chaves específicas do projeto
+        const { data: projSettings } = await serviceClient
+          .from("app_settings")
+          .select("key, value")
+          .in("key", [
+            `meta_ads_account_id_${projectId}`,
+            `meta_ads_access_token_${projectId}`,
+          ]);
+        for (const s of projSettings || []) {
+          const val = typeof s.value === "string" ? s.value : JSON.stringify(s.value);
+          const cleanKey = s.key.replace(`_${projectId}`, "");
+          legacy[cleanKey] = val.replace(/^"|"$/g, "");
+        }
+
+        const legacyAccountId = (legacy["meta_ads_account_id"] || "").replace(/^act_/, "");
+        const legacyToken = legacy["meta_ads_access_token"] || Deno.env.get("META_ADS_ACCESS_TOKEN") || "";
+
+        if (legacyAccountId && legacyToken) {
+          // Auto-migra: busca o nome da conta na Meta API
+          let accountName = `act_${legacyAccountId}`;
+          try {
+            const nameRes = await fetch(
+              `https://graph.facebook.com/v21.0/act_${legacyAccountId}?access_token=${legacyToken}&fields=name`
+            );
+            const nameData = await nameRes.json();
+            if (nameData.name) accountName = nameData.name;
+          } catch (_) { /* ignora falha */ }
+
+          // Cria/atualiza registro em meta_ad_accounts para este projeto
+          const { data: existing } = await serviceClient
+            .from("meta_ad_accounts")
+            .select("id")
+            .eq("project_id", projectId)
+            .maybeSingle();
+
+          if (existing) {
+            await serviceClient.from("meta_ad_accounts").update({
+              account_id: legacyAccountId,
+              account_name: accountName,
+              access_token: legacyToken,
+              is_active: true,
+              updated_at: new Date().toISOString(),
+            }).eq("id", existing.id);
+          } else {
+            await serviceClient.from("meta_ad_accounts").insert({
+              project_id: projectId,
+              account_id: legacyAccountId,
+              account_name: accountName,
+              access_token: legacyToken,
+              is_active: true,
+            });
+          }
+
+          return new Response(JSON.stringify({
+            meta_ads_account_id: legacyAccountId,
+            account_name: accountName,
+            meta_ads_last_sync: legacy["meta_ads_last_sync"] || new Date().toISOString(),
+            has_token: true,
+            configured: true,
+            migrated: true,
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Sem conta configurada
         return new Response(JSON.stringify({
-          meta_ads_account_id: account?.account_id || null,
-          account_name: account?.account_name || null,
-          meta_ads_last_sync: account?.updated_at || null,
-          has_token: !!account?.account_id,
-          configured: !!account?.account_id,
+          meta_ads_account_id: null,
+          account_name: null,
+          meta_ads_last_sync: null,
+          has_token: false,
+          configured: false,
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
