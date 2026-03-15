@@ -401,11 +401,42 @@ export function useUpdateImplementation() {
       assigned_to: string | null;
       status: string;
     }>) => {
-      const { error, data } = await (supabase as any).from("implementations").update(updates).eq("id", id).select();
+      console.log("Atualizando mentoria:", { id, updates });
+      
+      // Remove campos undefined para evitar problemas
+      const cleanUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([_, v]) => v !== undefined)
+      );
+      
+      const { data, error } = await (supabase as any)
+        .from("implementations")
+        .update(cleanUpdates)
+        .eq("id", id)
+        .select();
+        
       if (error) {
-        console.error("Erro ao atualizar mentoria:", error);
-        throw new Error(error.message || "Erro ao atualizar mentoria. Verifique suas permissões.");
+        console.error("Erro ao atualizar mentoria:", {
+          error,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          id,
+          updates: cleanUpdates,
+        });
+        
+        // Erro 406 geralmente significa que a política RLS está bloqueando
+        if (error.code === "PGRST301" || error.message?.includes("406") || error.code === "42501") {
+          throw new Error("Permissão negada. Verifique se a política RLS foi atualizada. Erro: " + (error.message || error.code));
+        }
+        
+        throw new Error(error.message || `Erro ao atualizar mentoria (${error.code || "desconhecido"}). Verifique suas permissões.`);
       }
+      
+      if (!data || data.length === 0) {
+        throw new Error("Nenhum registro foi atualizado. Verifique se o ID existe e se você tem permissão.");
+      }
+      
       return data;
     },
     onSuccess: () => {
