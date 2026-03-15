@@ -185,7 +185,6 @@ export function useCreateImplementation() {
       } else {
         impl = tryWithPaid.data;
       }
-      if (error) throw error;
 
       // 2. Create steps
       if (payload.steps.length > 0) {
