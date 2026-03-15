@@ -5,7 +5,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Phone, Mail, Copy, ExternalLink, Clock, X, DollarSign, FileText, ArrowRight, Plus, Send } from "lucide-react";
+import { Phone, Mail, Copy, ExternalLink, Clock, X, DollarSign, FileText, ArrowRight, Plus, Send, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { format, parseISO, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -228,6 +239,35 @@ export function LeadDetailModal({ lead, open, onClose, onStatusChange }: LeadDet
   const addNote = useAddLeadNote();
   const updateField = useUpdateLeadField();
   const { data: timeline = [] } = useLeadTimelineById(lead?.id || "", lead?.email || "");
+  const qc = useQueryClient();
+
+  const deleteSale = useMutation({
+    mutationFn: async (saleId: string) => {
+      const { error } = await supabase.from("sales").delete().eq("id", saleId);
+      if (error) throw error;
+      // Se não restarem vendas aprovadas, reverter status do lead
+      if (lead?.email) {
+        const { data: remaining } = await supabase
+          .from("sales")
+          .select("id")
+          .eq("lead_email", lead.email)
+          .eq("sale_status_enum", "approved");
+        if (!remaining || remaining.length === 0) {
+          await supabase
+            .from("leads")
+            .update({ status: "novo" })
+            .eq("email", lead.email)
+            .eq("status", "comprou");
+        }
+      }
+    },
+    onSuccess: () => {
+      toast.success("Venda removida com sucesso!");
+      qc.invalidateQueries({ queryKey: ["lead-timeline", lead?.id] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
+    },
+    onError: (err: any) => toast.error("Erro ao remover venda: " + err.message),
+  });
 
   if (!lead) return null;
 
@@ -481,11 +521,49 @@ export function LeadDetailModal({ lead, open, onClose, onStatusChange }: LeadDet
                         {event.type === "note" && <FileText className="h-3 w-3 text-white" />}
                       </div>
                       <div className="min-w-0 flex-1 pb-1">
-                        <p className="text-sm font-medium text-foreground">{event.title}</p>
-                        {event.subtitle && <p className="text-xs text-muted-foreground">{event.subtitle}</p>}
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          {format(parseISO(event.date), "d 'de' MMM 'às' HH:mm", { locale: ptBR })}
-                        </p>
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground">{event.title}</p>
+                            {event.subtitle && <p className="text-xs text-muted-foreground">{event.subtitle}</p>}
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              {format(parseISO(event.date), "d 'de' MMM 'às' HH:mm", { locale: ptBR })}
+                            </p>
+                          </div>
+                          {event.type === "sale" && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                                  title="Remover venda"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Remover venda?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Tem certeza que deseja remover a venda <strong>{event.title}</strong>
+                                    {event.subtitle && <> · {event.subtitle}</>}?
+                                    Esta ação é irreversível.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteSale.mutate(event.id)}
+                                    disabled={deleteSale.isPending}
+                                    className="bg-destructive hover:bg-destructive/90"
+                                  >
+                                    {deleteSale.isPending ? "Removendo..." : "Remover"}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
