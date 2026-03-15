@@ -1,5 +1,5 @@
 import { Trophy, Info, ChevronRight } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   useProjectRevenueTotal,
 } from "@/hooks/useProjectRevenue";
@@ -93,14 +93,14 @@ export function RevenueProgressBar() {
           Nv.{level}
         </span>
 
-        {/* Tooltip de breakdown */}
-        <Tooltip>
-          <TooltipTrigger asChild>
+        {/* Popover de breakdown — abre instantaneamente ao clicar */}
+        <Popover>
+          <PopoverTrigger asChild>
             <button className="text-muted-foreground hover:text-foreground transition-colors">
               <Info className="h-3 w-3" />
             </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs space-y-1.5 p-3 max-w-[220px]">
+          </PopoverTrigger>
+          <PopoverContent side="bottom" align="start" className="text-xs space-y-1.5 p-3 w-[220px]">
             {/* Níveis concluídos */}
             {completedLevels.length > 0 && (
               <div className="space-y-0.5 mb-1">
@@ -145,8 +145,8 @@ export function RevenueProgressBar() {
             <p className="text-muted-foreground text-[10px] border-t pt-1">
               {currentProject?.name} · mês atual · tempo real
             </p>
-          </TooltipContent>
-        </Tooltip>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Valores inline */}
