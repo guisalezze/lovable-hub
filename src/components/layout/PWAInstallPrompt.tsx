@@ -159,9 +159,10 @@ export function PWAInstallPrompt() {
             size="sm"
             onClick={handleInstallClick}
             className="h-8 text-xs"
+            disabled={isIOS && !isSafari}
           >
             <Download className="h-3.5 w-3.5 mr-1.5" />
-            Instalar
+            {deferredPrompt ? "Instalar Agora" : "Como Instalar"}
           </Button>
           <Button
             size="sm"
