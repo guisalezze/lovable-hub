@@ -14,23 +14,12 @@ import { playTaskSound } from "@/lib/sounds";
 export function useTaskRealtime() {
   // Guardar o ID do usuário atual para comparação no callback
   const myUserIdRef = useRef<string | null>(null);
-  const myNameRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Buscar dados do usuário atual
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
       myUserIdRef.current = user.id;
-
-      // Buscar nome do perfil
-      supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", user.id)
-        .maybeSingle()
-        .then(({ data }) => {
-          myNameRef.current = data?.full_name ?? user.email ?? "Você";
-        });
     });
 
     const channel = supabase
@@ -58,7 +47,8 @@ export function useTaskRealtime() {
           // Só notificar se foi atribuída a mim e criada por outra pessoa
           if (task.assigned_to === myId && task.created_by !== myId) {
             const creatorName = await getProfileName(task.created_by);
-            showTaskToast(creatorName, task.title ?? "Nova tarefa");
+            showTaskToast(creatorName, task.title ?? "Nova tarefa", task.id);
+            sendTaskPushNotification(creatorName, task.title ?? "Nova tarefa", myId, task.id);
           }
         }
       )
@@ -92,7 +82,8 @@ export function useTaskRealtime() {
 
           if (!wasAssignedToMe && isNowAssignedToMe && task.created_by !== myId) {
             const creatorName = await getProfileName(task.created_by);
-            showTaskToast(creatorName, task.title ?? "Tarefa atualizada");
+            showTaskToast(creatorName, task.title ?? "Tarefa atualizada", task.id);
+            sendTaskPushNotification(creatorName, task.title ?? "Tarefa atualizada", myId, task.id);
           }
         }
       )
@@ -105,7 +96,7 @@ export function useTaskRealtime() {
 }
 
 /** Busca o nome de um usuário pelo ID */
-async function getProfileName(userId?: string | null): Promise<string> {
+export async function getProfileName(userId?: string | null): Promise<string> {
   if (!userId) return "Alguém";
   try {
     const { data } = await supabase
@@ -120,21 +111,63 @@ async function getProfileName(userId?: string | null): Promise<string> {
 }
 
 /** Exibe toast de tarefa atribuída com som */
-function showTaskToast(creatorName: string, taskTitle: string) {
+export function showTaskToast(creatorName: string, taskTitle: string, taskId?: string) {
   playTaskSound();
 
-  toast(
-    `📋 ${creatorName} mandou uma tarefa pra você`,
-    {
-      description: taskTitle,
-      duration: 7000,
-      position: "top-center",
-      style: {
-        background: "#18181b",
-        border: "1px solid rgba(99,102,241,0.3)",
-        color: "#fff",
-        borderRadius: "12px",
+  toast("Tarefa Criada!", {
+    description: `${creatorName} criou uma tarefa pra você: ${taskTitle}`,
+    duration: 7000,
+    position: "top-center",
+    style: {
+      background: "#18181b",
+      border: "1px solid rgba(99,102,241,0.3)",
+      color: "#fff",
+      borderRadius: "12px",
+    },
+    action: taskId
+      ? {
+          label: "Ver",
+          onClick: () => {
+            window.location.href = `/tarefas`;
+          },
+        }
+      : undefined,
+  });
+}
+
+/** Envia push notification de tarefa atribuída */
+async function sendTaskPushNotification(
+  creatorName: string,
+  taskTitle: string,
+  userId: string,
+  taskId?: string
+) {
+  try {
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
       },
-    }
-  );
+      body: JSON.stringify({
+        userId,
+        title: "Tarefa Criada!",
+        body: `${creatorName} criou uma tarefa pra você: ${taskTitle}`,
+        icon: "/logo.png",
+        tag: `task-${taskId || Date.now()}`,
+        data: {
+          url: "/tarefas",
+          type: "task",
+          taskId,
+        },
+      }),
+    });
+  } catch (error) {
+    // Silenciosamente falha se push não estiver disponível
+    console.debug("Task push notification não enviada:", error);
+  }
 }

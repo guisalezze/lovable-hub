@@ -105,8 +105,8 @@ async function sendPushNotification(amount: number, productName: string) {
   }
 }
 
-/** Mostra o toast de venda aprovada */
-async function showSaleToast(amount: number, productName: string) {
+/** Mostra o toast de venda aprovada (exportado para uso em testes) */
+export async function showSaleToast(amount: number, productName: string) {
   if (amount <= 0) return;
   playSaleSound();
 

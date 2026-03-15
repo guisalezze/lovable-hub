@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Phone, Mail, Copy, ExternalLink, Plus, Search, Clock } from "lucide-react";
+import { Phone, Mail, Copy, ExternalLink, Plus, Search, Clock, Video } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { format, parseISO, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { LeadDetailModal } from "@/components/leads/LeadDetailModal";
+import { CreateCallFromLeadDialog } from "@/components/leads/CreateCallFromLeadDialog";
 
 type LeadStatus = "novo" | "quase_comprou" | "comprou" | "perdido";
 
@@ -88,6 +89,7 @@ export default function LeadsPage() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [showFollowUpOnly, setShowFollowUpOnly] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [callLead, setCallLead] = useState<Lead | null>(null);
 
   const { data: leads = [], isLoading } = useLeads();
   const updateStatus = useUpdateLeadStatus();
@@ -261,6 +263,9 @@ export default function LeadsPage() {
                               <Phone className="h-3.5 w-3.5" />
                             </a>
                           )}
+                          <button onClick={(e) => { e.stopPropagation(); setCallLead(lead); }} className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-primary" title="Agendar Call">
+                            <Video className="h-3.5 w-3.5" />
+                          </button>
                           <button onClick={(e) => { e.stopPropagation(); copyToClipboard(lead.email, "Email"); }} className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground" title="Copiar email">
                             <Mail className="h-3.5 w-3.5" />
                           </button>
@@ -305,6 +310,15 @@ export default function LeadsPage() {
         onClose={() => setSelectedLead(null)}
         onStatusChange={handleStatusChange}
       />
+
+      {callLead && (
+        <CreateCallFromLeadDialog
+          open={!!callLead}
+          onOpenChange={(v) => { if (!v) setCallLead(null); }}
+          leadEmail={callLead.email}
+          leadName={callLead.full_name}
+        />
+      )}
     </div>
   );
 }

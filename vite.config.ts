@@ -126,8 +126,12 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,mp3}"],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB para incluir logo.png (2.23 MB)
-        // Não cachear index.html para evitar problemas de atualização
-        navigateFallback: null,
+        // Sempre servir index.html como fallback de navegação (evita tela branca no PWA)
+        navigateFallback: "/index.html",
+        navigateFallbackDenylist: [/^\/api\//, /^\/functions\//, /^\/supabase\//],
+        // Atualizar service worker imediatamente ao abrir o app
+        skipWaiting: true,
+        clientsClaim: true,
         // Handlers de push serão registrados dinamicamente no app
         runtimeCaching: [
           {

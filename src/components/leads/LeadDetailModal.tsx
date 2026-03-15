@@ -5,7 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Phone, Mail, Copy, ExternalLink, Clock, X, DollarSign, FileText, ArrowRight, Plus, Send, Trash2 } from "lucide-react";
+import { Phone, Mail, Copy, ExternalLink, Clock, X, DollarSign, FileText, ArrowRight, Plus, Send, Trash2, Video } from "lucide-react";
+import { CreateCallFromLeadDialog } from "./CreateCallFromLeadDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -234,6 +235,7 @@ export function LeadDetailModal({ lead, open, onClose, onStatusChange }: LeadDet
   const [noteText, setNoteText] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
   const [followUpNoteInput, setFollowUpNoteInput] = useState("");
+  const [showCreateCall, setShowCreateCall] = useState(false);
 
   const { data: notes = [] } = useLeadNotes(lead?.id || "");
   const addNote = useAddLeadNote();
@@ -301,6 +303,7 @@ export function LeadDetailModal({ lead, open, onClose, onStatusChange }: LeadDet
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -391,6 +394,16 @@ export function LeadDetailModal({ lead, open, onClose, onStatusChange }: LeadDet
                   </div>
                 )}
               </div>
+              {/* Agendar Call */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2 w-full gap-1.5 text-xs h-8"
+                onClick={() => setShowCreateCall(true)}
+              >
+                <Video className="h-3.5 w-3.5 text-primary" />
+                Agendar Call
+              </Button>
             </div>
 
             {/* Last Sale */}
@@ -574,5 +587,14 @@ export function LeadDetailModal({ lead, open, onClose, onStatusChange }: LeadDet
         </Tabs>
       </DialogContent>
     </Dialog>
+
+    {/* Dialog de criar call pre-preenchida com dados do lead */}
+    <CreateCallFromLeadDialog
+      open={showCreateCall}
+      onOpenChange={setShowCreateCall}
+      leadEmail={lead.email}
+      leadName={lead.full_name}
+    />
+    </>
   );
 }
