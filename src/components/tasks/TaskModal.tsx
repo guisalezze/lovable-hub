@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,14 +35,14 @@ interface Props {
 
 export function TaskModal({ open, onOpenChange, task }: Props) {
   const { currentProject } = useProject();
-  const [title, setTitle] = useState(task?.title || "");
-  const [description, setDescription] = useState(task?.description || "");
-  const [status, setStatus] = useState<TaskStatus>(task?.status || "backlog");
-  const [priority, setPriority] = useState<TaskPriority>(task?.priority || "media");
-  const [dueDate, setDueDate] = useState(task?.due_date || "");
-  const [assignedTo, setAssignedTo] = useState(task?.assigned_to || "");
-  const [tags, setTags] = useState(task?.tags?.join(", ") || "");
-  const [checklist, setChecklist] = useState<{ text: string; done: boolean }[]>(task?.checklist || []);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState<TaskStatus>("backlog");
+  const [priority, setPriority] = useState<TaskPriority>("media");
+  const [dueDate, setDueDate] = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
+  const [tags, setTags] = useState("");
+  const [checklist, setChecklist] = useState<{ text: string; done: boolean }[]>([]);
   const [newCheckItem, setNewCheckItem] = useState("");
 
   const createTask = useCreateTask();
@@ -51,6 +51,20 @@ export function TaskModal({ open, onOpenChange, task }: Props) {
   const { data: members } = useTeamMembers();
 
   const isEdit = !!task;
+
+  useEffect(() => {
+    if (!open) return;
+
+    setTitle(task?.title || "");
+    setDescription(task?.description || "");
+    setStatus(task?.status || "backlog");
+    setPriority(task?.priority || "media");
+    setDueDate(task?.due_date || "");
+    setAssignedTo(task?.assigned_to || "");
+    setTags(task?.tags?.join(", ") || "");
+    setChecklist(task?.checklist || []);
+    setNewCheckItem("");
+  }, [task, open]);
 
   const handleSubmit = async () => {
     if (!title.trim()) return toast.error("Título obrigatório");
