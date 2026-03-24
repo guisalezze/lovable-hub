@@ -37,6 +37,9 @@ describe("TaskModal", () => {
           checklist: [],
           project_id: "project-1",
           created_by: "user-1",
+          lead_email: null,
+          completed_at: null,
+          owner_user_id: null,
           created_at: "2026-03-20T00:00:00.000Z",
           updated_at: "2026-03-20T00:00:00.000Z",
         }}

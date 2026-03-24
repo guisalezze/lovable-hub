@@ -81,6 +81,7 @@ self.addEventListener('push', (event) => {
     data: data.data || {},
     tag: (data.tag as string) || 'default',
     requireInteraction: false,
+    // @ts-ignore vibrate is supported in browsers
     vibrate: [200, 100, 200],
   };
 
