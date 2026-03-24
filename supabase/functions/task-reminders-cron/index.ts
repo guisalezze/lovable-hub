@@ -108,6 +108,7 @@ Deno.serve(async (req) => {
 
       // Send via send-whatsapp (n8n/neowchat webhook)
       try {
+        console.log(`[task-reminders] Sending to ${phone} for task ${task.title}`);
         const waRes = await fetch(`${supabaseUrl}/functions/v1/send-whatsapp`, {
           method: "POST",
           headers: {
