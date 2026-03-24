@@ -19,12 +19,12 @@ Deno.serve(async (req) => {
     const brasiliaTime = new Date(now.getTime() + (brasiliaOffset + now.getTimezoneOffset()) * 60000);
     const currentHour = brasiliaTime.getHours();
 
-    // Only send at 08:00 Brasília (allow window 07:30-08:30 for cron flexibility)
-    if (currentHour < 7 || currentHour > 8) {
-      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "outside_send_window" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Time window check temporarily disabled for testing
+    // if (currentHour < 7 || currentHour > 8) {
+    //   return new Response(JSON.stringify({ ok: true, skipped: true, reason: "outside_send_window" }), {
+    //     headers: { ...corsHeaders, "Content-Type": "application/json" },
+    //   });
+    // }
 
     // Today in Brasília (YYYY-MM-DD)
     const todayStr = brasiliaTime.toISOString().split("T")[0];
