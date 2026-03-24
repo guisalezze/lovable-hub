@@ -13,42 +13,33 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Current time in UTC-3 (Brasilia)
+    // Current time in Brasília (UTC-3)
     const now = new Date();
     const brasiliaOffset = -3 * 60;
     const brasiliaTime = new Date(now.getTime() + (brasiliaOffset + now.getTimezoneOffset()) * 60000);
     const currentHour = brasiliaTime.getHours();
 
-    // Silent hours: 22:00 - 07:00
-    if (currentHour >= 22 || currentHour < 7) {
-      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "silent_hours" }), {
+    // Only send at 08:00 Brasília (allow window 07:30-08:30 for cron flexibility)
+    if (currentHour < 7 || currentHour > 8) {
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "outside_send_window" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Check if WhatsApp is configured
-    const { data: config } = await supabase
-      .from("app_settings")
-      .select("value")
-      .eq("key", "whatsapp_cloud_config")
-      .single();
-
-    if (!config?.value) {
-      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "whatsapp_not_configured" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Today in Brasília (YYYY-MM-DD)
+    const todayStr = brasiliaTime.toISOString().split("T")[0];
 
     // Fetch all non-completed tasks with assigned_to and due_date
-    const { data: tasks } = await supabase
+    const { data: tasks, error: tasksError } = await supabase
       .from("tasks")
-      .select("id, title, status, priority, due_date, assigned_to")
+      .select("id, title, status, due_date, assigned_to")
       .neq("status", "concluido")
       .not("assigned_to", "is", null)
       .not("due_date", "is", null);
 
+    if (tasksError) throw tasksError;
     if (!tasks || tasks.length === 0) {
-      return new Response(JSON.stringify({ ok: true, reminders_sent: 0 }), {
+      return new Response(JSON.stringify({ ok: true, reminders_sent: 0, reason: "no_tasks" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -57,136 +48,116 @@ Deno.serve(async (req) => {
     const userIds = [...new Set(tasks.map(t => t.assigned_to!))];
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, full_name, phone_e164, whatsapp_notifications_enabled, quiet_hours_start, quiet_hours_end")
+      .select("id, full_name, phone_e164")
       .in("id", userIds);
 
     const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
 
-    const todayStart = new Date(brasiliaTime);
-    todayStart.setHours(0, 0, 0, 0);
-    const todayStartISO = todayStart.toISOString();
+    // Check which tasks already got a reminder today
+    const taskIds = tasks.map(t => t.id);
+    const { data: sentToday } = await supabase
+      .from("task_whatsapp_notifications")
+      .select("task_id")
+      .in("task_id", taskIds)
+      .eq("message_type", "daily_reminder")
+      .eq("status", "sent")
+      .gte("created_at", `${todayStr}T00:00:00-03:00`);
+
+    const alreadySentSet = new Set(sentToday?.map(s => s.task_id) || []);
 
     let sentCount = 0;
+    const errors: string[] = [];
 
     for (const task of tasks) {
+      // Skip if already reminded today
+      if (alreadySentSet.has(task.id)) continue;
+
       const profile = profileMap.get(task.assigned_to!);
-      if (!profile?.phone_e164 || profile.whatsapp_notifications_enabled === false) continue;
+      if (!profile?.phone_e164) continue;
 
-      // Check user's quiet hours
-      if (profile.quiet_hours_start && profile.quiet_hours_end) {
-        const qStart = parseInt(profile.quiet_hours_start.split(":")[0]);
-        const qEnd = parseInt(profile.quiet_hours_end.split(":")[0]);
-        if (qStart > qEnd) {
-          // e.g. 22:00 - 08:00
-          if (currentHour >= qStart || currentHour < qEnd) continue;
-        } else {
-          if (currentHour >= qStart && currentHour < qEnd) continue;
-        }
+      // Sanitize phone
+      const phone = profile.phone_e164.replace(/[^0-9+]/g, "");
+      if (!phone || phone.length < 10) continue;
+
+      const dueDate = new Date(task.due_date! + "T00:00:00-03:00");
+      const todayDate = new Date(todayStr + "T00:00:00-03:00");
+      const diffMs = dueDate.getTime() - todayDate.getTime();
+      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+      // Format due_date as DD/MM/YYYY
+      const dueDateFormatted = `${String(dueDate.getDate()).padStart(2, "0")}/${String(dueDate.getMonth() + 1).padStart(2, "0")}/${dueDate.getFullYear()}`;
+
+      let mensagem: string;
+
+      if (diffDays >= 0) {
+        // Within deadline
+        mensagem = `🔔 Lembrete de Tarefa\n\nOlá, ${profile.full_name || "responsável"}!\n\nVocê tem uma tarefa pendente:\n\n📋 Tarefa: ${task.title}\n📅 Prazo limite: ${dueDateFormatted}\n⏳ Dias restantes: ${diffDays} dia(s)\n\nPor favor, finalize antes do prazo!`;
+      } else {
+        // Overdue
+        const diasVencidos = Math.abs(diffDays);
+        mensagem = `🚨 Tarefa com Prazo Vencido!\n\nOlá, ${profile.full_name || "responsável"}!\n\nA seguinte tarefa está com o prazo vencido:\n\n📋 Tarefa: ${task.title}\n📅 Prazo limite era: ${dueDateFormatted}\n❌ Vencida há: ${diasVencidos} dia(s)\n\nRegularize o quanto antes!`;
       }
 
-      const dueDate = new Date(task.due_date!);
-      const diffMs = dueDate.getTime() - brasiliaTime.getTime();
-      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      // Send via send-whatsapp (n8n/neowchat webhook)
+      try {
+        const waRes = await fetch(`${supabaseUrl}/functions/v1/send-whatsapp`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${serviceKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            nomeCliente: profile.full_name || "Responsável",
+            telefoneCliente: phone,
+            mensagem,
+          }),
+        });
 
-      // Determine max notifications per day based on proximity
-      let maxPerDay: number;
-      if (diffDays < 0) maxPerDay = 12;       // Overdue
-      else if (diffDays === 0) maxPerDay = 10; // Today
-      else if (diffDays === 1) maxPerDay = 8;  // Tomorrow
-      else if (diffDays <= 3) maxPerDay = 6;   // 2-3 days
-      else if (diffDays <= 7) maxPerDay = 4;   // 4-7 days
-      else maxPerDay = 3;                       // > 7 days
+        const waData = await waRes.json().catch(() => ({}));
+        const success = waRes.ok && waData.success;
 
-      // Urgent tasks get +2
-      if (task.priority === "urgente") maxPerDay += 2;
+        // Log notification
+        await supabase.from("task_whatsapp_notifications").insert({
+          task_id: task.id,
+          recipient_user_id: task.assigned_to,
+          recipient_phone: phone,
+          message_type: "daily_reminder",
+          status: success ? "sent" : "failed",
+          error_message: success ? null : JSON.stringify(waData),
+          sent_at: success ? now.toISOString() : null,
+        });
 
-      // Count reminders sent today for this task
-      const { count: sentToday } = await supabase
-        .from("task_whatsapp_notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("task_id", task.id)
-        .eq("message_type", "reminder")
-        .gte("created_at", todayStartISO);
+        // Also create in-app notification
+        await supabase.from("notifications").insert({
+          user_id: task.assigned_to,
+          type: diffDays < 0 ? "TASK_OVERDUE" : "TASK_DUE_SOON",
+          task_id: task.id,
+          message: diffDays < 0
+            ? `🚨 Tarefa atrasada: ${task.title} (vencida há ${Math.abs(diffDays)} dia(s))`
+            : `🔔 Lembrete: ${task.title} (${diffDays} dia(s) restantes)`,
+        });
 
-      if ((sentToday || 0) >= maxPerDay) continue;
-
-      // Calculate interval (15h window = 900 min)
-      const intervalMinutes = Math.floor(900 / maxPerDay);
-
-      // Check time since last notification
-      const { data: lastNotif } = await supabase
-        .from("task_whatsapp_notifications")
-        .select("sent_at")
-        .eq("task_id", task.id)
-        .eq("message_type", "reminder")
-        .order("sent_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (lastNotif?.sent_at) {
-        const minutesSinceLast = (now.getTime() - new Date(lastNotif.sent_at).getTime()) / 60000;
-        if (minutesSinceLast < intervalMinutes) continue;
+        if (success) sentCount++;
+        else errors.push(`Task ${task.id}: ${JSON.stringify(waData)}`);
+      } catch (sendErr) {
+        errors.push(`Task ${task.id}: ${String(sendErr)}`);
+        await supabase.from("task_whatsapp_notifications").insert({
+          task_id: task.id,
+          recipient_user_id: task.assigned_to,
+          recipient_phone: phone,
+          message_type: "daily_reminder",
+          status: "failed",
+          error_message: String(sendErr),
+        });
       }
-
-      // Build urgency prefix
-      let urgencyPrefix: string;
-      if (diffDays < 0) urgencyPrefix = `🚨 ATRASADA (${Math.abs(diffDays)} dia(s))`;
-      else if (diffDays === 0) urgencyPrefix = "⚠️ VENCE HOJE";
-      else if (diffDays === 1) urgencyPrefix = "⏰ Vence AMANHÃ";
-      else urgencyPrefix = `📋 Vence em ${diffDays} dias`;
-
-      const statusLabels: Record<string, string> = {
-        backlog: "Backlog",
-        em_andamento: "Em andamento",
-        bloqueado: "Bloqueado",
-      };
-
-      // Send via whatsapp-send-message
-      const waRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-message`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${serviceKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          to: profile.phone_e164,
-          template_name: "task_reminder",
-          template_language: "pt_BR",
-          template_params: [
-            urgencyPrefix,
-            task.title,
-            dueDate.toLocaleDateString("pt-BR"),
-            statusLabels[task.status] || task.status,
-          ],
-        }),
-      });
-
-      const waData = await waRes.json();
-
-      // Record notification
-      await supabase.from("task_whatsapp_notifications").insert({
-        task_id: task.id,
-        recipient_user_id: task.assigned_to,
-        recipient_phone: profile.phone_e164,
-        message_type: "reminder",
-        whatsapp_message_id: waData.whatsapp_message_id || null,
-        status: waRes.ok ? "sent" : "failed",
-        error_message: waRes.ok ? null : JSON.stringify(waData),
-        sent_at: waRes.ok ? now.toISOString() : null,
-      });
-
-      // In-app notification as fallback
-      await supabase.from("notifications").insert({
-        user_id: task.assigned_to,
-        type: diffDays < 0 ? "TASK_OVERDUE" : "TASK_DUE_SOON",
-        task_id: task.id,
-        message: `${urgencyPrefix}: ${task.title}`,
-      });
-
-      if (waRes.ok) sentCount++;
     }
 
-    return new Response(JSON.stringify({ ok: true, reminders_sent: sentCount }), {
+    return new Response(JSON.stringify({
+      ok: true,
+      reminders_sent: sentCount,
+      errors_count: errors.length,
+      errors: errors.length > 0 ? errors.slice(0, 5) : undefined,
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
