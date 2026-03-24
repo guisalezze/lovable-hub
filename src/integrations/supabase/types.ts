@@ -116,6 +116,7 @@ export type Database = {
           installment_number: number
           notes: string | null
           paid_at: string | null
+          receipt_url: string | null
           status: string
           updated_at: string
         }
@@ -128,6 +129,7 @@ export type Database = {
           installment_number: number
           notes?: string | null
           paid_at?: string | null
+          receipt_url?: string | null
           status?: string
           updated_at?: string
         }
@@ -140,6 +142,7 @@ export type Database = {
           installment_number?: number
           notes?: string | null
           paid_at?: string | null
+          receipt_url?: string | null
           status?: string
           updated_at?: string
         }
@@ -162,6 +165,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           entry_paid: number
+          entry_receipt_url: string | null
           id: string
           installment_value: number
           installments_count: number
@@ -179,6 +183,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           entry_paid?: number
+          entry_receipt_url?: string | null
           id?: string
           installment_value: number
           installments_count?: number
@@ -196,6 +201,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           entry_paid?: number
+          entry_receipt_url?: string | null
           id?: string
           installment_value?: number
           installments_count?: number
@@ -318,9 +324,9 @@ export type Database = {
           is_validated: boolean
           sort_order: number
           structured_content: Json | null
-          translated_content: Json | null
           tags: string[] | null
           title: string
+          translated_content: Json | null
           type: string
           updated_at: string
         }
@@ -333,9 +339,9 @@ export type Database = {
           is_validated?: boolean
           sort_order?: number
           structured_content?: Json | null
-          translated_content?: Json | null
           tags?: string[] | null
           title?: string
+          translated_content?: Json | null
           type?: string
           updated_at?: string
         }
@@ -348,9 +354,9 @@ export type Database = {
           is_validated?: boolean
           sort_order?: number
           structured_content?: Json | null
-          translated_content?: Json | null
           tags?: string[] | null
           title?: string
+          translated_content?: Json | null
           type?: string
           updated_at?: string
         }
@@ -1664,6 +1670,36 @@ export type Database = {
           id?: string
           name?: string
           slug?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth_key: string
+          created_at: string | null
+          endpoint: string
+          id: string
+          p256dh_key: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          auth_key: string
+          created_at?: string | null
+          endpoint: string
+          id?: string
+          p256dh_key: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          auth_key?: string
+          created_at?: string | null
+          endpoint?: string
+          id?: string
+          p256dh_key?: string
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
