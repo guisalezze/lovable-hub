@@ -45,6 +45,7 @@ Deno.serve(async (req) => {
       .not("due_date", "is", null);
 
     if (tasksError) throw tasksError;
+    console.log(`[task-reminders] Found ${tasks?.length || 0} tasks`);
     if (!tasks || tasks.length === 0) {
       return new Response(JSON.stringify({ ok: true, reminders_sent: 0, reason: "no_tasks" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
