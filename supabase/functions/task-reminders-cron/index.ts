@@ -20,7 +20,14 @@ Deno.serve(async (req) => {
     const currentHour = brasiliaTime.getHours();
 
     // Only send at 08:00 Brasília (allow window 07:30-08:30 for cron flexibility)
-    if (currentHour < 7 || currentHour > 8) {
+    // Also allow bypass with force=true for manual testing
+    const url = new URL(req.url);
+    const force = url.searchParams.get("force") === "true";
+    let body: Record<string, unknown> = {};
+    try { body = await req.json(); } catch { /* empty body is fine */ }
+    const forceBody = (body as Record<string, unknown>).force === true;
+
+    if (!force && !forceBody && (currentHour < 7 || currentHour > 8)) {
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "outside_send_window" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -38,6 +45,7 @@ Deno.serve(async (req) => {
       .not("due_date", "is", null);
 
     if (tasksError) throw tasksError;
+    console.log(`[task-reminders] Found ${tasks?.length || 0} tasks`);
     if (!tasks || tasks.length === 0) {
       return new Response(JSON.stringify({ ok: true, reminders_sent: 0, reason: "no_tasks" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -100,6 +108,7 @@ Deno.serve(async (req) => {
 
       // Send via send-whatsapp (n8n/neowchat webhook)
       try {
+        console.log(`[task-reminders] Sending to ${phone} for task ${task.title}`);
         const waRes = await fetch(`${supabaseUrl}/functions/v1/send-whatsapp`, {
           method: "POST",
           headers: {
