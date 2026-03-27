@@ -40,21 +40,13 @@ function concat(...arrays: Uint8Array[]): Uint8Array {
   return out;
 }
 
-// ─── HKDF (SHA-256) via WebCrypto ────────────────────────────────────────────
+// ─── HMAC-SHA-256 ────────────────────────────────────────────────────────────
 
-async function hkdf(
-  ikm: Uint8Array,
-  salt: Uint8Array,
-  info: Uint8Array,
-  length: number
-): Promise<Uint8Array> {
-  const key = await crypto.subtle.importKey("raw", ikm, "HKDF", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits(
-    { name: "HKDF", hash: "SHA-256", salt, info },
-    key,
-    length * 8
+async function hmac(key: Uint8Array, data: Uint8Array): Promise<Uint8Array> {
+  const k = await crypto.subtle.importKey(
+    "raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
   );
-  return new Uint8Array(bits);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, data));
 }
 
 // ─── VAPID JWT (ES256) ────────────────────────────────────────────────────────
@@ -100,25 +92,14 @@ async function createVapidJwt(audience: string): Promise<string> {
   return `${sigInput}.${bytesToB64url(new Uint8Array(sig))}`;
 }
 
-// ─── Web Push Payload Encryption (RFC 4288 / aesgcm) ─────────────────────────
-
-function buildKeyContext(clientPub: Uint8Array, serverPub: Uint8Array): Uint8Array {
-  const label = new TextEncoder().encode("P-256\0");
-  const out = new Uint8Array(label.length + 2 + clientPub.length + 2 + serverPub.length);
-  let i = 0;
-  out.set(label, i); i += label.length;
-  out[i++] = 0; out[i++] = clientPub.length;
-  out.set(clientPub, i); i += clientPub.length;
-  out[i++] = 0; out[i++] = serverPub.length;
-  out.set(serverPub, i);
-  return out;
-}
+// ─── Web Push Payload Encryption (RFC 8291 / aes128gcm) ──────────────────────
+// Compatível com Apple (iOS PWA), Chrome e Firefox.
 
 async function encryptPayload(
   plaintext: string,
   p256dhB64url: string,
   authB64url: string
-): Promise<{ ciphertext: ArrayBuffer; salt: Uint8Array; serverPubKey: Uint8Array }> {
+): Promise<Uint8Array> {
   const enc = new TextEncoder();
   const salt = crypto.getRandomValues(new Uint8Array(16));
 
@@ -128,35 +109,54 @@ async function encryptPayload(
   );
   const serverPubKey = new Uint8Array(await crypto.subtle.exportKey("raw", serverKP.publicKey));
 
-  // Client public key
+  // Import client's public key
   const clientPubBytes = b64urlToBytes(p256dhB64url);
   const clientPubKey = await crypto.subtle.importKey(
     "raw", clientPubBytes, { name: "ECDH", namedCurve: "P-256" }, false, []
   );
 
   // ECDH shared secret
-  const sharedSecret = new Uint8Array(
+  const ecdhSecret = new Uint8Array(
     await crypto.subtle.deriveBits({ name: "ECDH", public: clientPubKey }, serverKP.privateKey, 256)
   );
 
   const authBytes = b64urlToBytes(authB64url);
 
-  // PRK = HKDF(ikm=sharedSecret, salt=auth, info="Content-Encoding: auth\0", L=32)
-  const prk = await hkdf(sharedSecret, authBytes, enc.encode("Content-Encoding: auth\0"), 32);
+  // RFC 8291 key derivation via HMAC-SHA-256:
+  // PRK_key = HMAC(auth_secret, ecdh_secret)
+  const prkKey = await hmac(authBytes, ecdhSecret);
 
-  const keyCtx = buildKeyContext(clientPubBytes, serverPubKey);
+  // key_info = "WebPush: info\0" || ua_public || as_public
+  const keyInfo = concat(enc.encode("WebPush: info\0"), clientPubBytes, serverPubKey);
 
-  // CEK = HKDF(ikm=prk, salt=salt, info="Content-Encoding: aesgcm\0" + keyCtx, L=16)
-  const cek = await hkdf(prk, salt, concat(enc.encode("Content-Encoding: aesgcm\0"), keyCtx), 16);
+  // IKM = HMAC(PRK_key, key_info || 0x01)
+  const ikm = await hmac(prkKey, concat(keyInfo, new Uint8Array([0x01])));
 
-  // Nonce = HKDF(ikm=prk, salt=salt, info="Content-Encoding: nonce\0" + keyCtx, L=12)
-  const nonce = await hkdf(prk, salt, concat(enc.encode("Content-Encoding: nonce\0"), keyCtx), 12);
+  // PRK = HMAC(salt, IKM)
+  const prk = await hmac(salt, ikm);
 
+  // CEK = HMAC(PRK, "Content-Encoding: aes128gcm\0" || 0x01)[0:16]
+  const cek = (await hmac(prk, concat(enc.encode("Content-Encoding: aes128gcm\0"), new Uint8Array([0x01])))).slice(0, 16);
+
+  // NONCE = HMAC(PRK, "Content-Encoding: nonce\0" || 0x01)[0:12]
+  const nonce = (await hmac(prk, concat(enc.encode("Content-Encoding: nonce\0"), new Uint8Array([0x01])))).slice(0, 12);
+
+  // Encrypt: plaintext || 0x02 (padding delimiter, last record)
+  const paddedContent = concat(enc.encode(plaintext), new Uint8Array([0x02]));
   const aesKey = await crypto.subtle.importKey("raw", cek, "AES-GCM", false, ["encrypt"]);
-  const paddedContent = concat(new Uint8Array(2), enc.encode(plaintext));
-  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, aesKey, paddedContent);
+  const ciphertext = new Uint8Array(
+    await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, aesKey, paddedContent)
+  );
 
-  return { ciphertext, salt, serverPubKey };
+  // Build RFC 8291 body: salt(16) || rs(4,be) || idlen(1) || server_pub(65) || ciphertext
+  const rs = 4096;
+  const header = new Uint8Array(16 + 4 + 1 + serverPubKey.length);
+  header.set(salt, 0);
+  new DataView(header.buffer).setUint32(16, rs, false);
+  header[20] = serverPubKey.length; // 65
+  header.set(serverPubKey, 21);
+
+  return concat(header, ciphertext);
 }
 
 // ─── Core push sender ─────────────────────────────────────────────────────────
@@ -175,7 +175,8 @@ async function sendWebPush(
   const audience = `${url.protocol}//${url.host}`;
 
   const jwt = await createVapidJwt(audience);
-  const { ciphertext, salt, serverPubKey } = await encryptPayload(
+  // RFC 8291 (aes128gcm) — compatível com Apple iOS PWA, Chrome e Firefox
+  const encryptedBody = await encryptPayload(
     JSON.stringify(payload),
     sub.p256dh_key,
     sub.auth_key
@@ -184,14 +185,13 @@ async function sendWebPush(
   const res = await fetch(sub.endpoint, {
     method: "POST",
     headers: {
-      Authorization: `WebPush ${jwt}`,
-      "Crypto-Key": `dh=${bytesToB64url(serverPubKey)};p256ecdsa=${VAPID_PUBLIC_KEY}`,
-      Encryption: `salt=${bytesToB64url(salt)}`,
+      // RFC 8292 VAPID format: "vapid t=<jwt>,k=<pubkey>"
+      Authorization: `vapid t=${jwt},k=${VAPID_PUBLIC_KEY}`,
       "Content-Type": "application/octet-stream",
-      "Content-Encoding": "aesgcm",
+      "Content-Encoding": "aes128gcm",
       TTL: "86400",
     },
-    body: ciphertext,
+    body: encryptedBody,
   });
 
   const detail = await res.text();
