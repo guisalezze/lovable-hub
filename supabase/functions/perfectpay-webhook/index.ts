@@ -206,8 +206,10 @@ Deno.serve(async (req) => {
         payment_method_enum: paymentMethod,
         checkout_type_enum: checkoutType,
         billet_url: payload.billet_url || null,
-        date_created: payload.date_created || null,
-        date_approved: payload.date_approved || null,
+        date_created: payload.date_created || new Date().toISOString(),
+        // Garantir que date_approved nunca fica null em vendas aprovadas
+        date_approved: payload.date_approved ||
+          (saleStatus === "approved" ? (payload.date_created || new Date().toISOString()) : null),
       },
       { onConflict: "code" }
     );

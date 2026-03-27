@@ -138,7 +138,7 @@ export function usePushNotifications() {
         auth_key: subscriptionData.auth,
         updated_at: new Date().toISOString(),
       }, {
-        onConflict: "user_id",
+        onConflict: "endpoint", // cada dispositivo tem endpoint único
       });
 
       if (error) {
@@ -175,13 +175,10 @@ export function usePushNotifications() {
       const subscription = await registration.pushManager.getSubscription();
 
       if (subscription) {
+        // Remover apenas o endpoint deste dispositivo (não os outros)
+        const { endpoint } = subscription.toJSON() as { endpoint: string };
+        await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
         await subscription.unsubscribe();
-      }
-
-      // Remover do Supabase
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from("push_subscriptions").delete().eq("user_id", user.id);
       }
 
       setIsSubscribed(false);

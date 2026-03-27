@@ -279,33 +279,33 @@ serve(async (req) => {
         }, 500);
       }
 
-      const supabase = makeClient();
-      const { data: sub, error: subErr } = await supabase
-        .from("push_subscriptions")
-        .select("endpoint, p256dh_key, auth_key")
-        .eq("user_id", userId)
-        .single();
+    const supabase = makeClient();
+    const { data: subs, error: subErr } = await supabase
+      .from("push_subscriptions")
+      .select("endpoint, p256dh_key, auth_key")
+      .eq("user_id", userId);
 
-      if (subErr || !sub) {
-        return json({ error: "Subscription não encontrada", details: subErr?.message }, 404);
-      }
+    if (subErr || !subs || subs.length === 0) {
+      return json({ error: "Nenhuma subscription encontrada", details: subErr?.message }, 404);
+    }
 
+    const results: unknown[] = [];
+    for (const sub of subs) {
       try {
         const result = await sendWebPush(sub, { title, body, icon, tag, data });
+        results.push({ endpoint: sub.endpoint.slice(0, 40) + "...", ...result });
 
-        if (!result.ok) {
-          // 410 Gone = subscription expirada; limpar
-          if (result.status === 410 || result.status === 404) {
-            await supabase.from("push_subscriptions").delete().eq("user_id", userId);
-            return json({ error: "Subscription expirada e removida. Reative as notificações." }, 410);
-          }
-          return json({ error: "Push retornou erro", status: result.status, detail: result.detail }, 500);
+        // 410 Gone = subscription expirada; limpar este endpoint
+        if (result.status === 410 || result.status === 404) {
+          await supabase.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
         }
-
-        return json({ success: true });
       } catch (pushErr: unknown) {
-        return json({ error: pushErr instanceof Error ? pushErr.message : String(pushErr) }, 500);
+        results.push({ endpoint: sub.endpoint.slice(0, 40) + "...", error: pushErr instanceof Error ? pushErr.message : String(pushErr) });
       }
+    }
+
+    const anyOk = results.some((r: any) => r.ok);
+    return json({ success: anyOk, sent_to: subs.length, results });
     } catch (err: unknown) {
       return json({ error: err instanceof Error ? err.message : String(err) }, 500);
     }

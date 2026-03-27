@@ -18,11 +18,12 @@ export function useDashboardKpis({ since, until }: DashboardFilters) {
   return useQuery({
     queryKey: ["dashboard-kpis", since, until],
     queryFn: async () => {
+      // Filtra por date_approved (data real do pagamento), não date_created (início do checkout)
       const { data: sales, error } = await supabase
         .from("sales")
-        .select("sale_amount, sale_status_enum, date_created")
-        .gte("date_created", `${since}T00:00:00`)
-        .lte("date_created", `${until}T23:59:59`);
+        .select("sale_amount, sale_status_enum, date_approved, date_created")
+        .gte("date_approved", `${since}T00:00:00`)
+        .lte("date_approved", `${until}T23:59:59`);
 
       if (error) throw error;
 
@@ -66,17 +67,17 @@ export function useDailyRevenue({ since, until }: DashboardFilters) {
     queryFn: async () => {
       const { data: sales, error } = await supabase
         .from("sales")
-        .select("sale_amount, sale_status_enum, date_created")
+        .select("sale_amount, sale_status_enum, date_approved")
         .eq("sale_status_enum", "approved")
-        .gte("date_created", `${since}T00:00:00`)
-        .lte("date_created", `${until}T23:59:59`);
+        .gte("date_approved", `${since}T00:00:00`)
+        .lte("date_approved", `${until}T23:59:59`);
 
       if (error) throw error;
 
       const byDay: Record<string, number> = {};
       sales?.forEach((s) => {
-        if (s.date_created) {
-          const day = format(parseISO(s.date_created), "dd/MM");
+        if (s.date_approved) {
+          const day = format(parseISO(s.date_approved), "dd/MM");
           byDay[day] = (byDay[day] || 0) + Number(s.sale_amount || 0);
         }
       });
@@ -114,8 +115,8 @@ export function useSalesByProduct({ since, until }: DashboardFilters) {
         .from("sales")
         .select("product_name, sale_status_enum")
         .eq("sale_status_enum", "approved")
-        .gte("date_created", `${since}T00:00:00`)
-        .lte("date_created", `${until}T23:59:59`);
+        .gte("date_approved", `${since}T00:00:00`)
+        .lte("date_approved", `${until}T23:59:59`);
 
       if (error) throw error;
 
@@ -143,9 +144,9 @@ export function usePreviousPeriodKpis({ since, until }: DashboardFilters) {
 
       const { data: sales, error } = await supabase
         .from("sales")
-        .select("sale_amount, sale_status_enum, date_created")
-        .gte("date_created", `${prevSince}T00:00:00`)
-        .lte("date_created", `${prevUntil}T23:59:59`);
+        .select("sale_amount, sale_status_enum, date_approved")
+        .gte("date_approved", `${prevSince}T00:00:00`)
+        .lte("date_approved", `${prevUntil}T23:59:59`);
 
       if (error) throw error;
 
