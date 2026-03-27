@@ -97,9 +97,14 @@ export function PushNotificationsCard() {
         method: "GET",
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
-      const json: DiagResult = await res.json();
-      setDiagResult(json);
-      if (json?.ok) {
+      const raw = await res.json();
+      // Normaliza: garante que sempre tem campo `log`
+      const normalized: DiagResult = {
+        ok: raw?.ok ?? false,
+        log: raw?.log ?? (raw?.error ? { error: raw.error, dica: "A edge function pode estar desatualizada no Supabase. Faça o deploy via: supabase functions deploy send-push-notification" } : { raw: JSON.stringify(raw) }),
+      };
+      setDiagResult(normalized);
+      if (normalized.ok) {
         toast.success("Push enviado com sucesso! Verifique o dispositivo inscrito.");
       } else {
         toast.error("Falha no envio — veja o diagnóstico abaixo.");
