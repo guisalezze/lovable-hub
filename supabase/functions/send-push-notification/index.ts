@@ -1,195 +1,315 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-// @deno-types="https://esm.sh/@types/web-push@3.6.4/index.d.ts"
-import webpush from "https://esm.sh/web-push@4.0.0";
 
-const VAPID_PUBLIC_KEY = Deno.env.get("VITE_VAPID_PUBLIC_KEY") || "";
+// Supports both VAPID_PUBLIC_KEY (Supabase Secret) and VITE_VAPID_PUBLIC_KEY (legacy)
+const VAPID_PUBLIC_KEY =
+  Deno.env.get("VAPID_PUBLIC_KEY") || Deno.env.get("VITE_VAPID_PUBLIC_KEY") || "";
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") || "";
+const VAPID_SUBJECT = "mailto:support@solaryz.com";
 
-// Headers CORS obrigatórios para chamadas do browser
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-interface PushSubscription {
+// ─── Utilities ───────────────────────────────────────────────────────────────
+
+function b64urlToBytes(b64url: string): Uint8Array {
+  const padding = "=".repeat((4 - (b64url.length % 4)) % 4);
+  const b64 = (b64url + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64);
+  return new Uint8Array(bin.length).map((_, i) => bin.charCodeAt(i));
+}
+
+function bytesToB64url(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+}
+
+function concat(...arrays: Uint8Array[]): Uint8Array {
+  const total = arrays.reduce((n, a) => n + a.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const a of arrays) {
+    out.set(a, offset);
+    offset += a.length;
+  }
+  return out;
+}
+
+// ─── HKDF (SHA-256) via WebCrypto ────────────────────────────────────────────
+
+async function hkdf(
+  ikm: Uint8Array,
+  salt: Uint8Array,
+  info: Uint8Array,
+  length: number
+): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey("raw", ikm, "HKDF", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "HKDF", hash: "SHA-256", salt, info },
+    key,
+    length * 8
+  );
+  return new Uint8Array(bits);
+}
+
+// ─── VAPID JWT (ES256) ────────────────────────────────────────────────────────
+
+async function importVapidPrivateKey(rawB64url: string): Promise<CryptoKey> {
+  const raw = b64urlToBytes(rawB64url);
+  // Wrap 32-byte raw P-256 key in minimal PKCS#8 shell
+  const header = Uint8Array.from([
+    0x30, 0x41, 0x02, 0x01, 0x00, 0x30, 0x13, 0x06,
+    0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01,
+    0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03,
+    0x01, 0x07, 0x04, 0x27, 0x30, 0x25, 0x02, 0x01,
+    0x01, 0x04, 0x20,
+  ]);
+  const pkcs8 = new Uint8Array(header.length + raw.length);
+  pkcs8.set(header);
+  pkcs8.set(raw, header.length);
+  return await crypto.subtle.importKey(
+    "pkcs8",
+    pkcs8.buffer,
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"]
+  );
+}
+
+async function createVapidJwt(audience: string): Promise<string> {
+  const privateKey = await importVapidPrivateKey(VAPID_PRIVATE_KEY);
+  const now = Math.floor(Date.now() / 1000);
+  const enc = new TextEncoder();
+
+  const headerB64 = bytesToB64url(enc.encode(JSON.stringify({ typ: "JWT", alg: "ES256" })));
+  const claimsB64 = bytesToB64url(
+    enc.encode(JSON.stringify({ aud: audience, exp: now + 43200, sub: VAPID_SUBJECT }))
+  );
+  const sigInput = `${headerB64}.${claimsB64}`;
+
+  const sig = await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    privateKey,
+    enc.encode(sigInput)
+  );
+  return `${sigInput}.${bytesToB64url(new Uint8Array(sig))}`;
+}
+
+// ─── Web Push Payload Encryption (RFC 4288 / aesgcm) ─────────────────────────
+
+function buildKeyContext(clientPub: Uint8Array, serverPub: Uint8Array): Uint8Array {
+  const label = new TextEncoder().encode("P-256\0");
+  const out = new Uint8Array(label.length + 2 + clientPub.length + 2 + serverPub.length);
+  let i = 0;
+  out.set(label, i); i += label.length;
+  out[i++] = 0; out[i++] = clientPub.length;
+  out.set(clientPub, i); i += clientPub.length;
+  out[i++] = 0; out[i++] = serverPub.length;
+  out.set(serverPub, i);
+  return out;
+}
+
+async function encryptPayload(
+  plaintext: string,
+  p256dhB64url: string,
+  authB64url: string
+): Promise<{ ciphertext: ArrayBuffer; salt: Uint8Array; serverPubKey: Uint8Array }> {
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+
+  // Ephemeral server key pair
+  const serverKP = await crypto.subtle.generateKey(
+    { name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]
+  );
+  const serverPubKey = new Uint8Array(await crypto.subtle.exportKey("raw", serverKP.publicKey));
+
+  // Client public key
+  const clientPubBytes = b64urlToBytes(p256dhB64url);
+  const clientPubKey = await crypto.subtle.importKey(
+    "raw", clientPubBytes, { name: "ECDH", namedCurve: "P-256" }, false, []
+  );
+
+  // ECDH shared secret
+  const sharedSecret = new Uint8Array(
+    await crypto.subtle.deriveBits({ name: "ECDH", public: clientPubKey }, serverKP.privateKey, 256)
+  );
+
+  const authBytes = b64urlToBytes(authB64url);
+
+  // PRK = HKDF(ikm=sharedSecret, salt=auth, info="Content-Encoding: auth\0", L=32)
+  const prk = await hkdf(sharedSecret, authBytes, enc.encode("Content-Encoding: auth\0"), 32);
+
+  const keyCtx = buildKeyContext(clientPubBytes, serverPubKey);
+
+  // CEK = HKDF(ikm=prk, salt=salt, info="Content-Encoding: aesgcm\0" + keyCtx, L=16)
+  const cek = await hkdf(prk, salt, concat(enc.encode("Content-Encoding: aesgcm\0"), keyCtx), 16);
+
+  // Nonce = HKDF(ikm=prk, salt=salt, info="Content-Encoding: nonce\0" + keyCtx, L=12)
+  const nonce = await hkdf(prk, salt, concat(enc.encode("Content-Encoding: nonce\0"), keyCtx), 12);
+
+  const aesKey = await crypto.subtle.importKey("raw", cek, "AES-GCM", false, ["encrypt"]);
+  const paddedContent = concat(new Uint8Array(2), enc.encode(plaintext));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, aesKey, paddedContent);
+
+  return { ciphertext, salt, serverPubKey };
+}
+
+// ─── Core push sender ─────────────────────────────────────────────────────────
+
+interface PushSub {
   endpoint: string;
   p256dh_key: string;
   auth_key: string;
 }
 
-/**
- * Converte chave base64url para Buffer (formato esperado pelo web-push)
- */
-function base64UrlToBuffer(base64url: string): Uint8Array {
-  // Adicionar padding se necessário
-  let base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
-  while (base64.length % 4) {
-    base64 += "=";
-  }
-  
-  // Converter base64 para bytes
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
+async function sendWebPush(
+  sub: PushSub,
+  payload: { title: string; body: string; icon?: string; tag?: string; data?: unknown }
+): Promise<{ ok: boolean; status: number; detail: string }> {
+  const url = new URL(sub.endpoint);
+  const audience = `${url.protocol}//${url.host}`;
 
-/**
- * Envia notificação push usando Web Push Protocol com web-push library
- */
-async function sendPushNotification(
-  subscription: PushSubscription,
-  payload: { title: string; body: string; icon?: string; data?: any; tag?: string }
-) {
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-    throw new Error("VAPID keys não configuradas. Configure VITE_VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no Supabase.");
-  }
+  const jwt = await createVapidJwt(audience);
+  const { ciphertext, salt, serverPubKey } = await encryptPayload(
+    JSON.stringify(payload),
+    sub.p256dh_key,
+    sub.auth_key
+  );
 
-  // Converter subscription para formato esperado pelo web-push
-  const pushSubscription = {
-    endpoint: subscription.endpoint,
-    keys: {
-      p256dh: base64UrlToBuffer(subscription.p256dh_key),
-      auth: base64UrlToBuffer(subscription.auth_key),
+  const res = await fetch(sub.endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `WebPush ${jwt}`,
+      "Crypto-Key": `dh=${bytesToB64url(serverPubKey)};p256ecdsa=${VAPID_PUBLIC_KEY}`,
+      Encryption: `salt=${bytesToB64url(salt)}`,
+      "Content-Type": "application/octet-stream",
+      "Content-Encoding": "aesgcm",
+      TTL: "86400",
     },
-  };
-
-  // Criar payload JSON
-  const notificationPayload = JSON.stringify({
-    title: payload.title,
-    body: payload.body,
-    icon: payload.icon || "/logo.png",
-    badge: "/logo.png",
-    data: payload.data || {},
-    tag: payload.tag || "default",
+    body: ciphertext,
   });
 
-  // Configurar VAPID details
-  const vapidDetails = {
-    subject: "mailto:support@solaryz.com", // Pode ser qualquer email válido
-    publicKey: VAPID_PUBLIC_KEY,
-    privateKey: VAPID_PRIVATE_KEY,
-  };
-
-  try {
-    // Enviar notificação usando web-push
-    await webpush.sendNotification(pushSubscription, notificationPayload, {
-      vapidDetails,
-    });
-
-    console.log(`[send-push-notification] Notificação enviada com sucesso para ${subscription.endpoint}`);
-    return { success: true };
-  } catch (error: any) {
-    console.error(`[send-push-notification] Erro ao enviar:`, error);
-    
-    // Verificar se é erro de subscription inválida
-    if (error.statusCode === 410 || error.statusCode === 404 || error.message?.includes("Gone")) {
-      throw new Error("SUBSCRIPTION_INVALID");
-    }
-    
-    throw error;
-  }
+  const detail = await res.text();
+  console.log(`[push] endpoint=${sub.endpoint.slice(0, 60)}... status=${res.status} body=${detail}`);
+  return { ok: res.status === 201 || res.status === 200, status: res.status, detail };
 }
 
+// ─── Supabase client helper ────────────────────────────────────────────────────
+
+function makeClient() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+  );
+}
+
+// ─── HTTP handler ─────────────────────────────────────────────────────────────
+
 serve(async (req) => {
-  // Responder ao preflight OPTIONS do CORS
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  try {
-    const { userId, title, body, icon, data, tag } = await req.json();
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
 
-    if (!userId || !title || !body) {
-      return new Response(
-        JSON.stringify({ error: "userId, title e body são obrigatórios" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+  // ── Diagnostics / quick test (GET) ──────────────────────────────────────────
+  if (req.method === "GET") {
+    const log: Record<string, unknown> = {};
 
-    // Verificar se VAPID keys estão configuradas
+    log.vapid_public_key = VAPID_PUBLIC_KEY ? `OK (${VAPID_PUBLIC_KEY.length} chars)` : "MISSING";
+    log.vapid_private_key = VAPID_PRIVATE_KEY ? `OK (${VAPID_PRIVATE_KEY.length} chars)` : "MISSING";
+
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-      return new Response(
-        JSON.stringify({ 
-          error: "VAPID keys não configuradas", 
-          details: "Configure VITE_VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no Supabase Secrets" 
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      log.diagnosis = "Configure VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY nos Secrets do Supabase.";
+      return json({ ok: false, log }, 500);
     }
 
-    // Criar cliente Supabase
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
-    // Buscar subscription do usuário
-    const { data: subscription, error: subError } = await supabaseClient
+    const supabase = makeClient();
+    const { data: sub, error: subErr } = await supabase
       .from("push_subscriptions")
-      .select("endpoint, p256dh_key, auth_key")
-      .eq("user_id", userId)
+      .select("endpoint, p256dh_key, auth_key, user_id")
+      .order("updated_at", { ascending: false })
+      .limit(1)
       .single();
 
-    if (subError || !subscription) {
-      console.error(`[send-push-notification] Subscription não encontrada para userId: ${userId}`, subError);
-      return new Response(
-        JSON.stringify({ error: "Subscription não encontrada", details: subError?.message }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (subErr || !sub) {
+      log.subscription = "Nenhuma subscription encontrada no banco.";
+      return json({ ok: false, log });
     }
 
-    // Enviar notificação
-    try {
-      await sendPushNotification(subscription, {
-        title,
-        body,
-        icon,
-        data,
-        tag,
-      });
+    log.subscription = `user_id=${sub.user_id} endpoint=${sub.endpoint.slice(0, 60)}...`;
 
-      return new Response(
-        JSON.stringify({ success: true, message: "Notificação enviada" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    } catch (pushError: any) {
-      console.error(`[send-push-notification] Erro ao enviar push:`, pushError);
-      
-      // Se a subscription é inválida, remover do banco
-      if (pushError.message === "SUBSCRIPTION_INVALID" || pushError.message?.includes("410") || pushError.message?.includes("Gone")) {
-        await supabaseClient
-          .from("push_subscriptions")
-          .delete()
-          .eq("user_id", userId);
-        
-        return new Response(
-          JSON.stringify({ 
-            error: "Subscription inválida e removida", 
-            details: "A subscription foi removida. O usuário precisa reativar as notificações." 
-          }),
-          { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+    try {
+      const result = await sendWebPush(sub, {
+        title: "🔔 Teste de Push — Solaryz",
+        body: "Se você recebeu isso, as notificações estão funcionando!",
+        icon: "/logo.png",
+        tag: `test-${Date.now()}`,
+      });
+      log.push_result = result;
+      return json({ ok: result.ok, log });
+    } catch (err: unknown) {
+      log.push_error = err instanceof Error ? err.message : String(err);
+      return json({ ok: false, log }, 500);
+    }
+  }
+
+  // ── Send push (POST) ─────────────────────────────────────────────────────────
+  if (req.method === "POST") {
+    try {
+      const { userId, title, body, icon, data, tag } = await req.json();
+
+      if (!userId || !title || !body) {
+        return json({ error: "userId, title e body são obrigatórios" }, 400);
       }
 
-      return new Response(
-        JSON.stringify({ 
-          error: "Erro ao enviar push", 
-          details: pushError.message || String(pushError),
-          statusCode: pushError.statusCode 
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+        return json({
+          error: "VAPID keys não configuradas",
+          details: "Configure VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY nos Secrets do Supabase.",
+        }, 500);
+      }
+
+      const supabase = makeClient();
+      const { data: sub, error: subErr } = await supabase
+        .from("push_subscriptions")
+        .select("endpoint, p256dh_key, auth_key")
+        .eq("user_id", userId)
+        .single();
+
+      if (subErr || !sub) {
+        return json({ error: "Subscription não encontrada", details: subErr?.message }, 404);
+      }
+
+      try {
+        const result = await sendWebPush(sub, { title, body, icon, tag, data });
+
+        if (!result.ok) {
+          // 410 Gone = subscription expirada; limpar
+          if (result.status === 410 || result.status === 404) {
+            await supabase.from("push_subscriptions").delete().eq("user_id", userId);
+            return json({ error: "Subscription expirada e removida. Reative as notificações." }, 410);
+          }
+          return json({ error: "Push retornou erro", status: result.status, detail: result.detail }, 500);
+        }
+
+        return json({ success: true });
+      } catch (pushErr: unknown) {
+        return json({ error: pushErr instanceof Error ? pushErr.message : String(pushErr) }, 500);
+      }
+    } catch (err: unknown) {
+      return json({ error: err instanceof Error ? err.message : String(err) }, 500);
     }
-  } catch (error: any) {
-    console.error(`[send-push-notification] Erro geral:`, error);
-    return new Response(
-      JSON.stringify({ error: error.message || String(error) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   }
+
+  return json({ error: "Método não suportado" }, 405);
 });
