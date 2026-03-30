@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback } from "react";
+import DOMPurify from "dompurify";
 import { Button } from "@/components/ui/button";
 import { Bold, Italic, List, ListOrdered } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,7 +29,7 @@ export function CopyBodyEditor({
     if (!el) return;
     if (document.activeElement === el) return; // user is typing — don't overwrite
     if (value !== lastValue.current) {
-      el.innerHTML = value;
+      el.innerHTML = DOMPurify.sanitize(value);
       lastValue.current = value;
     }
   }, [value]);
@@ -37,7 +38,7 @@ export function CopyBodyEditor({
   useEffect(() => {
     const el = editorRef.current;
     if (el && value) {
-      el.innerHTML = value;
+      el.innerHTML = DOMPurify.sanitize(value);
       lastValue.current = value;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
