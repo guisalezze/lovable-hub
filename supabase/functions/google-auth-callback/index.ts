@@ -78,6 +78,7 @@ Deno.serve(async (req) => {
     return new Response(null, {
       status: 302,
       headers: {
+        "Access-Control-Allow-Origin": "https://crm.guisalezze.com",
         Location: `${siteUrl}/integracoes?google=connected`,
       },
     });
