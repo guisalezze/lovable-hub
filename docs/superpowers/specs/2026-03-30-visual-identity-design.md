@@ -10,8 +10,8 @@
 
 | Dimension | Before | After |
 |-----------|--------|-------|
-| Display font | Inter 700 | **Syne 800** |
-| Body font | Inter 400/500 | **DM Sans 400/500/600** |
+| Display font | Inter 700 | **Raleway 800** |
+| Body font | Inter 400/500 | **Nunito 400/500/600** |
 | Background | `222 28% 7%` | `#090e17` (deeper) |
 | Sidebar bg | `222 30% 5%` | `#060b13` (darker layer) |
 | Card bg | `222 26% 10%` | `#0d1826` |
@@ -26,31 +26,31 @@
 ### Fonts
 
 ```
-Display/Headings: Syne, weight 800 (700 for subheadings)
-Body/UI:          DM Sans, weight 400 / 500 / 600
+Display/Headings: Raleway, weight 800 (700 for subheadings)
+Body/UI:          Nunito, weight 400 / 500 / 600
 Mono (code):      JetBrains Mono (unchanged)
 ```
 
 Google Fonts import (replaces current Inter):
 ```
-https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap
+https://fonts.googleapis.com/css2?family=Raleway:wght@700;800&family=Nunito:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap
 ```
 
 ### Type Scale
 
 | Role | Font | Weight | Size | Letter-spacing |
 |------|------|--------|------|----------------|
-| Page title | Syne | 800 | 1.5–2rem | −0.04em |
-| Section heading | Syne | 700 | 1–1.2rem | −0.03em |
-| KPI number | Syne | 800 | 1.4–2rem | −0.04em |
-| Eyebrow label | DM Sans | 700 | 0.6rem | +0.12em uppercase |
-| Body text | DM Sans | 400 | 0.875rem | −0.01em |
-| UI label | DM Sans | 500–600 | 0.75–0.8rem | 0 |
-| Caption | DM Sans | 500 | 0.65–0.7rem | 0 |
+| Page title | Raleway | 800 | 1.5–2rem | −0.04em |
+| Section heading | Raleway | 700 | 1–1.2rem | −0.03em |
+| KPI number | Raleway | 800 | 1.4–2rem | −0.04em |
+| Eyebrow label | Nunito | 700 | 0.6rem | +0.12em uppercase |
+| Body text | Nunito | 400 | 0.875rem | −0.01em |
+| UI label | Nunito | 500–600 | 0.75–0.8rem | 0 |
+| Caption | Nunito | 500 | 0.65–0.7rem | 0 |
 
 ### Eyebrow Pattern
 
-Every major section and card gets an **eyebrow**: small uppercase label in amber above the Syne heading. This is the defining editorial signature of the identity.
+Every major section and card gets an **eyebrow**: small uppercase label in amber above the Raleway heading. This is the defining editorial signature of the identity.
 
 ```html
 <p class="eyebrow">Março 2026</p>
@@ -59,7 +59,7 @@ Every major section and card gets an **eyebrow**: small uppercase label in amber
 
 ```css
 .eyebrow {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Nunito', sans-serif;
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -121,9 +121,9 @@ Colors are preserved from the existing system. Only the background layering is a
 
 ### `src/index.css`
 
-1. Replace Google Fonts import: Inter → Syne + DM Sans
-2. Update `--font-sans` to `'DM Sans', system-ui, sans-serif`
-3. Add `--font-display: 'Syne', sans-serif`
+1. Replace Google Fonts import: Inter → Raleway + Nunito
+2. Update `--font-sans` to `'Nunito', system-ui, sans-serif`
+3. Add `--font-display: 'Raleway', sans-serif`
 4. Update dark-mode background tokens (3-layer system above)
 5. Update `--radius` to `0.625rem`
 6. Add `.eyebrow` utility class
@@ -133,14 +133,14 @@ Colors are preserved from the existing system. Only the background layering is a
 
 ### `tailwind.config.ts`
 
-1. Update `fontFamily.sans` → `['DM Sans', 'system-ui', ...]`
-2. Add `fontFamily.display` → `['Syne', 'system-ui', ...]`
+1. Update `fontFamily.sans` → `['Nunito', 'system-ui', ...]`
+2. Add `fontFamily.display` → `['Raleway', 'system-ui', ...]`
 3. No color changes (all via CSS variables)
 
 ### `src/components/layout/AppSidebar.tsx`
 
 Visual changes only (no logic):
-1. Brand name: add `font-display` class for Syne rendering
+1. Brand name: add `font-display` class for Raleway rendering
 2. Section labels: add uppercase eyebrow styling
 3. Active nav item: tighten padding, ensure amber/teal treatment matches spec
 
@@ -157,8 +157,8 @@ Visual changes only (no logic):
 
 ### `src/pages/Auth.tsx`
 
-1. Brand name "OpsCRM": Syne 800, amber
-2. Subtitle: DM Sans italic, muted
+1. Brand name "OpsCRM": Raleway 800, amber
+2. Subtitle: Nunito italic, muted
 
 ---
 
