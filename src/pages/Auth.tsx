@@ -6,15 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Zap } from "lucide-react";
 import { toast } from "sonner";
 
-/**
- * Mapa de usernames curtos → email completo.
- * Permite login com "guizz", "marilia" ou "kabul" no lugar do email.
- */
-const USERNAME_MAP: Record<string, string> = {
-  guizz:   "salezzeguilherme@gmail.com",
-  marilia: "mariliacatarinne@gmail.com",
-  kabul:   "marcusv.castello@gmail.com",
-};
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 
 export default function AuthPage() {
   const [login, setLogin] = useState("");
@@ -36,29 +28,34 @@ export default function AuthPage() {
     e.preventDefault();
     setLoading(true);
 
-    // Resolver username → email (se não contiver @, busca no mapa)
     const trimmed = login.trim().toLowerCase();
-    let resolvedEmail: string | null;
 
-    if (trimmed.includes("@")) {
-      resolvedEmail = trimmed;
-    } else {
-      resolvedEmail = USERNAME_MAP[trimmed] ?? null;
-    }
-
-    if (!resolvedEmail) {
-      toast.error("Usuário não encontrado. Use seu email ou username.");
+    try {
+      if (trimmed.includes("@")) {
+        // Direct email login
+        const { error } = await supabase.auth.signInWithPassword({
+          email: trimmed,
+          password,
+        });
+        if (error) toast.error("Email ou senha incorretos.");
+      } else {
+        // Username login — resolved server-side (email never sent to browser)
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/resolve-username`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: trimmed, password }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.session) {
+          toast.error("Usuário ou senha incorretos.");
+          return;
+        }
+        const { error } = await supabase.auth.setSession(data.session);
+        if (error) toast.error("Usuário ou senha incorretos.");
+      }
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: resolvedEmail,
-      password,
-    });
-
-    if (error) toast.error("Email/usuário ou senha incorretos.");
-    setLoading(false);
   }
 
   return (
@@ -77,7 +74,7 @@ export default function AuthPage() {
         <form onSubmit={handleSubmit} className="glass-card p-6 space-y-4">
           <Input
             type="text"
-            placeholder="Email ou usuário (ex: guizz)"
+            placeholder="Email ou usuário"
             value={login}
             onChange={(e) => setLogin(e.target.value)}
             required
