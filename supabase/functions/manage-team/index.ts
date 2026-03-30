@@ -6,6 +6,13 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const VALID_ROLES: string[] = ["admin", "team"];
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUUID(id: string): boolean {
+  return UUID_REGEX.test(id);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -66,6 +73,13 @@ Deno.serve(async (req) => {
         });
       }
 
+      if (Array.isArray(project_ids) && project_ids.some((pid: unknown) => typeof pid !== "string" || !isValidUUID(pid))) {
+        return new Response(JSON.stringify({ error: "project_ids inválidos" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const { data: newUser, error: createError } = await serviceClient.auth.admin.createUser({
         email,
         password,
@@ -75,7 +89,10 @@ Deno.serve(async (req) => {
 
       if (createError) {
         console.error("Create user error:", createError);
-        return new Response(JSON.stringify({ error: createError.message }), {
+        const msg = createError.message?.includes("already")
+          ? "Email já cadastrado."
+          : "Não foi possível criar o usuário.";
+        return new Response(JSON.stringify({ error: msg }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -92,9 +109,10 @@ Deno.serve(async (req) => {
       });
 
       // Insert role
+      const assignedRole = role && VALID_ROLES.includes(role) ? role : "team";
       await serviceClient.from("user_roles").insert({
         user_id: userId,
-        role: role || "team",
+        role: assignedRole,
       });
 
       // Insert project access
@@ -113,8 +131,15 @@ Deno.serve(async (req) => {
     if (action === "update") {
       const { user_id, full_name, phone_e164, role, project_ids } = body;
 
-      if (!user_id) {
-        return new Response(JSON.stringify({ error: "user_id é obrigatório" }), {
+      if (!user_id || !isValidUUID(user_id)) {
+        return new Response(JSON.stringify({ error: "user_id inválido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (Array.isArray(project_ids) && project_ids.some((pid: unknown) => typeof pid !== "string" || !isValidUUID(pid))) {
+        return new Response(JSON.stringify({ error: "project_ids inválidos" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -130,7 +155,7 @@ Deno.serve(async (req) => {
       }
 
       // Update role if provided
-      if (role) {
+      if (role && VALID_ROLES.includes(role)) {
         await serviceClient.from("user_roles").update({ role }).eq("user_id", user_id);
       }
 
@@ -155,8 +180,8 @@ Deno.serve(async (req) => {
     if (action === "remove") {
       const { user_id } = body;
 
-      if (!user_id) {
-        return new Response(JSON.stringify({ error: "user_id é obrigatório" }), {
+      if (!user_id || !isValidUUID(user_id)) {
+        return new Response(JSON.stringify({ error: "user_id inválido" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -176,7 +201,7 @@ Deno.serve(async (req) => {
       const { error: deleteError } = await serviceClient.auth.admin.deleteUser(user_id);
       if (deleteError) {
         console.error("Delete user error:", deleteError);
-        return new Response(JSON.stringify({ error: deleteError.message }), {
+        return new Response(JSON.stringify({ error: "Não foi possível remover o usuário." }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
