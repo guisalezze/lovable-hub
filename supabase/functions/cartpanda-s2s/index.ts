@@ -9,6 +9,21 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Verify CartPanda secret — mandatory
+  const webhookSecret = Deno.env.get("CARTPANDA_WEBHOOK_SECRET");
+  if (!webhookSecret) {
+    console.error("CARTPANDA_WEBHOOK_SECRET not configured");
+    return new Response(JSON.stringify({ error: "Webhook not configured" }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const providedToken = req.headers.get("X-Cartpanda-Token") || req.headers.get("Authorization")?.replace("Bearer ", "");
+  if (providedToken !== webhookSecret) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const payload = await req.json();
     

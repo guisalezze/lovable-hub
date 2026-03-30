@@ -15,16 +15,24 @@ Deno.serve(async (req) => {
     const body = await req.text();
     const payload = JSON.parse(body);
 
-    // Verify ClickBank signature if secret is configured
+    // Verify ClickBank secret — mandatory
     const secretKey = Deno.env.get("CLICKBANK_SECRET_KEY");
-    if (secretKey) {
-      // ClickBank sends verification via specific headers or fields
-      // Basic validation: check that required fields exist
-      if (!payload.transactionType) {
-        return new Response(JSON.stringify({ error: "Invalid ClickBank payload" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    if (!secretKey) {
+      console.error("CLICKBANK_SECRET_KEY not configured");
+      return new Response(JSON.stringify({ error: "Webhook not configured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const providedKey = req.headers.get("X-Clickbank-Key") || req.headers.get("Authorization")?.replace("Bearer ", "");
+    if (providedKey !== secretKey) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!payload.transactionType) {
+      return new Response(JSON.stringify({ error: "Invalid ClickBank payload" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
