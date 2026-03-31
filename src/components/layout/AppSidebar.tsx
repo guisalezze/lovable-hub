@@ -147,7 +147,7 @@ function SidebarContent() {
           alt="Solaryz"
           className="h-12 w-12 rounded-xl object-cover shrink-0"
         />
-        <span className="font-display font-extrabold text-foreground text-lg tracking-tight whitespace-nowrap">
+        <span className="heading-display text-foreground text-lg whitespace-nowrap">
           Solaryz
         </span>
       </div>

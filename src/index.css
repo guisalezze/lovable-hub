@@ -211,6 +211,10 @@
     pointer-events: none;
   }
 
+  .heading-display {
+    @apply font-display font-extrabold tracking-tight;
+  }
+
   .eyebrow {
     font-family: var(--font-sans);
     font-size: 0.6rem;
