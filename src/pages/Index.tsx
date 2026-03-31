@@ -90,7 +90,8 @@ const Dashboard = () => {
     <div className="space-y-4 sm:space-y-6 w-full max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground">
+          <p className="eyebrow">{format(new Date(), "MMMM yyyy")}</p>
+          <h1 className="text-xl sm:text-2xl font-display font-extrabold tracking-tight text-foreground">
             {currentProject?.icon} Dashboard · {currentProject?.name}
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">Visão geral da operação</p>
