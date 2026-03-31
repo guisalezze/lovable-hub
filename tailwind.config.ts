@@ -15,11 +15,16 @@ export default {
   	extend: {
   		fontFamily: {
   			sans: [
-  				'Inter',
+  				'Nunito',
   				'system-ui',
   				'-apple-system',
   				'BlinkMacSystemFont',
   				'Segoe UI',
+  				'sans-serif'
+  			],
+  			display: [
+  				'Raleway',
+  				'system-ui',
   				'sans-serif'
   			],
   			serif: [
