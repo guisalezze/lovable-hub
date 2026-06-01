@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Users,
@@ -16,12 +16,14 @@ import {
   BarChart3,
   ChevronDown,
   FileText,
+  LogOut,
 } from "lucide-react";
 import { useProject, type Project } from "@/contexts/ProjectContext";
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { supabase } from "@/integrations/supabase/client";
 
 interface NavItem {
   label: string;
@@ -129,7 +131,13 @@ interface AppSidebarProps {
 function SidebarContent() {
   const { projects, currentProject, setCurrentProject } = useProject();
   const location = useLocation();
+  const navigate = useNavigate();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ educacional: true, nutra: true });
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth");
+  };
 
   const eduProject = projects.find((p) => p.slug === "educacional");
   const nutraProject = projects.find((p) => p.slug === "nutra");
@@ -205,7 +213,7 @@ function SidebarContent() {
       </nav>
 
       {/* Footer */}
-      <div className="p-3 border-t border-sidebar-border">
+      <div className="p-3 border-t border-sidebar-border space-y-1">
         <div className="flex items-center gap-3 px-3 py-2">
           <img
             src="/logo.png"
@@ -219,6 +227,13 @@ function SidebarContent() {
             </p>
           </div>
         </div>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium w-full transition-colors text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+        >
+          <LogOut className="h-4 w-4 shrink-0" />
+          <span>Sair</span>
+        </button>
       </div>
     </>
   );
