@@ -76,11 +76,13 @@ export function CreateCallFromLeadDialog({
               meet_link: result.meetLink || callData.meet_link,
               google_event_id: result.eventId,
             }).eq("id", callData.id);
-            // Show generated meet link
             if (result.meetLink) setMeetLink(result.meetLink);
+          } else if (result === null) {
+            toast.warning("Google Calendar: não foi possível gerar o link do Meet. Verifique a conexão com o Google.");
           }
         } catch (e) {
           console.error("Google Calendar sync failed:", e);
+          toast.warning("Erro ao sincronizar com Google Calendar.");
         }
       }
 

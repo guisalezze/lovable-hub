@@ -26,17 +26,15 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data, error } = await supabase.auth.getClaims(
-      authHeader.replace("Bearer ", "")
-    );
-    if (error || !data?.claims) {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData?.user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const userId = data.claims.sub;
+    const userId = userData.user.id;
     const clientId = Deno.env.get("GOOGLE_CLIENT_ID")!;
     const redirectUri = `${Deno.env.get("SUPABASE_URL")}/functions/v1/google-auth-callback`;
 
