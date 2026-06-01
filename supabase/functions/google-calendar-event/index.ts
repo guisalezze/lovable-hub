@@ -42,7 +42,8 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: userData, error: userError } = await supabaseUser.auth.getUser();
+    const token = authHeader.replace("Bearer ", "");
+    const { data: userData, error: userError } = await supabaseUser.auth.getUser(token);
     if (userError || !userData?.user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -141,6 +142,7 @@ Deno.serve(async (req) => {
       );
     }
 
+    console.log("conferenceData:", JSON.stringify(calData.conferenceData ?? null));
     const meetLink = calData.conferenceData?.entryPoints?.find(
       (ep: { entryPointType: string }) => ep.entryPointType === "video"
     )?.uri || null;
