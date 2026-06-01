@@ -12,17 +12,40 @@ export default function AuthPage() {
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isRecovery, setIsRecovery] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) navigate("/", { replace: true });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setIsRecovery(true);
+        return;
+      }
+      if (session && !isRecovery) navigate("/", { replace: true });
     });
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigate("/", { replace: true });
+      if (session && !isRecovery) navigate("/", { replace: true });
     });
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, isRecovery]);
+
+  async function handlePasswordReset(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        toast.error("Erro ao redefinir senha: " + error.message);
+      } else {
+        toast.success("Senha redefinida com sucesso!");
+        setIsRecovery(false);
+        navigate("/", { replace: true });
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,6 +94,23 @@ export default function AuthPage() {
           </p>
         </div>
 
+        {isRecovery ? (
+          <form onSubmit={handlePasswordReset} className="glass-card p-6 space-y-4">
+            <p className="text-sm text-muted-foreground text-center">Digite sua nova senha</p>
+            <Input
+              type="password"
+              placeholder="Nova senha"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              minLength={6}
+              className="bg-secondary border-border"
+            />
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Salvando..." : "Redefinir senha"}
+            </Button>
+          </form>
+        ) : (
         <form onSubmit={handleSubmit} className="glass-card p-6 space-y-4">
           <Input
             type="text"
@@ -94,6 +134,7 @@ export default function AuthPage() {
             {loading ? "Carregando..." : "Entrar"}
           </Button>
         </form>
+        )}
 
         <p className="text-xs text-muted-foreground text-center mt-4">
           Acesso restrito. Contate o administrador para obter uma conta.
