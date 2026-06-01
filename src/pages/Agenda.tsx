@@ -406,6 +406,10 @@ function NewCallDialog({
       (l.full_name || "").toLowerCase().includes(leadSearch.toLowerCase())
   );
 
+  useEffect(() => {
+    if (open) setDate(format(defaultDate, "yyyy-MM-dd"));
+  }, [open, defaultDate]);
+
   const createCall = useMutation({
     mutationFn: async () => {
       const startAt = new Date(`${date}T${time}:00`);
@@ -607,8 +611,11 @@ function NewTaskDialog({
       (l.full_name || "").toLowerCase().includes(leadSearch.toLowerCase())
   );
 
+  useEffect(() => {
+    if (open) setDueDate(format(defaultDate, "yyyy-MM-dd"));
+  }, [open, defaultDate]);
+
   const handleOpenChange = (v: boolean) => {
-    if (v) setDueDate(format(defaultDate, "yyyy-MM-dd"));
     onOpenChange(v);
   };
 
