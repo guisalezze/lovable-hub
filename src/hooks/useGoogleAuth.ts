@@ -59,16 +59,29 @@ export function useGoogleAuth() {
 
   const disconnect = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
-      // Use supabase client to delete own tokens (RLS allows DELETE for own user)
-      await (supabase as any).from("google_tokens").delete().eq("user_id", user.id);
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/google-disconnect`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Erro ao desconectar");
+      }
 
       qc.invalidateQueries({ queryKey: ["google-auth-status"] });
       toast.success("Google desconectado");
-    } catch {
-      toast.error("Erro ao desconectar");
+    } catch (e: any) {
+      toast.error("Erro ao desconectar: " + e.message);
     }
   };
 
