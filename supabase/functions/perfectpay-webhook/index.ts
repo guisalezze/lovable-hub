@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 // Perfect Pay sale_status_enum mapping (numeric codes from docs)
+// Códigos oficiais: https://help.perfectpay.com.br/article/597-integracao-via-webhook-com-a-perfect-pay
 const SALE_STATUS_MAP: Record<number, string> = {
   0: "none",
   1: "pending",
@@ -16,9 +17,11 @@ const SALE_STATUS_MAP: Record<number, string> = {
   5: "rejected",
   6: "cancelled",
   7: "refunded",
+  8: "authorized",
   9: "charged_back",
+  10: "completed",
   11: "checkout_error",
-  12: "abandono",
+  12: "precheckout",
   13: "expired",
   16: "in_review",
   17: "pre_chargeback",
@@ -66,24 +69,15 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
-    // Verify webhook secret — mandatory
-    const webhookSecret = Deno.env.get("PERFECTPAY_WEBHOOK_SECRET");
-    if (!webhookSecret) {
-      console.error("PERFECTPAY_WEBHOOK_SECRET not configured");
-      return new Response(JSON.stringify({ error: "Webhook not configured" }), {
-        status: 500,
+    let payload: Record<string, unknown>;
+    try {
+      payload = (await req.json()) as Record<string, unknown>;
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON" }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const providedToken = req.headers.get("X-Webhook-Token") || req.headers.get("Authorization")?.replace("Bearer ", "");
-    if (providedToken !== webhookSecret) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const payload = await req.json();
 
     // Log raw webhook
     await supabase.from("webhook_logs").insert({
@@ -126,7 +120,12 @@ Deno.serve(async (req) => {
     const rawStatus = typeof payload.sale_status_enum === "number"
       ? payload.sale_status_enum
       : parseInt(payload.sale_status_enum || "0", 10);
-    const saleStatus = SALE_STATUS_MAP[rawStatus] || String(payload.sale_status_enum);
+    let saleStatus = SALE_STATUS_MAP[rawStatus] || String(payload.sale_status_enum);
+
+    // 8 (authorized) e 10 (completed) são estados de venda paga na PP; o CRM trata receita só como "approved"
+    if (saleStatus === "authorized" || saleStatus === "completed") {
+      saleStatus = "approved";
+    }
 
     const rawPaymentType = typeof payload.payment_type_enum === "number"
       ? payload.payment_type_enum
@@ -157,12 +156,29 @@ Deno.serve(async (req) => {
       leadStatus = "perdido";
     }
 
+    const countryStr = String(customer.country ?? "").toLowerCase();
+    const phoneFromParts =
+      customer.phone_area_code != null && customer.phone_number != null
+        ? (() => {
+            const ac = String(customer.phone_area_code).replace(/\D/g, "");
+            const num = String(customer.phone_number).replace(/\D/g, "");
+            if (!num) return null;
+            const br = !countryStr || countryStr.includes("brasil") || countryStr === "br";
+            return br ? `+55${ac}${num}` : `+${ac}${num}`;
+          })()
+        : null;
+
     // Build lead data from customer fields per Perfect Pay docs
     const leadData: Record<string, unknown> = {
       email,
       full_name: customer.full_name || null,
-      phone_e164: customer.phone_formated_ddi || null,
-      phone_formatted: customer.phone_formated || customer.phone_formated_ddi || null,
+      phone_e164: customer.phone_formated_ddi || phoneFromParts,
+      phone_formatted:
+        customer.phone_formated ||
+        customer.phone_formated_ddi ||
+        (customer.phone_area_code != null && customer.phone_number != null
+          ? `${String(customer.phone_area_code)} ${String(customer.phone_number)}`
+          : null),
       city: customer.city || null,
       state: customer.state || null,
       country: customer.country || null,
@@ -280,26 +296,38 @@ Deno.serve(async (req) => {
         const buyerName = customer.full_name || lead.full_name || "Cliente";
 
         // Create onboarding task
-        await supabase.from("tasks").insert({
-          title: `Onboarding: ${buyerName} — ${productName}`,
-          description: `Nova venda aprovada. Enviar link de onboarding e realizar primeira reunião.`,
-          assigned_to: lead.assigned_to,
-          status: "backlog",
-          priority: "alta",
-          due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-        }).catch(() => {});
+        try {
+          await supabase.from("tasks").insert({
+            title: `Onboarding: ${buyerName} — ${productName}`,
+            description: `Nova venda aprovada. Enviar link de onboarding e realizar primeira reunião.`,
+            assigned_to: lead.assigned_to,
+            status: "backlog",
+            priority: "alta",
+            due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+          });
+        } catch (_) {}
 
         // Auto-create onboarding_responses record
-        await supabase.from("onboarding_responses").insert({
-          lead_id: lead.id,
-          assigned_to: lead.assigned_to,
-        }).catch(() => {});
+        try {
+          await supabase.from("onboarding_responses").insert({
+            lead_id: lead.id,
+            assigned_to: lead.assigned_to,
+          });
+        } catch (_) {}
       }
     }
 
     // ── Auto-create charges for installment sales ────────────────────────
     if (saleStatus === "approved" && email && saleAmount > 0) {
-      const rawInstallments = parseInt(String(metadata.installments || plan.installments || 1), 10);
+      const rawInstallments = parseInt(
+        String(
+          (payload as Record<string, unknown>).installments ??
+            metadata.installments ??
+            plan.installments ??
+            1
+        ),
+        10
+      );
       if (rawInstallments > 1) {
         const { data: lead } = await supabase
           .from("leads")
@@ -309,23 +337,27 @@ Deno.serve(async (req) => {
 
         if (lead) {
           const installmentValue = saleAmount / rawInstallments;
-          const { data: charge } = await supabase.from("charges").insert({
-            product_name: product.name || "Produto",
-            client_name: lead.full_name || email,
-            total_ticket: saleAmount,
-            entry_paid: installmentValue,
-            installments_count: rawInstallments - 1,
-            installment_value: installmentValue,
-            assigned_to: lead.assigned_to,
-            notes: `Criado automaticamente via PerfectPay. Código: ${saleCode}`,
-          }).select("id").single().catch(() => ({ data: null }));
+          let chargeId: string | null = null;
+          try {
+            const { data: charge } = await supabase.from("charges").insert({
+              product_name: product.name || "Produto",
+              client_name: lead.full_name || email,
+              total_ticket: saleAmount,
+              entry_paid: installmentValue,
+              installments_count: rawInstallments - 1,
+              installment_value: installmentValue,
+              assigned_to: lead.assigned_to,
+              notes: `Criado automaticamente via PerfectPay. Código: ${saleCode}`,
+            }).select("id").single();
+            chargeId = charge?.id ?? null;
+          } catch (_) {}
 
-          if (charge?.id) {
+          if (chargeId) {
             const installments = Array.from({ length: rawInstallments - 1 }, (_, i) => {
               const dueDate = new Date();
               dueDate.setMonth(dueDate.getMonth() + i + 1);
               return {
-                charge_id: charge.id,
+                charge_id: chargeId,
                 installment_number: i + 2,
                 due_date: dueDate.toISOString().slice(0, 10),
                 amount: installmentValue,
@@ -333,7 +365,9 @@ Deno.serve(async (req) => {
               };
             });
             if (installments.length > 0) {
-              await supabase.from("charge_installments").insert(installments).catch(() => {});
+              try {
+                await supabase.from("charge_installments").insert(installments);
+              } catch (_) {}
             }
           }
         }

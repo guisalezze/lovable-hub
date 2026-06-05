@@ -75,6 +75,21 @@ function useCalls() {
 }
 
 function useLeads() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("leads-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["leads-list"] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   return useQuery({
     queryKey: ["leads-list"],
     queryFn: async () => {
@@ -84,6 +99,7 @@ function useLeads() {
         .order("full_name", { ascending: true });
       return (data as Lead[]) || [];
     },
+    staleTime: 0,
   });
 }
 
