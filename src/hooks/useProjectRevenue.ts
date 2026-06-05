@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
+import { isApprovedSaleStatus } from "@/hooks/useDashboardData";
 
 /** Faturamento acumulado total: vendas aprovadas + mentorias (paid_amount) — separado por projeto */
 export function useProjectRevenueTotal() {
@@ -34,15 +35,11 @@ export function useProjectRevenueTotal() {
         mentoriasTotal = 0;
       } else {
         // Educacional — tabela sales (acumulado total, sem filtro de data)
-        const { data: salesData } = await supabase
-          .from("sales")
-          .select("sale_amount")
-          .eq("sale_status_enum", "approved");
+        const { data: salesData } = await supabase.from("sales").select("sale_amount, sale_status_enum");
 
-        salesTotal = (salesData || []).reduce(
-          (acc, s) => acc + Number(s.sale_amount || 0),
-          0
-        );
+        salesTotal = (salesData || [])
+          .filter((s) => isApprovedSaleStatus(s.sale_status_enum))
+          .reduce((acc, s) => acc + Number(s.sale_amount || 0), 0);
 
         // Mentorias/Implementações — paid_amount registrado (só Educacional)
         // Se a coluna ainda não existe (migration pendente), o erro é ignorado e mentoriasTotal = 0

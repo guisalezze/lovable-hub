@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { brazilCivilRangeUtcIso, isApprovedSaleStatus } from "@/hooks/useDashboardData";
 
 export function useProductGoals(since: string, until: string) {
   return useQuery({
@@ -12,15 +13,17 @@ export function useProductGoals(since: string, until: string) {
         .gte("period_end", since);
       if (error) throw error;
 
-      const { data: sales } = await supabase
+      const { startIso, endIso } = brazilCivilRangeUtcIso(since, until);
+      const { data: salesRaw } = await supabase
         .from("sales")
-        .select("product_name, sale_amount")
-        .eq("sale_status_enum", "approved")
-        .gte("created_at", `${since}T00:00:00`)
-        .lte("created_at", `${until}T23:59:59`);
+        .select("product_name, sale_amount, sale_status_enum")
+        .gte("created_at", startIso)
+        .lte("created_at", endIso);
+
+      const sales = (salesRaw || []).filter((s) => isApprovedSaleStatus(s.sale_status_enum));
 
       const revenueByProduct: Record<string, number> = {};
-      (sales || []).forEach((s: any) => {
+      sales.forEach((s: any) => {
         const p = s.product_name || "Outros";
         revenueByProduct[p] = (revenueByProduct[p] || 0) + Number(s.sale_amount || 0);
       });

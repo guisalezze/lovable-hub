@@ -1,7 +1,74 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format, subDays, parseISO, formatDistanceToNow, differenceInDays } from "date-fns";
+import { format, subDays, parseISO, formatDistanceToNow, differenceInDays, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+/** Intervalo em UTC equivalente aos dias civis [since, until] em America/Sao_Paulo (UTC−3, sem horário de verão). */
+export function brazilCivilRangeUtcIso(since: string, until: string): { startIso: string; endIso: string } {
+  const startIso = `${since}T03:00:00.000Z`;
+  const endDayAfter = addDays(parseISO(`${until}T12:00:00`), 1);
+  const endIso = `${format(endDayAfter, "yyyy-MM-dd")}T02:59:59.999Z`;
+  return { startIso, endIso };
+}
+
+/** Rótulo dd/MM no fuso de Brasília (para gráficos baterem com "Ontem" / período). */
+function dayLabelBrazil(iso: string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(parseISO(iso));
+}
+
+/** Venda aprovada (texto atual ou legado quando o webhook gravava o código numérico como string). */
+export function isApprovedSaleStatus(status: string | null | undefined): boolean {
+  if (status == null || status === "") return false;
+  const s = String(status).toLowerCase();
+  if (s === "approved" || s === "authorized" || s === "completed") return true;
+  if (s === "2" || s === "8" || s === "10") return true;
+  return false;
+}
+
+/**
+ * Vendas que "tocam" o período civil BR: data de aprovação, data do pedido (PP) ou data de gravação no CRM.
+ * Evita sumir venda antiga só porque `date_approved` está vazio/errado enquanto `date_created`/`created_at` batem.
+ */
+async function fetchSalesTouchingBrazilPeriod(
+  startIso: string,
+  endIso: string,
+  columns: string
+): Promise<Record<string, unknown>[]> {
+  const col = columns.includes("id") ? columns : `id, ${columns}`;
+  const [byApprovedAt, byOrderDate, byRowCreated] = await Promise.all([
+    supabase
+      .from("sales")
+      .select(col)
+      .not("date_approved", "is", null)
+      .gte("date_approved", startIso)
+      .lte("date_approved", endIso),
+    supabase
+      .from("sales")
+      .select(col)
+      .not("date_created", "is", null)
+      .gte("date_created", startIso)
+      .lte("date_created", endIso),
+    supabase
+      .from("sales")
+      .select(col)
+      .gte("created_at", startIso)
+      .lte("created_at", endIso),
+  ]);
+  if (byApprovedAt.error) throw byApprovedAt.error;
+  if (byOrderDate.error) throw byOrderDate.error;
+  if (byRowCreated.error) throw byRowCreated.error;
+
+  const map = new Map<string, Record<string, unknown>>();
+  for (const row of [...(byApprovedAt.data ?? []), ...(byOrderDate.data ?? []), ...(byRowCreated.data ?? [])]) {
+    const id = row.id as string | undefined;
+    if (id && !map.has(id)) map.set(id, row);
+  }
+  return Array.from(map.values());
+}
 
 interface DashboardFilters {
   since: string;
@@ -18,16 +85,14 @@ export function useDashboardKpis({ since, until }: DashboardFilters) {
   return useQuery({
     queryKey: ["dashboard-kpis", since, until],
     queryFn: async () => {
-      // Filtra por date_approved (data real do pagamento), não date_created (início do checkout)
-      const { data: sales, error } = await supabase
-        .from("sales")
-        .select("sale_amount, sale_status_enum, date_approved, date_created")
-        .gte("date_approved", `${since}T00:00:00`)
-        .lte("date_approved", `${until}T23:59:59`);
+      const { startIso, endIso } = brazilCivilRangeUtcIso(since, until);
+      const sales = await fetchSalesTouchingBrazilPeriod(
+        startIso,
+        endIso,
+        "sale_amount, sale_status_enum, date_approved, date_created, created_at"
+      );
 
-      if (error) throw error;
-
-      const approved = sales?.filter((s) => s.sale_status_enum === "approved") || [];
+      const approved = sales?.filter((s) => isApprovedSaleStatus(s.sale_status_enum as string)) || [];
       const pending = sales?.filter((s) => s.sale_status_enum === "pending" || s.sale_status_enum === "in_process" || s.sale_status_enum === "in_review") || [];
       const refunded = sales?.filter((s) => s.sale_status_enum === "refunded" || s.sale_status_enum === "pre_refunded") || [];
       const chargebacks = sales?.filter((s) => s.sale_status_enum === "charged_back" || s.sale_status_enum === "pre_chargeback") || [];
@@ -65,19 +130,19 @@ export function useDailyRevenue({ since, until }: DashboardFilters) {
   return useQuery({
     queryKey: ["daily-revenue", since, until],
     queryFn: async () => {
-      const { data: sales, error } = await supabase
-        .from("sales")
-        .select("sale_amount, sale_status_enum, date_approved")
-        .eq("sale_status_enum", "approved")
-        .gte("date_approved", `${since}T00:00:00`)
-        .lte("date_approved", `${until}T23:59:59`);
-
-      if (error) throw error;
+      const { startIso, endIso } = brazilCivilRangeUtcIso(since, until);
+      const raw = await fetchSalesTouchingBrazilPeriod(
+        startIso,
+        endIso,
+        "sale_amount, sale_status_enum, date_approved, date_created, created_at"
+      );
+      const sales = raw.filter((s) => isApprovedSaleStatus(s.sale_status_enum as string));
 
       const byDay: Record<string, number> = {};
-      sales?.forEach((s) => {
-        if (s.date_approved) {
-          const day = format(parseISO(s.date_approved), "dd/MM");
+      sales.forEach((s) => {
+        const ref = (s.date_approved || s.date_created || s.created_at) as string | undefined;
+        if (ref) {
+          const day = dayLabelBrazil(ref);
           byDay[day] = (byDay[day] || 0) + Number(s.sale_amount || 0);
         }
       });
@@ -91,7 +156,11 @@ export function useDailyRevenue({ since, until }: DashboardFilters) {
           .lte("contract_start", until);
         (impls || []).forEach((i: any) => {
           if (i.contract_start && Number(i.paid_amount || 0) > 0) {
-            const day = format(parseISO(i.contract_start), "dd/MM");
+            const day = dayLabelBrazil(
+              typeof i.contract_start === "string" && i.contract_start.length <= 10
+                ? `${i.contract_start}T12:00:00.000Z`
+                : i.contract_start
+            );
             byDay[day] = (byDay[day] || 0) + Number(i.paid_amount || 0);
           }
         });
@@ -111,17 +180,16 @@ export function useSalesByProduct({ since, until }: DashboardFilters) {
   return useQuery({
     queryKey: ["sales-by-product", since, until],
     queryFn: async () => {
-      const { data: sales, error } = await supabase
-        .from("sales")
-        .select("product_name, sale_status_enum")
-        .eq("sale_status_enum", "approved")
-        .gte("date_approved", `${since}T00:00:00`)
-        .lte("date_approved", `${until}T23:59:59`);
-
-      if (error) throw error;
+      const { startIso, endIso } = brazilCivilRangeUtcIso(since, until);
+      const raw = await fetchSalesTouchingBrazilPeriod(
+        startIso,
+        endIso,
+        "product_name, sale_status_enum, date_approved, date_created, created_at"
+      );
+      const sales = raw.filter((s) => isApprovedSaleStatus(s.sale_status_enum as string));
 
       const byProduct: Record<string, number> = {};
-      sales?.forEach((s) => {
+      sales.forEach((s) => {
         const name = s.product_name || "Sem nome";
         byProduct[name] = (byProduct[name] || 0) + 1;
       });
@@ -141,16 +209,15 @@ export function usePreviousPeriodKpis({ since, until }: DashboardFilters) {
       const days = differenceInDays(parseISO(until), parseISO(since)) + 1;
       const prevUntil = format(subDays(parseISO(since), 1), "yyyy-MM-dd");
       const prevSince = format(subDays(parseISO(since), days), "yyyy-MM-dd");
+      const { startIso: prevStart, endIso: prevEnd } = brazilCivilRangeUtcIso(prevSince, prevUntil);
 
-      const { data: sales, error } = await supabase
-        .from("sales")
-        .select("sale_amount, sale_status_enum, date_approved")
-        .gte("date_approved", `${prevSince}T00:00:00`)
-        .lte("date_approved", `${prevUntil}T23:59:59`);
+      const sales = await fetchSalesTouchingBrazilPeriod(
+        prevStart,
+        prevEnd,
+        "sale_amount, sale_status_enum, date_approved, date_created, created_at"
+      );
 
-      if (error) throw error;
-
-      const approved = sales?.filter((s) => s.sale_status_enum === "approved") || [];
+      const approved = sales?.filter((s) => isApprovedSaleStatus(s.sale_status_enum as string)) || [];
       const salesRevenue = approved.reduce((sum, s) => sum + Number(s.sale_amount || 0), 0);
 
       let mentoriasRevenue = 0;
@@ -180,12 +247,13 @@ export function useDashboardNutraKpis({ since, until, projectId }: NutraDashboar
     queryKey: ["dashboard-nutra-kpis", since, until, projectId],
     queryFn: async () => {
       if (!projectId) return { revenue: 0, approvedCount: 0, pendingCount: 0, refundCount: 0, chargebackCount: 0 };
+      const { startIso, endIso } = brazilCivilRangeUtcIso(since, until);
       const { data, error } = await supabase
         .from("nutra_sales")
         .select("amount, status")
         .eq("project_id", projectId)
-        .gte("created_at", `${since}T00:00:00`)
-        .lte("created_at", `${until}T23:59:59`);
+        .gte("created_at", startIso)
+        .lte("created_at", endIso);
       if (error) throw error;
       const approved = (data || []).filter((s) => NUTRA_APPROVED.includes(s.status));
       const pending = (data || []).filter((s) => s.status === "pending");
@@ -204,18 +272,19 @@ export function useDailyNutraRevenue({ since, until, projectId }: NutraDashboard
     queryKey: ["daily-nutra-revenue", since, until, projectId],
     queryFn: async () => {
       if (!projectId) return [];
+      const { startIso, endIso } = brazilCivilRangeUtcIso(since, until);
       const { data, error } = await supabase
         .from("nutra_sales")
         .select("amount, status, created_at")
         .eq("project_id", projectId)
         .in("status", NUTRA_APPROVED)
-        .gte("created_at", `${since}T00:00:00`)
-        .lte("created_at", `${until}T23:59:59`);
+        .gte("created_at", startIso)
+        .lte("created_at", endIso);
       if (error) throw error;
       const byDay: Record<string, number> = {};
       (data || []).forEach((s) => {
         if (s.created_at) {
-          const day = format(parseISO(s.created_at), "dd/MM");
+          const day = dayLabelBrazil(s.created_at);
           byDay[day] = (byDay[day] || 0) + Number(s.amount || 0);
         }
       });
@@ -231,13 +300,14 @@ export function useSalesByNutraProduct({ since, until, projectId }: NutraDashboa
     queryKey: ["nutra-sales-by-product", since, until, projectId],
     queryFn: async () => {
       if (!projectId) return [];
+      const { startIso, endIso } = brazilCivilRangeUtcIso(since, until);
       const { data, error } = await supabase
         .from("nutra_sales")
         .select("product_name, status")
         .eq("project_id", projectId)
         .in("status", NUTRA_APPROVED)
-        .gte("created_at", `${since}T00:00:00`)
-        .lte("created_at", `${until}T23:59:59`);
+        .gte("created_at", startIso)
+        .lte("created_at", endIso);
       if (error) throw error;
       const byProduct: Record<string, number> = {};
       (data || []).forEach((s) => {
@@ -259,13 +329,14 @@ export function usePreviousPeriodNutraKpis({ since, until, projectId }: NutraDas
       const days = differenceInDays(parseISO(until), parseISO(since)) + 1;
       const prevUntil = format(subDays(parseISO(since), 1), "yyyy-MM-dd");
       const prevSince = format(subDays(parseISO(since), days), "yyyy-MM-dd");
+      const { startIso: prevStart, endIso: prevEnd } = brazilCivilRangeUtcIso(prevSince, prevUntil);
       const { data, error } = await supabase
         .from("nutra_sales")
         .select("amount, status")
         .eq("project_id", projectId)
         .in("status", NUTRA_APPROVED)
-        .gte("created_at", `${prevSince}T00:00:00`)
-        .lte("created_at", `${prevUntil}T23:59:59`);
+        .gte("created_at", prevStart)
+        .lte("created_at", prevEnd);
       if (error) throw error;
       const revenue = (data || []).reduce((sum, s) => sum + Number(s.amount || 0), 0);
       return { previousRevenue: revenue };

@@ -55,7 +55,7 @@ interface ProjectOption {
   icon: string;
 }
 
-const MANAGE_TEAM_URL = `https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/manage-team`;
+const MANAGE_TEAM_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-team`;
 
 export function TeamManagement() {
   const [members, setMembers] = useState<TeamMember[]>([]);
