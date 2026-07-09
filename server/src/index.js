@@ -622,6 +622,7 @@ app.get('/connect/:id', async (req, reply) => {
   reply.raw.setHeader('Content-Type', 'text/event-stream')
   reply.raw.setHeader('Cache-Control', 'no-cache')
   reply.raw.setHeader('Connection', 'keep-alive')
+  reply.raw.setHeader('Access-Control-Allow-Origin', '*')
 
   const send = (data) => reply.raw.write(`data: ${JSON.stringify(data)}\n\n`)
 
