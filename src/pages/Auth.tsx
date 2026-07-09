@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -17,20 +17,21 @@ export default function AuthPage() {
   const [isForgot, setIsForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const navigate = useNavigate();
+  const isRecoveryRef = useRef(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
+        isRecoveryRef.current = true;
         setIsRecovery(true);
         return;
       }
-      if (session && !isRecovery) navigate("/", { replace: true });
-    });
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && !isRecovery) navigate("/", { replace: true });
+      if (session && !isRecoveryRef.current) {
+        navigate("/", { replace: true });
+      }
     });
     return () => subscription.unsubscribe();
-  }, [navigate, isRecovery]);
+  }, [navigate]);
 
   async function handleForgotPassword(e: React.FormEvent) {
     e.preventDefault();
