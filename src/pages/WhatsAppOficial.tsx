@@ -499,6 +499,8 @@ function ConfigTab({ accounts }: { accounts: Account[] }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function WhatsAppOficialPage() {
+  const [activeTab, setActiveTab] = useState("inbox");
+
   const { data: accounts = [], isLoading } = useQuery<Account[]>({
     queryKey: ["wa-accounts"],
     queryFn: () => apiGet("/api-oficial/accounts"),
@@ -513,27 +515,30 @@ export default function WhatsAppOficialPage() {
         <p className="text-sm text-muted-foreground mt-1">Meta Cloud API — inbox multiagente, templates e broadcasts</p>
       </div>
 
-      {accounts.length === 0 ? (
-        <div className="glass-card p-12 text-center space-y-4">
-          <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto" />
-          <p className="text-muted-foreground">Nenhuma conta configurada ainda</p>
-          <p className="text-xs text-muted-foreground">Vá para a aba Configurações para adicionar sua conta Meta Cloud API</p>
-          <Button onClick={() => {}} variant="outline">Ir para Configurações</Button>
-        </div>
-      ) : (
-        <Tabs defaultValue="inbox">
-          <TabsList>
-            <TabsTrigger value="inbox" className="gap-1.5"><MessageSquare className="h-3.5 w-3.5" /> Atendimento</TabsTrigger>
-            <TabsTrigger value="templates" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Templates</TabsTrigger>
-            <TabsTrigger value="broadcast" className="gap-1.5"><Send className="h-3.5 w-3.5" /> Disparo</TabsTrigger>
-            <TabsTrigger value="config" className="gap-1.5"><Settings className="h-3.5 w-3.5" /> Contas</TabsTrigger>
-          </TabsList>
-          <TabsContent value="inbox" className="mt-4"><InboxTab accounts={accounts} /></TabsContent>
-          <TabsContent value="templates" className="mt-6"><TemplatesTab accounts={accounts} /></TabsContent>
-          <TabsContent value="broadcast" className="mt-6"><BroadcastTab accounts={accounts} /></TabsContent>
-          <TabsContent value="config" className="mt-6"><ConfigTab accounts={accounts} /></TabsContent>
-        </Tabs>
-      )}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="inbox" className="gap-1.5"><MessageSquare className="h-3.5 w-3.5" /> Atendimento</TabsTrigger>
+          <TabsTrigger value="templates" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Templates</TabsTrigger>
+          <TabsTrigger value="broadcast" className="gap-1.5"><Send className="h-3.5 w-3.5" /> Disparo</TabsTrigger>
+          <TabsTrigger value="config" className="gap-1.5"><Settings className="h-3.5 w-3.5" /> Contas</TabsTrigger>
+        </TabsList>
+
+        {accounts.length === 0 && activeTab !== "config" ? (
+          <div className="glass-card p-12 text-center space-y-4 mt-4">
+            <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto" />
+            <p className="text-muted-foreground">Nenhuma conta configurada ainda</p>
+            <p className="text-xs text-muted-foreground">Adicione sua conta Meta Cloud API na aba Contas</p>
+            <Button onClick={() => setActiveTab("config")} variant="outline">Ir para Contas</Button>
+          </div>
+        ) : (
+          <>
+            <TabsContent value="inbox" className="mt-4"><InboxTab accounts={accounts} /></TabsContent>
+            <TabsContent value="templates" className="mt-6"><TemplatesTab accounts={accounts} /></TabsContent>
+            <TabsContent value="broadcast" className="mt-6"><BroadcastTab accounts={accounts} /></TabsContent>
+          </>
+        )}
+        <TabsContent value="config" className="mt-6"><ConfigTab accounts={accounts} /></TabsContent>
+      </Tabs>
     </div>
   );
 }
