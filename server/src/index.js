@@ -37,9 +37,14 @@ const broadcastJobs = new Map()
 
 async function loadBaileys() {
   try {
-    const { default: makeWASocket, DisconnectReason, fetchLatestBaileysVersion } =
-      await import('@whiskeysockets/baileys')
-    return { makeWASocket, DisconnectReason, fetchLatestBaileysVersion }
+    const mod = await import('@whiskeysockets/baileys')
+    return {
+      makeWASocket: mod.default || mod.makeWASocket,
+      DisconnectReason: mod.DisconnectReason,
+      fetchLatestBaileysVersion: mod.fetchLatestBaileysVersion,
+      initAuthCreds: mod.initAuthCreds,
+      BufferJSON: mod.BufferJSON,
+    }
   } catch (e) {
     app.log.warn('Baileys não instalado ou erro ao importar: ' + e.message)
     return null
@@ -48,51 +53,87 @@ async function loadBaileys() {
 
 // Auth state customizado no Supabase (sobrevive a rebuilds do container)
 async function useSupabaseAuthState(sessionId) {
-  async function readAuthState() {
-    const { data } = await sb
-      .from('whatsapp_sessions')
-      .select('auth_state')
-      .eq('session_id', sessionId)
-      .maybeSingle()
-    return data?.auth_state || null
+  const baileys = await loadBaileys()
+  if (!baileys) throw new Error('Baileys não disponível')
+  const { initAuthCreds, BufferJSON } = baileys
+
+  const { data: row } = await sb
+    .from('whatsapp_sessions')
+    .select('auth_state')
+    .eq('session_id', sessionId)
+    .maybeSingle()
+
+  // Restaurar creds e keys do DB, ou inicializar do zero
+  let creds
+  let keys = {}
+  if (row?.auth_state) {
+    try {
+      // Supabase retorna JSONB já parseado; re-serializar para restaurar Buffers
+      const restored = JSON.parse(JSON.stringify(row.auth_state), BufferJSON.reviver)
+      creds = restored.creds
+      keys = restored.keys || {}
+    } catch {
+      creds = initAuthCreds()
+    }
+  } else {
+    creds = initAuthCreds()
   }
 
-  async function writeAuthState(state) {
+  const DEBOUNCE_MS = parseInt(process.env.AUTH_SAVE_DEBOUNCE_MS || '3000')
+  const MAX_WAIT_MS = parseInt(process.env.AUTH_SAVE_MAX_WAIT_MS || '10000')
+  let saveTimer = null
+  let lastSave = 0
+
+  async function writeToDB() {
+    // Converter Buffers em base64 para armazenar como JSONB
+    const toStore = JSON.parse(JSON.stringify({ creds, keys }, BufferJSON.replacer))
     await sb.from('whatsapp_sessions').upsert(
-      { session_id: sessionId, auth_state: state, updated_at: new Date().toISOString() },
+      { session_id: sessionId, auth_state: toStore, updated_at: new Date().toISOString() },
       { onConflict: 'session_id' }
     )
   }
 
-  const savedState = await readAuthState()
-
-  let authState = savedState || {
-    creds: {},
-    keys: {},
-  }
-
-  const savePendingRef = { timer: null, lastSave: 0 }
-  const DEBOUNCE_MS = parseInt(process.env.AUTH_SAVE_DEBOUNCE_MS || '3000')
-  const MAX_WAIT_MS = parseInt(process.env.AUTH_SAVE_MAX_WAIT_MS || '10000')
-
-  function scheduleStateSave() {
+  function scheduleSave() {
     const now = Date.now()
-    if (savePendingRef.timer) clearTimeout(savePendingRef.timer)
-    // Forçar save se passou muito tempo desde o último
-    if (now - savePendingRef.lastSave > MAX_WAIT_MS) {
-      savePendingRef.lastSave = now
-      writeAuthState(authState).catch(() => {})
+    if (saveTimer) clearTimeout(saveTimer)
+    if (now - lastSave > MAX_WAIT_MS) {
+      lastSave = now
+      writeToDB().catch(() => {})
       return
     }
-    savePendingRef.timer = setTimeout(() => {
-      savePendingRef.lastSave = Date.now()
-      writeAuthState(authState).catch(() => {})
+    saveTimer = setTimeout(() => {
+      lastSave = Date.now()
+      writeToDB().catch(() => {})
     }, DEBOUNCE_MS)
   }
 
   return {
-    state: authState,
-    saveCreds: scheduleStateSave,
+    state: {
+      creds,
+      // Key store em memória com persistência debounced no Supabase
+      keys: {
+        get: async (type, ids) => {
+          return ids.reduce((dict, id) => {
+            const val = keys[`${type}-${id}`]
+            if (val) dict[id] = val
+            return dict
+          }, {})
+        },
+        set: async (data) => {
+          for (const [cat, catData] of Object.entries(data)) {
+            for (const [id, val] of Object.entries(catData || {})) {
+              if (val) {
+                keys[`${cat}-${id}`] = val
+              } else {
+                delete keys[`${cat}-${id}`]
+              }
+            }
+          }
+          scheduleSave()
+        },
+      },
+    },
+    saveCreds: scheduleSave,
   }
 }
 
