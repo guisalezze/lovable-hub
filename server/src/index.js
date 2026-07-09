@@ -109,7 +109,7 @@ async function createBaileysSession(sessionId) {
     version,
     auth: state,
     printQRInTerminal: false,
-    logger: { level: 'silent', ...app.log },
+    logger: { level: 'silent', trace(){}, debug(){}, info(){}, warn(){}, error(){}, fatal(){}, child(){ return this } },
   })
 
   const sessionData = {
