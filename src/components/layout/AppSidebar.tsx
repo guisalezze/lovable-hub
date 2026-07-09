@@ -23,7 +23,6 @@ import {
   UserPlus,
   Link2,
   Zap,
-  ShoppingCart,
 } from "lucide-react";
 import { useProject, type Project } from "@/contexts/ProjectContext";
 import { useState, useEffect, useRef } from "react";
@@ -54,17 +53,6 @@ const educacionalItems: NavItem[] = [
   { label: "Integrações", icon: Plug, to: "/integracoes" },
 ];
 
-const nutraItems: NavItem[] = [
-  { label: "Dashboard", icon: LayoutDashboard, to: "/" },
-  { label: "Meta Ads", icon: BarChart3, to: "/nutra/meta-ads" },
-  { label: "Financeiro", icon: DollarSign, to: "/financeiro" },
-  { label: "Tarefas", icon: CheckSquare, to: "/tarefas" },
-  { label: "Copies", icon: FileText, to: "/copies" },
-  { label: "Produtos", icon: Package, to: "/produtos" },
-  { label: "Agenda", icon: CalendarDays, to: "/agenda" },
-  { label: "Relatórios", icon: FileBarChart, to: "/relatorios" },
-  { label: "Integrações", icon: Plug, to: "/integracoes" },
-];
 
 const connectItems: NavItem[] = [
   { label: "WA Oficial", icon: MessageCircle, to: "/whatsapp-oficial" },
@@ -74,7 +62,6 @@ const connectItems: NavItem[] = [
   { label: "Captação de Leads", icon: UserPlus, to: "/captacao-leads" },
   { label: "Encurtador", icon: Link2, to: "/encurtador" },
   { label: "Webhooks", icon: Zap, to: "/webhooks-automacoes" },
-  { label: "PerfectPay", icon: ShoppingCart, to: "/perfectpay" },
 ];
 
 const sharedItems: NavItem[] = [
@@ -150,7 +137,7 @@ function SidebarContent() {
   const { projects, currentProject, setCurrentProject } = useProject();
   const location = useLocation();
   const navigate = useNavigate();
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ educacional: true, nutra: true });
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ educacional: true });
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -158,7 +145,6 @@ function SidebarContent() {
   };
 
   const eduProject = projects.find((p) => p.slug === "educacional");
-  const nutraProject = projects.find((p) => p.slug === "nutra");
 
   const toggleGroup = (slug: string) => {
     setOpenGroups((prev) => ({ ...prev, [slug]: !prev[slug] }));
@@ -189,19 +175,6 @@ function SidebarContent() {
             onToggle={() => toggleGroup("educacional")}
             onSelectProject={setCurrentProject}
             isActiveProject={currentProject?.slug === "educacional"}
-            currentPath={location.pathname}
-          />
-        )}
-
-        {/* Nutra Group */}
-        {nutraProject && (
-          <ProjectGroup
-            project={nutraProject}
-            items={nutraItems}
-            isOpen={openGroups.nutra ?? true}
-            onToggle={() => toggleGroup("nutra")}
-            onSelectProject={setCurrentProject}
-            isActiveProject={currentProject?.slug === "nutra"}
             currentPath={location.pathname}
           />
         )}
