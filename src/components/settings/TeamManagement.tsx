@@ -79,7 +79,7 @@ export function TeamManagement() {
 
   // Reset password state
   const [resetMember, setResetMember] = useState<TeamMember | null>(null);
-  const [newPassword, setNewPassword] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
   const [resetting, setResetting] = useState(false);
 
   const fetchProjects = async () => {
@@ -232,20 +232,20 @@ export function TeamManagement() {
 
   const handleResetPassword = async () => {
     if (!resetMember) return;
-    if (newPassword.length < 6) { toast.error("Senha deve ter pelo menos 6 caracteres"); return; }
+    if (resetPassword.length < 6) { toast.error("Senha deve ter pelo menos 6 caracteres"); return; }
     setResetting(true);
     try {
       const headers = await getAuthHeaders();
       const res = await fetch(MANAGE_TEAM_URL, {
         method: "POST",
         headers,
-        body: JSON.stringify({ action: "reset_password", user_id: resetMember.user_id, new_password: newPassword }),
+        body: JSON.stringify({ action: "reset_password", user_id: resetMember.user_id, new_password: resetPassword }),
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Erro ao redefinir senha");
       toast.success(`Senha de ${resetMember.full_name} redefinida com sucesso!`);
       setResetMember(null);
-      setNewPassword("");
+      setResetPassword("");
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -400,7 +400,7 @@ export function TeamManagement() {
                       <Button variant="ghost" size="sm" onClick={() => openEdit(m)} title="Editar">
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => { setResetMember(m); setNewPassword(""); }} title="Redefinir senha">
+                      <Button variant="ghost" size="sm" onClick={() => { setResetMember(m); setResetPassword(""); }} title="Redefinir senha">
                         <KeyRound className="h-4 w-4" />
                       </Button>
                       <AlertDialog>
@@ -449,8 +449,8 @@ export function TeamManagement() {
               <Input
                 type="password"
                 placeholder="Mínimo 6 caracteres"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
               />
             </div>
             <Button onClick={handleResetPassword} disabled={resetting} className="w-full">
