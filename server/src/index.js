@@ -23,7 +23,7 @@ await app.register(cors, { origin: true })
 app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
   req.rawBody = body
   try {
-    done(null, JSON.parse(body.toString()))
+    done(null, body.length ? JSON.parse(body.toString()) : {})
   } catch (e) {
     done(e)
   }
