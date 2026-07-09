@@ -177,6 +177,37 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (action === "reset_password") {
+      const { user_id, new_password } = body;
+
+      if (!user_id || !isValidUUID(user_id)) {
+        return new Response(JSON.stringify({ error: "user_id inválido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (!new_password || new_password.length < 6) {
+        return new Response(JSON.stringify({ error: "Senha deve ter pelo menos 6 caracteres" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { error: resetError } = await serviceClient.auth.admin.updateUserById(user_id, { password: new_password });
+      if (resetError) {
+        console.error("Reset password error:", resetError);
+        return new Response(JSON.stringify({ error: "Não foi possível redefinir a senha." }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (action === "remove") {
       const { user_id } = body;
 

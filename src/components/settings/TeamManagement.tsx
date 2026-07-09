@@ -37,7 +37,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, Trash2, Shield, Users, Pencil } from "lucide-react";
+import { UserPlus, Trash2, Shield, Users, Pencil, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 
 interface TeamMember {
@@ -76,6 +76,11 @@ export function TeamManagement() {
   const [editRole, setEditRole] = useState<"admin" | "team">("team");
   const [editProjectIds, setEditProjectIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // Reset password state
+  const [resetMember, setResetMember] = useState<TeamMember | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   const fetchProjects = async () => {
     const { data } = await supabase.from("projects").select("id, name, icon");
@@ -225,6 +230,29 @@ export function TeamManagement() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!resetMember) return;
+    if (newPassword.length < 6) { toast.error("Senha deve ter pelo menos 6 caracteres"); return; }
+    setResetting(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(MANAGE_TEAM_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action: "reset_password", user_id: resetMember.user_id, new_password: newPassword }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Erro ao redefinir senha");
+      toast.success(`Senha de ${resetMember.full_name} redefinida com sucesso!`);
+      setResetMember(null);
+      setNewPassword("");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const handleRemoveMember = async (userId: string, name: string) => {
     try {
       const headers = await getAuthHeaders();
@@ -369,8 +397,11 @@ export function TeamManagement() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(m)}>
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(m)} title="Editar">
                         <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => { setResetMember(m); setNewPassword(""); }} title="Redefinir senha">
+                        <KeyRound className="h-4 w-4" />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -405,6 +436,29 @@ export function TeamManagement() {
           </Table>
         )}
       </div>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!resetMember} onOpenChange={(open) => !open && setResetMember(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Redefinir Senha — {resetMember?.full_name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label className="text-xs text-muted-foreground">Nova senha</Label>
+              <Input
+                type="password"
+                placeholder="Mínimo 6 caracteres"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </div>
+            <Button onClick={handleResetPassword} disabled={resetting} className="w-full">
+              {resetting ? "Redefinindo..." : "Redefinir Senha"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={!!editMember} onOpenChange={(open) => !open && setEditMember(null)}>
