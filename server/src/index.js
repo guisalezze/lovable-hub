@@ -1509,7 +1509,7 @@ app.get('/r/:slug', async (req, reply) => {
     sb.from('redirects').update({ hit_count: (redirect.hit_count || 0) + 1 }).eq('id', redirect.id).then(() => {})
   }
 
-  return reply.redirect(302, dest)
+  return reply.redirect(dest, 302)
 })
 
 // ─── Webhooks / Automações ────────────────────────────────────────────────────
