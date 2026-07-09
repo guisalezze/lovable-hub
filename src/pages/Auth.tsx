@@ -14,6 +14,8 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [isRecovery, setIsRecovery] = useState(false);
   const [newPassword, setNewPassword] = useState("");
+  const [isForgot, setIsForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -29,6 +31,25 @@ export default function AuthPage() {
     });
     return () => subscription.unsubscribe();
   }, [navigate, isRecovery]);
+
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim().toLowerCase(), {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+      if (error) {
+        toast.error("Erro ao enviar email: " + error.message);
+      } else {
+        toast.success("Email de recuperação enviado! Verifique a caixa de entrada.");
+        setIsForgot(false);
+        setForgotEmail("");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handlePasswordReset(e: React.FormEvent) {
     e.preventDefault();
@@ -110,30 +131,60 @@ export default function AuthPage() {
               {loading ? "Salvando..." : "Redefinir senha"}
             </Button>
           </form>
+        ) : isForgot ? (
+          <form onSubmit={handleForgotPassword} className="glass-card p-6 space-y-4">
+            <p className="text-sm text-muted-foreground text-center">Digite seu email para receber o link de recuperação</p>
+            <Input
+              type="email"
+              placeholder="seu@email.com"
+              value={forgotEmail}
+              onChange={(e) => setForgotEmail(e.target.value)}
+              required
+              autoCapitalize="none"
+              className="bg-secondary border-border"
+            />
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Enviando..." : "Enviar link de recuperação"}
+            </Button>
+            <button
+              type="button"
+              onClick={() => setIsForgot(false)}
+              className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Voltar ao login
+            </button>
+          </form>
         ) : (
-        <form onSubmit={handleSubmit} className="glass-card p-6 space-y-4">
-          <Input
-            type="text"
-            placeholder="Email ou usuário"
-            value={login}
-            onChange={(e) => setLogin(e.target.value)}
-            required
-            autoCapitalize="none"
-            autoCorrect="off"
-            className="bg-secondary border-border"
-          />
-          <Input
-            type="password"
-            placeholder="Senha"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="bg-secondary border-border"
-          />
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Carregando..." : "Entrar"}
-          </Button>
-        </form>
+          <form onSubmit={handleSubmit} className="glass-card p-6 space-y-4">
+            <Input
+              type="text"
+              placeholder="Email ou usuário"
+              value={login}
+              onChange={(e) => setLogin(e.target.value)}
+              required
+              autoCapitalize="none"
+              autoCorrect="off"
+              className="bg-secondary border-border"
+            />
+            <Input
+              type="password"
+              placeholder="Senha"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="bg-secondary border-border"
+            />
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Carregando..." : "Entrar"}
+            </Button>
+            <button
+              type="button"
+              onClick={() => setIsForgot(true)}
+              className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Esqueci minha senha
+            </button>
+          </form>
         )}
 
         <p className="text-xs text-muted-foreground text-center mt-4">
