@@ -17,6 +17,13 @@ import {
   ChevronDown,
   FileText,
   LogOut,
+  MessageCircle,
+  Smartphone,
+  Mail,
+  UserPlus,
+  Link2,
+  Zap,
+  ShoppingCart,
 } from "lucide-react";
 import { useProject, type Project } from "@/contexts/ProjectContext";
 import { useState, useEffect, useRef } from "react";
@@ -57,6 +64,17 @@ const nutraItems: NavItem[] = [
   { label: "Agenda", icon: CalendarDays, to: "/agenda" },
   { label: "Relatórios", icon: FileBarChart, to: "/relatorios" },
   { label: "Integrações", icon: Plug, to: "/integracoes" },
+];
+
+const connectItems: NavItem[] = [
+  { label: "WA Oficial", icon: MessageCircle, to: "/whatsapp-oficial" },
+  { label: "WA Canais", icon: Smartphone, to: "/whatsapp-canais" },
+  { label: "Grupos WA", icon: Users2, to: "/grupos-wa" },
+  { label: "Email Marketing", icon: Mail, to: "/email-marketing" },
+  { label: "Captação de Leads", icon: UserPlus, to: "/captacao-leads" },
+  { label: "Encurtador", icon: Link2, to: "/encurtador" },
+  { label: "Webhooks", icon: Zap, to: "/webhooks-automacoes" },
+  { label: "PerfectPay", icon: ShoppingCart, to: "/perfectpay" },
 ];
 
 const sharedItems: NavItem[] = [
@@ -187,6 +205,34 @@ function SidebarContent() {
             currentPath={location.pathname}
           />
         )}
+
+        {/* Divider */}
+        <div className="h-px bg-sidebar-border/50 my-2" />
+
+        {/* Connect items */}
+        <div>
+          <p className="px-3 py-1 text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider">Connect</p>
+          <div className="space-y-0.5">
+            {connectItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={false}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-3 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap",
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                  )
+                }
+              >
+                <item.icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="flex-1">{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
+        </div>
 
         {/* Divider */}
         <div className="h-px bg-sidebar-border/50 my-2" />

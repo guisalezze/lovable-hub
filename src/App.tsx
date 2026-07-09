@@ -32,6 +32,14 @@ import MetaCallback from "./pages/nutra/MetaCallback";
 import Copies from "./pages/Copies";
 import CopyProjectDetail from "./pages/CopyProjectDetail";
 import NotFound from "./pages/NotFound";
+import WhatsAppOficial from "./pages/WhatsAppOficial";
+import WhatsAppCanais from "./pages/WhatsAppCanais";
+import GruposWA from "./pages/GruposWA";
+import EmailMarketing from "./pages/EmailMarketing";
+import CaptacaoLeads from "./pages/CaptacaoLeads";
+import Encurtador from "./pages/Encurtador";
+import WebhooksAutomacoes from "./pages/WebhooksAutomacoes";
+import PerfectPay from "./pages/PerfectPay";
 // Inbox and Calls removed: Inbox is now a popover in the header; Calls was merged into Agenda
 
 const queryClient = new QueryClient();
@@ -207,6 +215,14 @@ const App = () => (
             <Route path="/meta-ads" element={<MetaAds />} />
             <Route path="/copies" element={<Copies />} />
             <Route path="/copies/:id" element={<CopyProjectDetail />} />
+            <Route path="/whatsapp-oficial" element={<WhatsAppOficial />} />
+            <Route path="/whatsapp-canais" element={<WhatsAppCanais />} />
+            <Route path="/grupos-wa" element={<GruposWA />} />
+            <Route path="/email-marketing" element={<EmailMarketing />} />
+            <Route path="/captacao-leads" element={<CaptacaoLeads />} />
+            <Route path="/encurtador" element={<Encurtador />} />
+            <Route path="/webhooks-automacoes" element={<WebhooksAutomacoes />} />
+            <Route path="/perfectpay" element={<PerfectPay />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
