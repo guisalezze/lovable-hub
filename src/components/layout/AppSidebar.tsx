@@ -23,6 +23,7 @@ import {
   UserPlus,
   Link2,
   Zap,
+  Instagram,
 } from "lucide-react";
 import { useProject, type Project } from "@/contexts/ProjectContext";
 import { useState, useEffect, useRef } from "react";
@@ -62,6 +63,7 @@ const connectItems: NavItem[] = [
   { label: "Captação de Leads", icon: UserPlus, to: "/captacao-leads" },
   { label: "Encurtador", icon: Link2, to: "/encurtador" },
   { label: "Webhooks", icon: Zap, to: "/webhooks-automacoes" },
+  { label: "Instagram", icon: Instagram, to: "/instagram-automacoes" },
 ];
 
 const sharedItems: NavItem[] = [

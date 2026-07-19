@@ -40,6 +40,7 @@ import CaptacaoLeads from "./pages/CaptacaoLeads";
 import Encurtador from "./pages/Encurtador";
 import WebhooksAutomacoes from "./pages/WebhooksAutomacoes";
 import PerfectPay from "./pages/PerfectPay";
+import InstagramAutomacoes from "./pages/InstagramAutomacoes";
 // Inbox and Calls removed: Inbox is now a popover in the header; Calls was merged into Agenda
 
 const queryClient = new QueryClient();
@@ -223,6 +224,7 @@ const App = () => (
             <Route path="/encurtador" element={<Encurtador />} />
             <Route path="/webhooks-automacoes" element={<WebhooksAutomacoes />} />
             <Route path="/perfectpay" element={<PerfectPay />} />
+            <Route path="/instagram-automacoes" element={<InstagramAutomacoes />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
