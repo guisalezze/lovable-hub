@@ -41,6 +41,8 @@ import Encurtador from "./pages/Encurtador";
 import WebhooksAutomacoes from "./pages/WebhooksAutomacoes";
 import PerfectPay from "./pages/PerfectPay";
 import InstagramAutomacoes from "./pages/InstagramAutomacoes";
+import Privacidade from "./pages/Privacidade";
+import ExclusaoDados from "./pages/ExclusaoDados";
 // Inbox and Calls removed: Inbox is now a popover in the header; Calls was merged into Agenda
 
 const queryClient = new QueryClient();
@@ -187,6 +189,8 @@ const App = () => (
         <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/privacidade" element={<Privacidade />} />
+          <Route path="/exclusao-de-dados" element={<ExclusaoDados />} />
           <Route path="/onboarding/:token" element={<Onboarding />} />
           <Route path="/nutra/meta-callback" element={<AuthGuard><MetaCallback /></AuthGuard>} />
           <Route
