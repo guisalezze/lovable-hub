@@ -2275,6 +2275,48 @@ app.get('/funnels/:id/enrollments', async (req, reply) => {
   return data
 })
 
+// Batch enrollment — enrola uma lista de contatos de uma vez
+app.post('/funnels/:id/enroll-batch', async (req, reply) => {
+  const { contacts } = req.body || {}
+  if (!Array.isArray(contacts) || !contacts.length) return reply.status(400).send({ error: 'contacts obrigatório' })
+
+  const { data: funnel } = await sb.from('funnels').select('*').eq('id', req.params.id).single()
+  if (!funnel) return reply.status(404).send({ error: 'Funil não encontrado' })
+
+  const graph = funnel.graph || { nodes: [], edges: [] }
+  const triggerNode = (graph.nodes || []).find(n => n.type === 'trigger')
+  const entryNode = triggerNode ? funnelNextNode(graph, triggerNode.id, null) : (graph.nodes || []).find(n => n.type !== 'trigger')
+  if (!entryNode) return reply.status(400).send({ error: 'Funil sem nós de entrada configurados' })
+
+  let enrolled = 0
+  const errors = []
+
+  for (const contact of contacts) {
+    const phone = cleanPhone(contact.phone)
+    if (!phone) { errors.push({ phone: contact.phone || '', error: 'Telefone inválido' }); continue }
+
+    try {
+      const { error } = await sb.from('funnel_enrollments').upsert({
+        funnel_id: funnel.id,
+        phone,
+        jid: phone + '@s.whatsapp.net',
+        current_node_id: entryNode.id,
+        current_step: 0,
+        next_send_at: funnelNextSendAt(entryNode),
+        status: 'active',
+        variables: { nome: contact.name || '', telefone: phone },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'funnel_id,phone', ignoreDuplicates: true })
+      if (error) throw error
+      enrolled++
+    } catch (e) {
+      errors.push({ phone, error: e.message })
+    }
+  }
+
+  return { ok: true, total: contacts.length, enrolled, errors }
+})
+
 // Manual enrollment
 app.post('/funnels/:id/enroll', async (req, reply) => {
   const { phone: rawPhone, variables } = req.body || {}
