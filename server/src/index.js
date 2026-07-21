@@ -731,7 +731,7 @@ app.post('/sessions/:id/send', async (req, reply) => {
         type,
         content: msgContent,
         timestamp: now,
-      }).catch(() => {})
+      })
     }
 
     return { ok: true }
