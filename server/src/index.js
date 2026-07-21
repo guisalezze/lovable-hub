@@ -856,6 +856,21 @@ app.get('/sessions/:id/conversations', async (req, reply) => {
   return data || []
 })
 
+app.patch('/sessions/:id/conversations/:jid/tags', async (req, reply) => {
+  const jid = decodeURIComponent(req.params.jid)
+  const { tags } = req.body || {}
+  if (!Array.isArray(tags)) return reply.status(400).send({ error: 'tags deve ser array' })
+  const { data, error } = await sb
+    .from('baileys_conversations')
+    .update({ tags, updated_at: new Date().toISOString() })
+    .eq('session_id', req.params.id)
+    .eq('jid', jid)
+    .select('id, jid, tags')
+    .single()
+  if (error) return reply.status(500).send({ error: error.message })
+  return data
+})
+
 app.get('/sessions/:id/conversations/:jid/messages', async (req, reply) => {
   const jid = decodeURIComponent(req.params.jid)
   const { data: conv } = await sb
