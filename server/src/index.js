@@ -217,6 +217,76 @@ async function createBaileysSession(sessionId) {
     }
   })
 
+  // ── Inbox: salva mensagens recebidas e enviadas no Supabase ───────────────
+  sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
+    if (type !== 'notify') return
+    for (const msg of msgs) {
+      try {
+        const jid = msg.key?.remoteJid
+        if (!jid || jid === 'status@broadcast') continue
+        if (!msg.message) continue
+        if (msg.message.protocolMessage || msg.message.reactionMessage) continue
+
+        const fromMe = !!msg.key.fromMe
+        const messageId = msg.key.id
+        const timestamp = new Date(Number(msg.messageTimestamp) * 1000).toISOString()
+        const isGroup = jid.endsWith('@g.us')
+        const fromName = fromMe ? null : (msg.pushName || null)
+
+        const m = msg.message
+        let msgType = 'text', content = ''
+        if (m.conversation) {
+          content = m.conversation
+        } else if (m.extendedTextMessage?.text) {
+          content = m.extendedTextMessage.text
+        } else if (m.imageMessage) {
+          msgType = 'image'; content = m.imageMessage.caption || '[Imagem]'
+        } else if (m.videoMessage) {
+          msgType = 'video'; content = m.videoMessage.caption || '[Vídeo]'
+        } else if (m.audioMessage) {
+          msgType = 'audio'; content = '[Áudio]'
+        } else if (m.documentMessage) {
+          msgType = 'document'; content = m.documentMessage.fileName || '[Documento]'
+        } else if (m.stickerMessage) {
+          msgType = 'sticker'; content = '[Figurinha]'
+        } else {
+          content = '[Mensagem]'
+        }
+
+        const convPayload = {
+          session_id: sessionId,
+          jid,
+          is_group: isGroup,
+          last_message: content,
+          last_message_at: timestamp,
+          updated_at: new Date().toISOString(),
+        }
+        if (fromName && !isGroup) convPayload.display_name = fromName
+
+        const { data: conv } = await sb
+          .from('baileys_conversations')
+          .upsert(convPayload, { onConflict: 'session_id,jid' })
+          .select('id')
+          .single()
+        if (!conv?.id) continue
+
+        await sb.from('baileys_messages').upsert({
+          session_id: sessionId,
+          conversation_id: conv.id,
+          message_id: messageId,
+          direction: fromMe ? 'out' : 'in',
+          from_jid: isGroup && !fromMe ? (msg.key.participant || jid) : (fromMe ? null : jid),
+          from_name: fromName,
+          type: msgType,
+          content,
+          timestamp,
+        }, { onConflict: 'session_id,message_id', ignoreDuplicates: true })
+      } catch (e) {
+        app.log.warn('messages.upsert error: ' + e.message)
+      }
+    }
+  })
+
   return sock
 }
 
@@ -631,16 +701,39 @@ app.get('/sessions/:id/groups', async (req, reply) => {
 
 app.post('/sessions/:id/send', async (req, reply) => {
   const { id } = req.params
-  const { phone, type = 'text', content, media_url, caption } = req.body || {}
+  const { phone, jid: targetJid, type = 'text', content, media_url, caption } = req.body || {}
   const session = sessions.get(id)
   if (!session?.socket) return reply.status(400).send({ error: 'Sessão não conectada' })
 
-  const cleaned = cleanPhone(phone)
-  if (!cleaned) return reply.status(400).send({ error: 'Telefone inválido' })
+  let jid = targetJid
+  if (!jid) {
+    const cleaned = cleanPhone(phone)
+    if (!cleaned) return reply.status(400).send({ error: 'Telefone ou JID obrigatório' })
+    jid = cleaned + '@s.whatsapp.net'
+  }
 
-  const jid = cleaned + '@s.whatsapp.net'
   try {
     await sendBaileysMessage(session.socket, jid, { type, content, media_url, caption })
+
+    // Salvar mensagem enviada no inbox
+    const msgContent = content || caption || `[${type}]`
+    const isGroup = jid.endsWith('@g.us')
+    const now = new Date().toISOString()
+    const { data: conv } = await sb.from('baileys_conversations')
+      .upsert({ session_id: id, jid, is_group: isGroup, last_message: msgContent, last_message_at: now, updated_at: now }, { onConflict: 'session_id,jid' })
+      .select('id').single()
+    if (conv?.id) {
+      await sb.from('baileys_messages').insert({
+        session_id: id,
+        conversation_id: conv.id,
+        message_id: `out-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        direction: 'out',
+        type,
+        content: msgContent,
+        timestamp: now,
+      }).catch(() => {})
+    }
+
     return { ok: true }
   } catch (e) {
     return reply.status(500).send({ error: e.message })
@@ -656,6 +749,38 @@ app.post('/sessions/:id/reconnect', async (req, reply) => {
   }
   await createBaileysSession(id)
   return { ok: true }
+})
+
+// ─── Inbox Baileys ────────────────────────────────────────────────────────────
+app.get('/sessions/:id/conversations', async (req, reply) => {
+  const { data, error } = await sb
+    .from('baileys_conversations')
+    .select('*')
+    .eq('session_id', req.params.id)
+    .order('last_message_at', { ascending: false })
+    .limit(100)
+  if (error) return reply.status(500).send({ error: error.message })
+  return data || []
+})
+
+app.get('/sessions/:id/conversations/:jid/messages', async (req, reply) => {
+  const jid = decodeURIComponent(req.params.jid)
+  const { data: conv } = await sb
+    .from('baileys_conversations')
+    .select('id')
+    .eq('session_id', req.params.id)
+    .eq('jid', jid)
+    .single()
+  if (!conv) return reply.status(404).send({ error: 'Conversa não encontrada' })
+
+  const { data, error } = await sb
+    .from('baileys_messages')
+    .select('*')
+    .eq('conversation_id', conv.id)
+    .order('timestamp', { ascending: true })
+    .limit(150)
+  if (error) return reply.status(500).send({ error: error.message })
+  return data || []
 })
 
 // SSE — status da conexão

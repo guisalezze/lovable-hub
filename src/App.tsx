@@ -34,6 +34,7 @@ import CopyProjectDetail from "./pages/CopyProjectDetail";
 import NotFound from "./pages/NotFound";
 import WhatsAppOficial from "./pages/WhatsAppOficial";
 import WhatsAppCanais from "./pages/WhatsAppCanais";
+import WhatsAppBaileysInbox from "./pages/WhatsAppBaileysInbox";
 import GruposWA from "./pages/GruposWA";
 import EmailMarketing from "./pages/EmailMarketing";
 import CaptacaoLeads from "./pages/CaptacaoLeads";
@@ -222,6 +223,7 @@ const App = () => (
             <Route path="/copies/:id" element={<CopyProjectDetail />} />
             <Route path="/whatsapp-oficial" element={<WhatsAppOficial />} />
             <Route path="/whatsapp-canais" element={<WhatsAppCanais />} />
+            <Route path="/whatsapp-inbox" element={<WhatsAppBaileysInbox />} />
             <Route path="/grupos-wa" element={<GruposWA />} />
             <Route path="/email-marketing" element={<EmailMarketing />} />
             <Route path="/captacao-leads" element={<CaptacaoLeads />} />

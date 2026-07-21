@@ -19,6 +19,7 @@ import {
   LogOut,
   MessageCircle,
   Smartphone,
+  Inbox,
   Mail,
   UserPlus,
   Link2,
@@ -58,6 +59,7 @@ const educacionalItems: NavItem[] = [
 const connectItems: NavItem[] = [
   { label: "WA Oficial", icon: MessageCircle, to: "/whatsapp-oficial" },
   { label: "WA Canais", icon: Smartphone, to: "/whatsapp-canais" },
+  { label: "WA Inbox", icon: Inbox, to: "/whatsapp-inbox" },
   { label: "Grupos WA", icon: Users2, to: "/grupos-wa" },
   { label: "Email Marketing", icon: Mail, to: "/email-marketing" },
   { label: "Captação de Leads", icon: UserPlus, to: "/captacao-leads" },
