@@ -222,7 +222,7 @@ async function createBaileysSession(sessionId) {
     if (type !== 'notify') return
     for (const msg of msgs) {
       try {
-        const jid = msg.key?.remoteJid
+        const jid = normalizeJid(msg.key?.remoteJid)
         if (!jid || jid === 'status@broadcast') continue
         if (!msg.message) continue
         if (msg.message.protocolMessage || msg.message.reactionMessage) continue
@@ -561,6 +561,52 @@ async function processButtonFlow(sessionId, jid, buttonId) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+
+// Strip Baileys multi-device suffix: "5511999:7@s.whatsapp.net" → "5511999@s.whatsapp.net"
+function normalizeJid(jid) {
+  if (!jid) return jid
+  return jid.replace(/:\d+@/, '@')
+}
+
+// Normalize common payload fields so {{nome}}/{{produto}} etc. work across platforms
+function buildNormVars(payload) {
+  return {
+    nome:    payload.nome    || payload.name          || payload.buyer?.name     || payload.client_name  || '',
+    email:   payload.email   || payload.buyer?.email  || payload.client_email   || '',
+    produto: payload.produto || payload.product?.name || payload.product_name   || payload.product      || '',
+    valor:   String(payload.valor || payload.amount   || payload.sale_amount    || payload.total        || ''),
+    telefone: payload.telefone || payload.phone || payload.buyer?.phone || payload.celular || payload.whatsapp || '',
+  }
+}
+
+// Maps raw payload event values (from any platform) → canonical event_type
+const EVENT_MAP = {
+  // PerfectPay sale_status
+  'approved': 'purchase_approved', 'sale_approved': 'purchase_approved',
+  'complete': 'purchase_approved', 'completed': 'purchase_approved', 'paid': 'purchase_approved',
+  'refused': 'purchase_refused', 'declined': 'purchase_refused', 'rejected': 'purchase_refused',
+  'refunded': 'purchase_refunded', 'refund': 'purchase_refunded',
+  'chargeback': 'purchase_chargeback',
+  'canceled': 'purchase_canceled', 'cancelled': 'purchase_canceled',
+  'generated': 'purchase_generated', 'pending': 'purchase_generated',
+  'waiting_payment': 'purchase_generated', 'boleto_generated': 'purchase_generated',
+  'abandoned': 'abandoned_cart', 'cart_abandoned': 'abandoned_cart',
+  'subscription_activated': 'subscription_activated', 'subscription_active': 'subscription_activated',
+  'subscription_canceled': 'subscription_canceled', 'subscription_cancelled': 'subscription_canceled',
+  // Pass-through canonical values
+  'purchase_approved': 'purchase_approved', 'purchase_refused': 'purchase_refused',
+  'purchase_generated': 'purchase_generated', 'purchase_canceled': 'purchase_canceled',
+  'purchase_refunded': 'purchase_refunded', 'purchase_chargeback': 'purchase_chargeback',
+  'abandoned_cart': 'abandoned_cart',
+}
+
+function extractEventType(payload) {
+  const raw = (
+    payload.sale_status || payload.event || payload.event_type ||
+    payload.type || payload.status || ''
+  ).toLowerCase().trim()
+  return EVENT_MAP[raw] || raw || null
+}
 
 function verifyMetaSignature(rawBody, signature, appSecret) {
   if (!signature || !appSecret) return false
@@ -1655,6 +1701,26 @@ app.post('/lists/:slug/contacts', async (req, reply) => {
   return reply.status(201).send({ ok: true })
 })
 
+// ─── Upload de mídia para automações ─────────────────────────────────────────
+// Recebe base64 para evitar dependência de multipart/form-data
+app.post('/upload/automation-media', async (req, reply) => {
+  const { filename, data, contentType } = req.body || {}
+  if (!data || !filename) return reply.status(400).send({ error: 'filename e data obrigatórios' })
+
+  const buffer = Buffer.from(data, 'base64')
+  const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const path = `automation/${Date.now()}-${safeName}`
+
+  const { data: uploadData, error } = await sb.storage
+    .from('group-media')
+    .upload(path, buffer, { contentType: contentType || 'application/octet-stream', upsert: true })
+
+  if (error) return reply.status(500).send({ error: error.message })
+
+  const { data: { publicUrl } } = sb.storage.from('group-media').getPublicUrl(uploadData.path)
+  return { url: publicUrl }
+})
+
 // ─── Encurtador de Links ──────────────────────────────────────────────────────
 app.get('/redirects', async (req, reply) => {
   const { data, error } = await sb.from('redirects').select('*').order('created_at', { ascending: false })
@@ -1717,22 +1783,22 @@ app.get('/r/:slug', async (req, reply) => {
 
 // ─── Webhooks / Automações ────────────────────────────────────────────────────
 app.get('/webhooks', async (req, reply) => {
-  const { data, error } = await sb.from('webhooks').select('id, name, token, session_id, is_active, created_at').order('created_at', { ascending: false })
+  const { data, error } = await sb.from('webhooks').select('id, name, token, session_id, is_active, event_type, created_at').order('created_at', { ascending: false })
   if (error) return reply.status(500).send({ error: error.message })
   return data || []
 })
 
 app.post('/webhooks', async (req, reply) => {
-  const { name, session_id, messages, initial_delay_ms, interval_ms } = req.body || {}
+  const { name, session_id, messages, initial_delay_ms, interval_ms, event_type } = req.body || {}
   if (!name || !session_id) return reply.status(400).send({ error: 'name e session_id obrigatórios' })
-  const { data, error } = await sb.from('webhooks').insert({ name, session_id, messages: messages || [], initial_delay_ms: initial_delay_ms || 0, interval_ms: interval_ms || 1000 }).select('id, name, token, session_id, is_active, created_at').single()
+  const { data, error } = await sb.from('webhooks').insert({ name, session_id, event_type: event_type || 'all', messages: messages || [], initial_delay_ms: initial_delay_ms || 0, interval_ms: interval_ms || 1000 }).select('id, name, token, session_id, is_active, event_type, created_at').single()
   if (error) return reply.status(500).send({ error: error.message })
   return data
 })
 
 app.put('/webhooks/:id', async (req, reply) => {
-  const { name, session_id, messages, initial_delay_ms, interval_ms, is_active } = req.body || {}
-  const { data, error } = await sb.from('webhooks').update({ name, session_id, messages, initial_delay_ms, interval_ms, is_active }).eq('id', req.params.id).select('id, name, token, session_id, is_active, created_at').single()
+  const { name, session_id, messages, initial_delay_ms, interval_ms, is_active, event_type } = req.body || {}
+  const { data, error } = await sb.from('webhooks').update({ name, session_id, event_type: event_type || 'all', messages, initial_delay_ms, interval_ms, is_active }).eq('id', req.params.id).select('id, name, token, session_id, is_active, event_type, created_at').single()
   if (error) return reply.status(500).send({ error: error.message })
   return data
 })
@@ -1770,6 +1836,15 @@ app.post('/webhook/:token', async (req, reply) => {
     return reply.status(400).send({ error: 'Telefone não encontrado no payload' })
   }
 
+  // Verificar se o evento do payload corresponde ao event_type configurado
+  if (webhook.event_type && webhook.event_type !== 'all') {
+    const incomingEvent = extractEventType(payload)
+    if (incomingEvent && incomingEvent !== webhook.event_type) {
+      await sb.from('webhook_logs').update({ status: 'skipped', error_message: `Evento '${incomingEvent}' não corresponde ao filtro '${webhook.event_type}'` }).eq('id', log.id)
+      return reply.status(200).send({ ok: true, skipped: true, reason: `event_type mismatch: ${incomingEvent} != ${webhook.event_type}` })
+    }
+  }
+
   // Disparar sequência em background
   ;(async () => {
     try {
@@ -1781,9 +1856,9 @@ app.post('/webhook/:token', async (req, reply) => {
 
       if (webhook.initial_delay_ms > 0) await sleep(webhook.initial_delay_ms)
 
+      const normVars = buildNormVars(payload)
       for (const msg of msgs) {
-        // Substituir variáveis do payload no texto
-        const content = (msg.content || '').replace(/\{\{(\w+)\}\}/g, (_, key) => payload[key] || '')
+        const content = (msg.content || '').replace(/\{\{(\w+)\}\}/g, (_, k) => normVars[k] || payload[k] || '')
         await sendBaileysMessage(session.socket, jid, { ...msg, content })
         await sleep(webhook.interval_ms || 1000)
       }
@@ -1818,9 +1893,10 @@ app.post('/webhooks/:webhookId/logs/:logId/resend', async (req, reply) => {
       const jid = phone + '@s.whatsapp.net'
       const msgs = webhook.messages || []
       const payload = log.payload || {}
+      const normVars = buildNormVars(payload)
       if (webhook.initial_delay_ms > 0) await sleep(webhook.initial_delay_ms)
       for (const msg of msgs) {
-        const content = (msg.content || '').replace(/\{\{(\w+)\}\}/g, (_, key) => payload[key] || '')
+        const content = (msg.content || '').replace(/\{\{(\w+)\}\}/g, (_, k) => normVars[k] || payload[k] || '')
         await sendBaileysMessage(session.socket, jid, { ...msg, content })
         await sleep(webhook.interval_ms || 1000)
       }

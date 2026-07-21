@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPut, apiDelete, API_URL } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Plus, Trash2, Copy, Zap, ArrowRight, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Copy, Zap, ArrowRight, Upload, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -33,6 +33,7 @@ interface Webhook {
   token: string;
   session_id: string;
   is_active: boolean;
+  event_type: string;
   messages: WMessage[];
   initial_delay_ms: number;
   interval_ms: number;
@@ -68,6 +69,19 @@ function emptyMsg(type: WMessage["type"] = "text"): WMessage {
 
 const VARS = ["{{nome}}", "{{email}}", "{{produto}}", "{{valor}}"];
 
+const EVENTS = [
+  { value: "all",                    label: "Todos os eventos" },
+  { value: "purchase_approved",      label: "Compra Aprovada" },
+  { value: "purchase_refused",       label: "Cartão Recusado" },
+  { value: "purchase_generated",     label: "Pix / Boleto Gerado" },
+  { value: "purchase_canceled",      label: "Compra Cancelada" },
+  { value: "purchase_refunded",      label: "Reembolso" },
+  { value: "purchase_chargeback",    label: "Chargeback" },
+  { value: "abandoned_cart",         label: "Carrinho Abandonado" },
+  { value: "subscription_activated", label: "Assinatura Ativada" },
+  { value: "subscription_canceled",  label: "Assinatura Cancelada" },
+];
+
 // ─── MessageRow ───────────────────────────────────────────────────────────────
 
 function MessageRow({
@@ -85,6 +99,35 @@ function MessageRow({
   onSelectButton: (id: string | null) => void;
   selectedButtonId: string | null;
 }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFileUpload(file: File) {
+    setUploading(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result as string;
+          resolve(result.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const result = await apiPost<{ url: string }>("/upload/automation-media", {
+        filename: file.name,
+        data: base64,
+        contentType: file.type,
+      });
+      onChange({ ...msg, media_url: result.url });
+      toast.success("Imagem enviada!");
+    } catch (e: any) {
+      toast.error("Erro no upload: " + e.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="border border-border rounded-lg p-3 space-y-2 bg-background text-xs">
       {/* Row header */}
@@ -127,14 +170,47 @@ function MessageRow({
         </Button>
       </div>
 
-      {/* Image URL */}
+      {/* Image upload */}
       {msg.type === "image" && (
-        <Input
-          placeholder="URL da imagem"
-          value={msg.media_url || ""}
-          onChange={(e) => onChange({ ...msg, media_url: e.target.value })}
-          className="h-7 text-xs"
-        />
+        <div className="space-y-1.5">
+          <div className="flex gap-1.5">
+            <Input
+              placeholder="URL da imagem ou faça upload →"
+              value={msg.media_url || ""}
+              onChange={(e) => onChange({ ...msg, media_url: e.target.value })}
+              className="h-7 text-xs flex-1 font-mono"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 shrink-0 gap-1"
+              disabled={uploading}
+              onClick={() => fileRef.current?.click()}
+            >
+              {uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+              Upload
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*,video/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileUpload(file);
+                e.target.value = "";
+              }}
+            />
+          </div>
+          {msg.media_url && (
+            <img
+              src={msg.media_url}
+              alt="preview"
+              className="h-20 rounded border border-border object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          )}
+        </div>
       )}
 
       {/* Content */}
@@ -288,6 +364,7 @@ export function AutomacoesTab({ sessions }: { sessions: Session[] }) {
     name: "",
     session_id: sessions[0]?.session_id || "",
     is_active: true,
+    event_type: "all",
     messages: [],
     initial_delay_ms: 5000,
     interval_ms: 2000,
@@ -324,6 +401,7 @@ export function AutomacoesTab({ sessions }: { sessions: Session[] }) {
       name: wh.name,
       session_id: wh.session_id,
       is_active: wh.is_active,
+      event_type: wh.event_type || "all",
       messages: wh.messages || [],
       initial_delay_ms: wh.initial_delay_ms,
       interval_ms: wh.interval_ms,
@@ -357,6 +435,7 @@ export function AutomacoesTab({ sessions }: { sessions: Session[] }) {
         const result = await apiPost<Webhook>("/webhooks", {
           name: form.name,
           session_id: form.session_id,
+          event_type: form.event_type || "all",
           messages: form.messages || [],
           initial_delay_ms: form.initial_delay_ms ?? 5000,
           interval_ms: form.interval_ms ?? 2000,
@@ -369,6 +448,7 @@ export function AutomacoesTab({ sessions }: { sessions: Session[] }) {
           name: form.name,
           session_id: form.session_id,
           is_active: form.is_active,
+          event_type: form.event_type || "all",
           messages: form.messages || [],
           initial_delay_ms: form.initial_delay_ms,
           interval_ms: form.interval_ms,
@@ -461,6 +541,11 @@ export function AutomacoesTab({ sessions }: { sessions: Session[] }) {
                 <p className="text-[10px] text-muted-foreground truncate pl-5 mt-0.5">
                   {sessions.find((s) => s.session_id === wh.session_id)?.display_name || wh.session_id}
                 </p>
+                {wh.event_type && wh.event_type !== "all" && (
+                  <p className="text-[10px] truncate pl-5 text-primary/70 font-medium">
+                    {EVENTS.find((e) => e.value === wh.event_type)?.label || wh.event_type}
+                  </p>
+                )}
               </button>
             ))
           )}
@@ -516,6 +601,27 @@ export function AutomacoesTab({ sessions }: { sessions: Session[] }) {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1 col-span-2">
+                <Label className="text-xs">Evento do webhook</Label>
+                <Select
+                  value={form.event_type || "all"}
+                  onValueChange={(v) => setForm((f) => ({ ...f, event_type: v }))}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVENTS.map((ev) => (
+                      <SelectItem key={ev.value} value={ev.value}>
+                        {ev.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">
+                  Esta automação só dispara quando o evento recebido no webhook corresponde ao selecionado.
+                </p>
+              </div>
               <div className="space-y-1">
                 <Label className="text-xs">Delay inicial (s)</Label>
                 <Input
@@ -567,18 +673,27 @@ export function AutomacoesTab({ sessions }: { sessions: Session[] }) {
             {/* Variables hint */}
             <div className="rounded-lg border border-border/50 bg-muted/40 p-2.5">
               <p className="text-[10px] font-semibold text-muted-foreground mb-1.5">
-                Variáveis disponíveis (substituídas pelo payload):
+                Variáveis disponíveis — clique para copiar (equivalências entre plataformas):
               </p>
               <div className="flex flex-wrap gap-1">
                 {VARS.map((v) => (
-                  <code key={v} className="text-[10px] bg-background border border-border rounded px-1.5 py-0.5">
+                  <button
+                    key={v}
+                    type="button"
+                    title="Clique para copiar"
+                    onClick={() => { navigator.clipboard.writeText(v); toast.success(`${v} copiado!`); }}
+                    className="text-[10px] bg-background border border-border rounded px-1.5 py-0.5 font-mono cursor-pointer hover:bg-primary/10 hover:border-primary/40 transition-colors"
+                  >
                     {v}
-                  </code>
+                  </button>
                 ))}
                 <span className="text-[10px] text-muted-foreground self-center">
                   + qualquer campo do payload
                 </span>
               </div>
+              <p className="text-[10px] text-muted-foreground mt-1.5">
+                São equivalências: <code className="bg-background rounded px-0.5">nome</code> mapeia <code className="bg-background rounded px-0.5">name</code>, <code className="bg-background rounded px-0.5">buyer.name</code>, etc.
+              </p>
             </div>
 
             {/* Message sequence */}
