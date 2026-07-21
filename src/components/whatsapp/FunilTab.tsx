@@ -9,16 +9,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Plus, Trash2, GitBranch, ArrowDown, Upload, Loader2, Clock } from "lucide-react";
+import { Plus, Trash2, GitBranch, ArrowDown, Upload, Loader2, Clock, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface WButton {
+  id: string;
+  text: string;
+}
 
 interface WMessage {
   type: "text" | "image" | "buttons";
   content: string;
   delay_ms: number;
   media_url?: string;
+  buttons?: WButton[];
 }
 
 interface FunnelStep {
@@ -68,6 +74,7 @@ const EVENTS = [
 ];
 
 function genId() { return "s_" + Math.random().toString(36).slice(2, 10); }
+function genBtnId() { return "btn_" + Math.random().toString(36).slice(2, 10); }
 
 function msToHuman(ms: number): { value: number; unit: "minutos" | "horas" | "dias" } {
   if (ms < 3_600_000) return { value: Math.round(ms / 60_000), unit: "minutos" };
@@ -123,15 +130,27 @@ function MsgEditor({
 
   return (
     <div className="border border-border rounded p-2 space-y-1.5 bg-background text-xs">
+      {/* Header row */}
       <div className="flex items-center gap-1.5">
         <span className="text-muted-foreground w-4 shrink-0">{index + 1}.</span>
-        <Select value={msg.type} onValueChange={(v) => onChange({ ...msg, type: v as WMessage["type"] })}>
-          <SelectTrigger className="h-6 text-xs w-20">
+        <Select
+          value={msg.type}
+          onValueChange={(v) => {
+            const type = v as WMessage["type"];
+            onChange({
+              ...msg,
+              type,
+              buttons: type === "buttons" ? [{ id: genBtnId(), text: "" }] : undefined,
+            });
+          }}
+        >
+          <SelectTrigger className="h-6 text-xs w-24">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="text">Texto</SelectItem>
             <SelectItem value="image">Imagem</SelectItem>
+            <SelectItem value="buttons">Botões</SelectItem>
           </SelectContent>
         </Select>
         <div className="flex items-center gap-1 ml-auto">
@@ -149,6 +168,7 @@ function MsgEditor({
         </Button>
       </div>
 
+      {/* Image upload */}
       {msg.type === "image" && (
         <div className="space-y-1">
           <div className="flex gap-1">
@@ -172,12 +192,56 @@ function MsgEditor({
         </div>
       )}
 
+      {/* Content textarea */}
       <Textarea
-        placeholder="Texto da mensagem… use {{nome}}, {{email}}, {{produto}}, {{valor}}"
+        placeholder={
+          msg.type === "buttons"
+            ? "Texto do menu de botões… use {{nome}}, {{produto}}, etc."
+            : "Texto da mensagem… use {{nome}}, {{email}}, {{produto}}, {{valor}}"
+        }
         value={msg.content}
         onChange={(e) => onChange({ ...msg, content: e.target.value })}
         className="text-xs min-h-[48px] resize-none"
       />
+
+      {/* Buttons editor */}
+      {msg.type === "buttons" && (
+        <div className="space-y-1 pt-0.5">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            Botões (máx. 3)
+          </p>
+          {(msg.buttons || []).map((btn, bi) => (
+            <div key={btn.id} className="flex items-center gap-1.5">
+              <ArrowRight className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
+              <Input
+                placeholder={`Botão ${bi + 1}`}
+                value={btn.text}
+                onChange={(e) => {
+                  const nb = [...(msg.buttons || [])];
+                  nb[bi] = { ...btn, text: e.target.value };
+                  onChange({ ...msg, buttons: nb });
+                }}
+                className="h-6 text-xs flex-1"
+              />
+              <Button
+                size="sm" variant="ghost" className="h-6 w-6 p-0 shrink-0"
+                disabled={(msg.buttons || []).length <= 1}
+                onClick={() => onChange({ ...msg, buttons: (msg.buttons || []).filter((_, i) => i !== bi) })}
+              >
+                <Trash2 className="h-2.5 w-2.5 text-muted-foreground" />
+              </Button>
+            </div>
+          ))}
+          {(msg.buttons || []).length < 3 && (
+            <Button
+              size="sm" variant="ghost" className="h-6 text-xs text-muted-foreground gap-1"
+              onClick={() => onChange({ ...msg, buttons: [...(msg.buttons || []), { id: genBtnId(), text: "" }] })}
+            >
+              <Plus className="h-2.5 w-2.5" /> Adicionar botão
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
