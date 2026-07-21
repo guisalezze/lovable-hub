@@ -249,6 +249,16 @@ async function createBaileysSession(sessionId) {
           msgType = 'document'; content = m.documentMessage.fileName || '[Documento]'
         } else if (m.stickerMessage) {
           msgType = 'sticker'; content = '[Figurinha]'
+        } else if (m.buttonsResponseMessage) {
+          msgType = 'button_reply'
+          content = m.buttonsResponseMessage.selectedDisplayText || m.buttonsResponseMessage.selectedButtonId || '[Resposta]'
+          const btnId = m.buttonsResponseMessage.selectedButtonId
+          if (btnId && !fromMe) processButtonFlow(sessionId, jid, btnId).catch(e => app.log.warn('BtnFlow: ' + e.message))
+        } else if (m.listResponseMessage) {
+          msgType = 'list_reply'
+          content = m.listResponseMessage.title || '[Lista]'
+          const rowId = m.listResponseMessage.singleSelectReply?.selectedRowId
+          if (rowId && !fromMe) processButtonFlow(sessionId, jid, rowId).catch(e => app.log.warn('BtnFlow: ' + e.message))
         } else {
           content = '[Mensagem]'
         }
@@ -507,8 +517,45 @@ async function sendBaileysMessage(sock, jid, msg) {
     case 'document':
       await sock.sendMessage(jid, { document: { url: msg.media_url }, fileName: msg.caption || 'arquivo' })
       break
+    case 'buttons':
+      await sock.sendMessage(jid, {
+        text: msg.content || '',
+        buttons: (msg.buttons || [])
+          .filter(b => b.id && b.text)
+          .map(b => ({ buttonId: b.id, buttonText: { displayText: b.text }, type: 1 })),
+        headerType: 1,
+      })
+      break
     default:
       await sock.sendMessage(jid, { text: msg.content || '' })
+  }
+}
+
+// ─── Button flow processor ───────────────────────────────────────────────────
+// Called when a contact replies to a Baileys button message.
+// Looks up the matching flow by button_id and session, then sends follow-up msgs.
+async function processButtonFlow(sessionId, jid, buttonId) {
+  // Find webhooks that belong to this session
+  const { data: sessionWebhooks } = await sb.from('webhooks').select('id').eq('session_id', sessionId)
+  if (!sessionWebhooks?.length) return
+
+  const webhookIds = sessionWebhooks.map(w => w.id)
+
+  const { data: flow } = await sb
+    .from('baileys_button_flows')
+    .select('*')
+    .eq('button_id', buttonId)
+    .in('webhook_id', webhookIds)
+    .maybeSingle()
+
+  if (!flow?.messages?.length) return
+
+  const session = sessions.get(sessionId)
+  if (!session?.socket) return
+
+  for (const msg of flow.messages) {
+    if (msg.delay_ms > 0) await sleep(msg.delay_ms)
+    await sendBaileysMessage(session.socket, jid, msg)
   }
 }
 
@@ -781,6 +828,37 @@ app.get('/sessions/:id/conversations/:jid/messages', async (req, reply) => {
     .limit(150)
   if (error) return reply.status(500).send({ error: error.message })
   return data || []
+})
+
+// ─── Button Flows ─────────────────────────────────────────────────────────────
+app.get('/webhooks/:id/button-flows', async (req, reply) => {
+  const { data, error } = await sb
+    .from('baileys_button_flows')
+    .select('*')
+    .eq('webhook_id', req.params.id)
+  if (error) return reply.status(500).send({ error: error.message })
+  return data || []
+})
+
+// Replace all button flows for a webhook at once (simpler than per-button CRUD)
+app.put('/webhooks/:id/button-flows', async (req, reply) => {
+  const { flows } = req.body || {}
+  if (!Array.isArray(flows)) return reply.status(400).send({ error: 'flows deve ser array' })
+
+  // Delete existing and reinsert
+  await sb.from('baileys_button_flows').delete().eq('webhook_id', req.params.id)
+
+  if (flows.length) {
+    const rows = flows
+      .filter(f => f.button_id && Array.isArray(f.messages))
+      .map(f => ({ webhook_id: req.params.id, button_id: f.button_id, messages: f.messages }))
+    if (rows.length) {
+      const { error } = await sb.from('baileys_button_flows').insert(rows)
+      if (error) return reply.status(500).send({ error: error.message })
+    }
+  }
+
+  return { ok: true }
 })
 
 // SSE — status da conexão

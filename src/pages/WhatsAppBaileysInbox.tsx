@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Send, MessageSquare, Loader2, Wifi, WifiOff, Plus, X } from "lucide-react";
+import { Send, MessageSquare, Loader2, Wifi, WifiOff, Plus, X, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { AutomacoesTab } from "@/components/whatsapp/AutomacoesTab";
 
 interface Session {
   id: string;
@@ -148,6 +149,7 @@ function MsgBubble({ msg }: { msg: Message }) {
 
 export default function WhatsAppBaileysInboxPage() {
   const qc = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"conversas" | "automacoes">("conversas");
   const [selectedSession, setSelectedSession] = useState<string>("");
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [message, setMessage] = useState("");
@@ -269,7 +271,42 @@ export default function WhatsAppBaileysInboxPage() {
     selectedConv?.display_name || (selectedConv ? jidToDisplay(selectedConv.jid) : "");
 
   return (
-    <div className="flex h-[calc(100vh-200px)] min-h-[500px] -mx-3 sm:-mx-4 md:-mx-6 overflow-hidden border border-border rounded-lg">
+    <div className="flex flex-col h-[calc(100vh-200px)] min-h-[500px] -mx-3 sm:-mx-4 md:-mx-6 border border-border rounded-lg overflow-hidden">
+      {/* ── Tab bar ── */}
+      <div className="flex border-b border-border bg-background shrink-0">
+        <button
+          onClick={() => setActiveTab("conversas")}
+          className={cn(
+            "flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors",
+            activeTab === "conversas"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+          Conversas
+        </button>
+        <button
+          onClick={() => setActiveTab("automacoes")}
+          className={cn(
+            "flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors",
+            activeTab === "automacoes"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Zap className="h-3.5 w-3.5" />
+          Automações
+        </button>
+      </div>
+
+      {/* ── Tab content ── */}
+      {activeTab === "automacoes" ? (
+        <div className="flex-1 overflow-hidden">
+          <AutomacoesTab sessions={sessions} />
+        </div>
+      ) : (
+      <div className="flex flex-1 overflow-hidden">
       {/* ── Painel esquerdo: sessão + conversas ── */}
       <div className="w-72 md:w-80 flex flex-col border-r border-border bg-background shrink-0">
         {/* Header */}
@@ -470,6 +507,8 @@ export default function WhatsAppBaileysInboxPage() {
           </div>
         )}
       </div>
+      </div>
+      )}
     </div>
   );
 }
