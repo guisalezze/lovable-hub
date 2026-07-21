@@ -34,6 +34,8 @@ app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, 
 const sessions = new Map()
 // Jobs de broadcast WA oficial em memória
 const broadcastJobs = new Map()
+// Jobs de broadcast Baileys (disparo por lista)
+const baileysJobs = new Map()
 
 async function loadBaileys() {
   try {
@@ -167,6 +169,37 @@ async function createBaileysSession(sessionId) {
   )
 
   sock.ev.on('creds.update', saveCreds)
+
+  // Sincronizar nomes da agenda do celular nas conversas
+  sock.ev.on('contacts.upsert', async (contactList) => {
+    for (const contact of contactList) {
+      try {
+        const jid = normalizeJid(contact.id)
+        if (!jid || jid.endsWith('@g.us')) continue
+        const name = contact.name || null
+        if (!name) continue
+        await sb.from('baileys_conversations')
+          .update({ display_name: name, updated_at: new Date().toISOString() })
+          .eq('session_id', sessionId)
+          .eq('jid', jid)
+      } catch {}
+    }
+  })
+
+  sock.ev.on('contacts.update', async (updates) => {
+    for (const update of updates) {
+      try {
+        const jid = normalizeJid(update.id)
+        if (!jid || jid.endsWith('@g.us')) continue
+        const name = update.name || null
+        if (!name) continue
+        await sb.from('baileys_conversations')
+          .update({ display_name: name, updated_at: new Date().toISOString() })
+          .eq('session_id', sessionId)
+          .eq('jid', jid)
+      } catch {}
+    }
+  })
 
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     const session = sessions.get(sessionId)
@@ -2135,6 +2168,51 @@ app.post('/webhook/perfectpay/:token', async (req, reply) => {
   }
 
   return reply.status(200).send({ ok: true, event_id: event.id })
+})
+
+// ─── Disparo por Lista (Baileys broadcast) ────────────────────────────────────
+app.post('/baileys-broadcast', async (req, reply) => {
+  const { session_id, contacts, messages, interval_ms = 3000 } = req.body || {}
+  if (!session_id || !contacts?.length || !messages?.length) {
+    return reply.status(400).send({ error: 'session_id, contacts e messages obrigatórios' })
+  }
+  const session = sessions.get(session_id)
+  if (!session?.socket) return reply.status(400).send({ error: 'Sessão não conectada' })
+
+  const jobId = crypto.randomUUID()
+  const validContacts = contacts.filter(c => c.phone && c.phone.replace(/\D/g, '').length >= 10)
+  baileysJobs.set(jobId, { total: validContacts.length, sent: 0, errors: [], status: 'running' })
+
+  ;(async () => {
+    const job = baileysJobs.get(jobId)
+    for (const contact of validContacts) {
+      try {
+        const jid = contact.phone + '@s.whatsapp.net'
+        const vars = { nome: contact.name || contact.phone, telefone: contact.phone }
+        for (const msg of messages) {
+          const content = (msg.content || '').replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] || '')
+          await sendBaileysMessage(session.socket, jid, { ...msg, content })
+          await sleep(800)
+        }
+        job.sent++
+      } catch (e) {
+        job.errors.push({ phone: contact.phone, error: e.message })
+        job.sent++
+      }
+      baileysJobs.set(jobId, { ...job })
+      await sleep(Math.max(500, interval_ms))
+    }
+    job.status = 'done'
+    baileysJobs.set(jobId, { ...job })
+  })()
+
+  return { job_id: jobId, total: validContacts.length }
+})
+
+app.get('/baileys-broadcast/:jobId', async (req, reply) => {
+  const job = baileysJobs.get(req.params.jobId)
+  if (!job) return reply.status(404).send({ error: 'Job não encontrado' })
+  return job
 })
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────

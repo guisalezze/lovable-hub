@@ -7,12 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Send, MessageSquare, Loader2, Wifi, WifiOff, Plus, X, Zap, GitBranch, Tag } from "lucide-react";
+import { Send, MessageSquare, Loader2, Wifi, WifiOff, Plus, X, Zap, GitBranch, Tag, Users } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { AutomacoesTab } from "@/components/whatsapp/AutomacoesTab";
 import { FunilTab } from "@/components/whatsapp/FunilTab";
+import { DisparoTab } from "@/components/whatsapp/DisparoTab";
 
 interface Session {
   id: string;
@@ -255,7 +256,7 @@ function MsgBubble({ msg }: { msg: Message }) {
 
 export default function WhatsAppBaileysInboxPage() {
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"conversas" | "automacoes" | "funil">("conversas");
+  const [activeTab, setActiveTab] = useState<"conversas" | "automacoes" | "funil" | "disparo">("conversas");
   const [selectedSession, setSelectedSession] = useState<string>("");
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [message, setMessage] = useState("");
@@ -367,6 +368,7 @@ export default function WhatsAppBaileysInboxPage() {
       last_message: null,
       last_message_at: null,
       is_group: false,
+      tags: [],
     });
     setNewPhone("");
     setShowNewConv(false);
@@ -438,10 +440,26 @@ export default function WhatsAppBaileysInboxPage() {
           <GitBranch className="h-3.5 w-3.5" />
           Funil
         </button>
+        <button
+          onClick={() => setActiveTab("disparo")}
+          className={cn(
+            "flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors",
+            activeTab === "disparo"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Users className="h-3.5 w-3.5" />
+          Disparo
+        </button>
       </div>
 
       {/* ── Tab content ── */}
-      {activeTab === "funil" ? (
+      {activeTab === "disparo" ? (
+        <div className="flex-1 overflow-hidden">
+          <DisparoTab sessions={sessions} />
+        </div>
+      ) : activeTab === "funil" ? (
         <div className="flex-1 overflow-hidden">
           <FunilTab sessions={sessions} />
         </div>
