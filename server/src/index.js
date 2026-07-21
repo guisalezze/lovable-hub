@@ -1867,6 +1867,36 @@ app.post('/webhook/:token', async (req, reply) => {
     } catch (e) {
       await sb.from('webhook_logs').update({ status: 'error', error_message: e.message }).eq('id', log.id)
     }
+
+    // Enroll contact into any matching active funnels
+    try {
+      const incomingEvent = extractEventType(payload) || 'all'
+      const { data: matchingFunnels } = await sb
+        .from('funnels')
+        .select('*')
+        .eq('session_id', webhook.session_id)
+        .eq('is_active', true)
+        .or(`trigger_event_type.eq.all,trigger_event_type.eq.${incomingEvent}`)
+
+      const normVars = buildNormVars(payload)
+      for (const funnel of matchingFunnels || []) {
+        const steps = funnel.steps || []
+        if (steps.length === 0) continue
+        const firstDelay = steps[0].delay_ms ?? 0
+        await sb.from('funnel_enrollments').upsert({
+          funnel_id: funnel.id,
+          phone,
+          jid: phone + '@s.whatsapp.net',
+          current_step: 0,
+          next_send_at: new Date(Date.now() + firstDelay).toISOString(),
+          status: 'active',
+          variables: normVars,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'funnel_id,phone', ignoreDuplicates: true })
+      }
+    } catch (e) {
+      app.log.warn('Funnel enroll error: ' + e.message)
+    }
   })()
 
   return reply.status(200).send({ ok: true, log_id: log.id })
@@ -2079,6 +2109,153 @@ app.post('/webhook/perfectpay/:token', async (req, reply) => {
 })
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
+// ─── Funnel CRUD ─────────────────────────────────────────────────────────────
+
+app.get('/funnels', async (req, reply) => {
+  const { data, error } = await sb.from('funnels').select('*').order('created_at', { ascending: false })
+  if (error) return reply.status(500).send({ error: error.message })
+  return data
+})
+
+app.post('/funnels', async (req, reply) => {
+  const { name, session_id, trigger_type, trigger_event_type, steps } = req.body || {}
+  if (!name || !session_id) return reply.status(400).send({ error: 'name e session_id obrigatórios' })
+  const { data, error } = await sb.from('funnels').insert({
+    name, session_id,
+    trigger_type: trigger_type || 'webhook_event',
+    trigger_event_type: trigger_event_type || 'all',
+    steps: steps || [],
+  }).select('*').single()
+  if (error) return reply.status(500).send({ error: error.message })
+  return data
+})
+
+app.put('/funnels/:id', async (req, reply) => {
+  const { name, session_id, trigger_type, trigger_event_type, steps, is_active } = req.body || {}
+  const { data, error } = await sb.from('funnels').update({
+    name, session_id, trigger_type, trigger_event_type, steps, is_active,
+    updated_at: new Date().toISOString(),
+  }).eq('id', req.params.id).select('*').single()
+  if (error) return reply.status(500).send({ error: error.message })
+  return data
+})
+
+app.delete('/funnels/:id', async (req, reply) => {
+  const { error } = await sb.from('funnels').delete().eq('id', req.params.id)
+  if (error) return reply.status(500).send({ error: error.message })
+  return { ok: true }
+})
+
+app.get('/funnels/:id/stats', async (req, reply) => {
+  const { data, error } = await sb
+    .from('funnel_enrollments')
+    .select('status')
+    .eq('funnel_id', req.params.id)
+  if (error) return reply.status(500).send({ error: error.message })
+  const stats = { active: 0, completed: 0, error: 0, canceled: 0, total: data.length }
+  for (const row of data || []) stats[row.status] = (stats[row.status] || 0) + 1
+  return stats
+})
+
+app.get('/funnels/:id/enrollments', async (req, reply) => {
+  const { data, error } = await sb
+    .from('funnel_enrollments')
+    .select('*')
+    .eq('funnel_id', req.params.id)
+    .order('created_at', { ascending: false })
+    .limit(100)
+  if (error) return reply.status(500).send({ error: error.message })
+  return data
+})
+
+// Manual enrollment
+app.post('/funnels/:id/enroll', async (req, reply) => {
+  const { phone: rawPhone, variables } = req.body || {}
+  const phone = cleanPhone(rawPhone)
+  if (!phone) return reply.status(400).send({ error: 'Telefone inválido' })
+
+  const { data: funnel } = await sb.from('funnels').select('*').eq('id', req.params.id).single()
+  if (!funnel) return reply.status(404).send({ error: 'Funil não encontrado' })
+
+  const steps = funnel.steps || []
+  const firstDelay = steps[0]?.delay_ms ?? 0
+  const jid = phone + '@s.whatsapp.net'
+
+  const { data, error } = await sb.from('funnel_enrollments').upsert({
+    funnel_id: funnel.id,
+    phone, jid,
+    current_step: 0,
+    next_send_at: new Date(Date.now() + firstDelay).toISOString(),
+    status: 'active',
+    variables: variables || {},
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'funnel_id,phone', ignoreDuplicates: true }).select().single()
+
+  if (error) return reply.status(500).send({ error: error.message })
+  return { ok: true, data }
+})
+
+// ─── Funnel queue worker ──────────────────────────────────────────────────────
+
+async function processFunnelQueue() {
+  try {
+    const { data: due } = await sb
+      .from('funnel_enrollments')
+      .select('*, funnels(*)')
+      .eq('status', 'active')
+      .lte('next_send_at', new Date().toISOString())
+      .limit(30)
+
+    for (const enrollment of due || []) {
+      const funnel = enrollment.funnels
+      if (!funnel?.is_active) {
+        await sb.from('funnel_enrollments').update({ status: 'canceled', updated_at: new Date().toISOString() }).eq('id', enrollment.id)
+        continue
+      }
+
+      const steps = funnel.steps || []
+      const stepIdx = enrollment.current_step
+
+      if (stepIdx >= steps.length) {
+        await sb.from('funnel_enrollments').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', enrollment.id)
+        continue
+      }
+
+      const step = steps[stepIdx]
+      try {
+        const session = sessions.get(funnel.session_id)
+        if (!session?.socket) throw new Error(`Sessão ${funnel.session_id} não conectada`)
+
+        const normVars = { ...(enrollment.variables || {}) }
+        for (const msg of step.messages || []) {
+          const content = (msg.content || '').replace(/\{\{(\w+)\}\}/g, (_, k) => normVars[k] || '')
+          await sendBaileysMessage(session.socket, enrollment.jid, { ...msg, content })
+          await sleep(msg.delay_ms || 1000)
+        }
+
+        const nextIdx = stepIdx + 1
+        const isDone = nextIdx >= steps.length
+        const nextStep = steps[nextIdx]
+
+        await sb.from('funnel_enrollments').update({
+          current_step: nextIdx,
+          status: isDone ? 'completed' : 'active',
+          next_send_at: isDone ? null : new Date(Date.now() + (nextStep?.delay_ms ?? 0)).toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq('id', enrollment.id)
+      } catch (e) {
+        await sb.from('funnel_enrollments').update({
+          status: 'error',
+          error_message: e.message,
+          updated_at: new Date().toISOString(),
+        }).eq('id', enrollment.id)
+      }
+    }
+  } catch (e) {
+    app.log.error('processFunnelQueue error: ' + e.message)
+  }
+}
+
 const PORT = parseInt(process.env.PORT || '3000')
 
 await app.listen({ port: PORT, host: '0.0.0.0' })
@@ -2090,7 +2267,9 @@ setTimeout(() => bootBaileySessions().catch(e => app.log.error('Boot Baileys err
 // Schedulers
 setInterval(runEmailScheduler, 30_000)
 setInterval(runGroupCampaignScheduler, 30_000)
+setInterval(processFunnelQueue, 30_000)
 
 // Rodar uma vez 5s após boot (pegar itens atrasados)
 setTimeout(runEmailScheduler, 5_000)
 setTimeout(runGroupCampaignScheduler, 7_000)
+setTimeout(processFunnelQueue, 9_000)

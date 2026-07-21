@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Send, MessageSquare, Loader2, Wifi, WifiOff, Plus, X, Zap } from "lucide-react";
+import { Send, MessageSquare, Loader2, Wifi, WifiOff, Plus, X, Zap, GitBranch } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { AutomacoesTab } from "@/components/whatsapp/AutomacoesTab";
+import { FunilTab } from "@/components/whatsapp/FunilTab";
 
 interface Session {
   id: string;
@@ -149,13 +150,14 @@ function MsgBubble({ msg }: { msg: Message }) {
 
 export default function WhatsAppBaileysInboxPage() {
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"conversas" | "automacoes">("conversas");
+  const [activeTab, setActiveTab] = useState<"conversas" | "automacoes" | "funil">("conversas");
   const [selectedSession, setSelectedSession] = useState<string>("");
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [showNewConv, setShowNewConv] = useState(false);
   const [newPhone, setNewPhone] = useState("");
+  const [search, setSearch] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -264,6 +266,16 @@ export default function WhatsAppBaileysInboxPage() {
     setShowNewConv(false);
   };
 
+  const filteredConvs = conversations.filter((c) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      (c.display_name || "").toLowerCase().includes(q) ||
+      c.jid.includes(q) ||
+      jidToDisplay(c.jid).includes(q)
+    );
+  });
+
   const activeSession = sessions.find((s) => s.session_id === selectedSession);
   const isConnected =
     activeSession?.live_status === "connected" || activeSession?.status === "connected";
@@ -298,10 +310,26 @@ export default function WhatsAppBaileysInboxPage() {
           <Zap className="h-3.5 w-3.5" />
           Automações
         </button>
+        <button
+          onClick={() => setActiveTab("funil")}
+          className={cn(
+            "flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors",
+            activeTab === "funil"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <GitBranch className="h-3.5 w-3.5" />
+          Funil
+        </button>
       </div>
 
       {/* ── Tab content ── */}
-      {activeTab === "automacoes" ? (
+      {activeTab === "funil" ? (
+        <div className="flex-1 overflow-hidden">
+          <FunilTab sessions={sessions} />
+        </div>
+      ) : activeTab === "automacoes" ? (
         <div className="flex-1 overflow-hidden">
           <AutomacoesTab sessions={sessions} />
         </div>
@@ -393,6 +421,16 @@ export default function WhatsAppBaileysInboxPage() {
           )}
         </div>
 
+        {/* Busca */}
+        <div className="px-3 pb-2">
+          <Input
+            placeholder="Buscar número ou nome…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-7 text-xs"
+          />
+        </div>
+
         {/* Lista de conversas */}
         <ScrollArea className="flex-1">
           {conversations.length === 0 ? (
@@ -403,8 +441,12 @@ export default function WhatsAppBaileysInboxPage() {
                 Mensagens recebidas ou enviadas pelo número conectado aparecerão aqui.
               </p>
             </div>
+          ) : filteredConvs.length === 0 ? (
+            <div className="p-6 text-center text-xs text-muted-foreground">
+              Nenhum resultado para &ldquo;{search}&rdquo;
+            </div>
           ) : (
-            conversations.map((conv) => (
+            filteredConvs.map((conv) => (
               <ConvItem
                 key={conv.id || conv.jid}
                 conv={conv}
