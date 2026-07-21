@@ -1868,27 +1868,41 @@ app.post('/webhook/:token', async (req, reply) => {
       await sb.from('webhook_logs').update({ status: 'error', error_message: e.message }).eq('id', log.id)
     }
 
-    // Enroll contact into any matching active funnels
+    // Record purchase for upsell detection
     try {
-      const incomingEvent = extractEventType(payload) || 'all'
+      const incomingEvent = extractEventType(payload) || ''
+      const normVars = buildNormVars(payload)
+      if (['purchase_approved', 'subscription_activated'].includes(incomingEvent) && normVars.produto) {
+        await sb.from('contact_purchases').insert({
+          phone,
+          product_name: normVars.produto,
+          event_type: incomingEvent,
+          payload,
+        })
+      }
+
+      // Enroll contact into any matching active funnels (graph-based)
       const { data: matchingFunnels } = await sb
         .from('funnels')
         .select('*')
         .eq('session_id', webhook.session_id)
         .eq('is_active', true)
-        .or(`trigger_event_type.eq.all,trigger_event_type.eq.${incomingEvent}`)
+        .or(`trigger_event_type.eq.all,trigger_event_type.eq.${incomingEvent || 'all'}`)
 
-      const normVars = buildNormVars(payload)
       for (const funnel of matchingFunnels || []) {
-        const steps = funnel.steps || []
-        if (steps.length === 0) continue
-        const firstDelay = steps[0].delay_ms ?? 0
+        const graph = funnel.graph || { nodes: [], edges: [] }
+        // Find trigger node and its first child
+        const triggerNode = (graph.nodes || []).find(n => n.type === 'trigger')
+        const entryNode = triggerNode ? funnelNextNode(graph, triggerNode.id, null) : (graph.nodes || []).find(n => n.type !== 'trigger')
+        if (!entryNode) continue
+
         await sb.from('funnel_enrollments').upsert({
           funnel_id: funnel.id,
           phone,
           jid: phone + '@s.whatsapp.net',
+          current_node_id: entryNode.id,
           current_step: 0,
-          next_send_at: new Date(Date.now() + firstDelay).toISOString(),
+          next_send_at: funnelNextSendAt(entryNode),
           status: 'active',
           variables: normVars,
           updated_at: new Date().toISOString(),
@@ -2197,6 +2211,26 @@ app.post('/funnels/:id/enroll', async (req, reply) => {
 
 // ─── Funnel queue worker ──────────────────────────────────────────────────────
 
+// ─── Graph traversal helpers ──────────────────────────────────────────────────
+
+function funnelNextSendAt(node) {
+  if (!node) return null
+  if (node.type === 'delay') return new Date(Date.now() + (node.data?.delay_ms || 0)).toISOString()
+  return new Date().toISOString()
+}
+
+function funnelNextNode(graph, currentId, edgeLabel) {
+  const edges = (graph.edges || []).filter(e => e.source === currentId)
+  let edge
+  if (edgeLabel) {
+    edge = edges.find(e => e.sourceHandle === edgeLabel) || edges[0]
+  } else {
+    edge = edges[0]
+  }
+  if (!edge) return null
+  return (graph.nodes || []).find(n => n.id === edge.target) || null
+}
+
 async function processFunnelQueue() {
   try {
     const { data: due } = await sb
@@ -2213,42 +2247,55 @@ async function processFunnelQueue() {
         continue
       }
 
-      const steps = funnel.steps || []
-      const stepIdx = enrollment.current_step
+      const graph = funnel.graph || { nodes: [], edges: [] }
+      const nodeId = enrollment.current_node_id
+      const node = (graph.nodes || []).find(n => n.id === nodeId)
 
-      if (stepIdx >= steps.length) {
+      if (!node) {
         await sb.from('funnel_enrollments').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', enrollment.id)
         continue
       }
 
-      const step = steps[stepIdx]
       try {
         const session = sessions.get(funnel.session_id)
         if (!session?.socket) throw new Error(`Sessão ${funnel.session_id} não conectada`)
 
         const normVars = { ...(enrollment.variables || {}) }
-        for (const msg of step.messages || []) {
-          const content = (msg.content || '').replace(/\{\{(\w+)\}\}/g, (_, k) => normVars[k] || '')
-          await sendBaileysMessage(session.socket, enrollment.jid, { ...msg, content })
-          await sleep(msg.delay_ms || 1000)
+        let edgeLabel = null
+
+        if (node.type === 'message') {
+          for (const msg of node.data?.messages || []) {
+            const content = (msg.content || '').replace(/\{\{(\w+)\}\}/g, (_, k) => normVars[k] || '')
+            await sendBaileysMessage(session.socket, enrollment.jid, { ...msg, content })
+            await sleep(msg.delay_ms || 1000)
+          }
+        } else if (node.type === 'delay') {
+          // delay already served by next_send_at — just advance
+        } else if (node.type === 'purchase_check') {
+          const productName = (node.data?.product_name || '').toLowerCase().trim()
+          const { data: purchase } = await sb
+            .from('contact_purchases')
+            .select('id')
+            .eq('phone', enrollment.phone)
+            .ilike('product_name', `%${productName}%`)
+            .limit(1)
+            .maybeSingle()
+          edgeLabel = purchase ? 'Já comprou' : 'Não comprou'
         }
 
-        const nextIdx = stepIdx + 1
-        const isDone = nextIdx >= steps.length
-        const nextStep = steps[nextIdx]
-
-        await sb.from('funnel_enrollments').update({
-          current_step: nextIdx,
-          status: isDone ? 'completed' : 'active',
-          next_send_at: isDone ? null : new Date(Date.now() + (nextStep?.delay_ms ?? 0)).toISOString(),
-          updated_at: new Date().toISOString(),
-        }).eq('id', enrollment.id)
+        const nextNode = funnelNextNode(graph, nodeId, edgeLabel)
+        if (!nextNode) {
+          await sb.from('funnel_enrollments').update({ status: 'completed', current_node_id: null, updated_at: new Date().toISOString() }).eq('id', enrollment.id)
+        } else {
+          await sb.from('funnel_enrollments').update({
+            current_node_id: nextNode.id,
+            next_send_at: funnelNextSendAt(nextNode),
+            status: 'active',
+            updated_at: new Date().toISOString(),
+          }).eq('id', enrollment.id)
+        }
       } catch (e) {
-        await sb.from('funnel_enrollments').update({
-          status: 'error',
-          error_message: e.message,
-          updated_at: new Date().toISOString(),
-        }).eq('id', enrollment.id)
+        await sb.from('funnel_enrollments').update({ status: 'error', error_message: e.message, updated_at: new Date().toISOString() }).eq('id', enrollment.id)
       }
     }
   } catch (e) {
