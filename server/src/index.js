@@ -2259,6 +2259,29 @@ app.post('/baileys-broadcast', async (req, reply) => {
             content,
             buttons: block.buttons || [],
           })
+
+          // Salvar no inbox para aparecer nas Conversas
+          const now = new Date().toISOString()
+          const msgContent = content || `[${block.type || 'text'}]`
+          const { data: conv } = await sb.from('baileys_conversations')
+            .upsert({
+              session_id, jid, is_group: false,
+              display_name: contact.name || null,
+              last_message: msgContent, last_message_at: now, updated_at: now,
+            }, { onConflict: 'session_id,jid' })
+            .select('id').single()
+          if (conv?.id) {
+            await sb.from('baileys_messages').insert({
+              session_id,
+              conversation_id: conv.id,
+              message_id: `out-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              direction: 'out',
+              type: block.type || 'text',
+              content: msgContent,
+              timestamp: now,
+            }).catch(() => {})
+          }
+
           await sleep(800)
         }
         job.sent++
