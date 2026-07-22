@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Upload, Send, Plus, Trash2, Users, CheckCircle2, XCircle, Loader2, GitBranch, Zap } from "lucide-react";
+import { Upload, Send, Plus, Trash2, Users, CheckCircle2, XCircle, Loader2, GitBranch, Zap, X, Shuffle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Session {
@@ -23,9 +23,15 @@ interface Contact {
   name: string;
 }
 
+interface BtnDef {
+  id: string;
+  text: string;
+}
+
 interface MsgBlock {
-  type: "text";
-  content: string;
+  type: "text" | "buttons";
+  variations: string[];
+  buttons: BtnDef[];
 }
 
 interface JobStatus {
@@ -73,12 +79,147 @@ function parseText(text: string): Contact[] {
     .filter((c) => c.phone.length >= 10);
 }
 
+function makeBlock(type: MsgBlock["type"] = "text"): MsgBlock {
+  return { type, variations: [""], buttons: [] };
+}
+
+// ─── Block Editor ─────────────────────────────────────────────────────────────
+function BlockEditor({
+  block, index, total, disabled,
+  onChange, onRemove,
+}: {
+  block: MsgBlock;
+  index: number;
+  total: number;
+  disabled?: boolean;
+  onChange: (b: MsgBlock) => void;
+  onRemove: () => void;
+}) {
+  function setVariation(vi: number, val: string) {
+    const v = [...block.variations];
+    v[vi] = val;
+    onChange({ ...block, variations: v });
+  }
+
+  function addVariation() {
+    onChange({ ...block, variations: [...block.variations, ""] });
+  }
+
+  function removeVariation(vi: number) {
+    onChange({ ...block, variations: block.variations.filter((_, i) => i !== vi) });
+  }
+
+  function setType(type: MsgBlock["type"]) {
+    onChange({ ...block, type });
+  }
+
+  function addButton() {
+    if (block.buttons.length >= 3) return;
+    const id = `btn_${Date.now()}`;
+    onChange({ ...block, buttons: [...block.buttons, { id, text: "" }] });
+  }
+
+  function updateButton(bi: number, text: string) {
+    const b = [...block.buttons];
+    b[bi] = { ...b[bi], text };
+    onChange({ ...block, buttons: b });
+  }
+
+  function removeButton(bi: number) {
+    onChange({ ...block, buttons: block.buttons.filter((_, i) => i !== bi) });
+  }
+
+  return (
+    <div className="border border-border rounded-lg p-3 space-y-2.5 bg-muted/10">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-semibold text-muted-foreground shrink-0">BLOCO #{index + 1}</span>
+        {block.variations.length > 1 && (
+          <span className="flex items-center gap-0.5 text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+            <Shuffle className="h-2.5 w-2.5" />{block.variations.length} variações
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-1">
+          <Select value={block.type} onValueChange={(v) => setType(v as MsgBlock["type"])} disabled={disabled}>
+            <SelectTrigger className="h-6 text-[10px] w-28 px-2">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="text">Texto</SelectItem>
+              <SelectItem value="buttons">Com Botões</SelectItem>
+            </SelectContent>
+          </Select>
+          {total > 1 && (
+            <button onClick={onRemove} disabled={disabled} className="text-muted-foreground hover:text-destructive transition-colors">
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Variations */}
+      <div className="space-y-1.5">
+        {block.variations.map((v, vi) => (
+          <div key={vi} className="flex gap-1 items-start">
+            {block.variations.length > 1 && (
+              <span className="text-[9px] text-muted-foreground mt-1.5 w-4 shrink-0 text-center font-mono">{vi + 1}</span>
+            )}
+            <Textarea
+              value={v}
+              onChange={(e) => setVariation(vi, e.target.value)}
+              placeholder={block.variations.length > 1 ? `Variação ${vi + 1}… ({{nome}}, {{telefone}})` : "Mensagem… use {{nome}}, {{telefone}}"}
+              className="text-xs h-16 resize-none flex-1"
+              disabled={disabled}
+            />
+            {block.variations.length > 1 && (
+              <button onClick={() => removeVariation(vi)} disabled={disabled} className="mt-1.5 text-muted-foreground hover:text-destructive transition-colors shrink-0">
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        ))}
+        <Button
+          size="sm" variant="ghost"
+          className="h-6 text-[10px] gap-1 text-muted-foreground hover:text-foreground w-full"
+          onClick={addVariation} disabled={disabled}
+        >
+          <Plus className="h-2.5 w-2.5" /> Adicionar variação
+        </Button>
+      </div>
+
+      {/* Buttons */}
+      {block.type === "buttons" && (
+        <div className="space-y-1.5 pt-2 border-t border-border">
+          <p className="text-[10px] font-medium text-muted-foreground">Botões (máx. 3)</p>
+          {block.buttons.map((btn, bi) => (
+            <div key={bi} className="flex gap-1 items-center">
+              <span className="text-[9px] text-muted-foreground w-4 shrink-0 text-center font-mono">{bi + 1}</span>
+              <Input
+                value={btn.text}
+                onChange={(e) => updateButton(bi, e.target.value)}
+                placeholder={`Texto do botão ${bi + 1}`}
+                className="h-7 text-xs flex-1"
+                disabled={disabled}
+              />
+              <button onClick={() => removeButton(bi)} disabled={disabled} className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+          {block.buttons.length < 3 && (
+            <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1 text-muted-foreground" onClick={addButton} disabled={disabled}>
+              <Plus className="h-2.5 w-2.5" /> Adicionar botão
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Contacts Input (shared) ──────────────────────────────────────────────────
 function ContactsInput({
-  contacts,
-  rawText,
-  onChange,
-  disabled,
+  contacts, rawText, onChange, disabled,
 }: {
   contacts: Contact[];
   rawText: string;
@@ -101,33 +242,22 @@ function ContactsInput({
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <Label className="text-xs">Contatos</Label>
-        {contacts.length > 0 && (
-          <span className="text-[10px] text-muted-foreground">{contacts.length} carregados</span>
-        )}
+        {contacts.length > 0 && <span className="text-[10px] text-muted-foreground">{contacts.length} carregados</span>}
       </div>
       <div
-        className={cn(
-          "border border-dashed border-border rounded-lg p-3 text-center transition-colors",
-          !disabled && "cursor-pointer hover:bg-muted/30"
-        )}
+        className={cn("border border-dashed border-border rounded-lg p-3 text-center transition-colors", !disabled && "cursor-pointer hover:bg-muted/30")}
         onClick={() => !disabled && fileRef.current?.click()}
       >
         <Upload className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
         <p className="text-[10px] text-muted-foreground">Clique para importar CSV</p>
         <p className="text-[10px] text-muted-foreground/60">formato: telefone, nome (opcional)</p>
       </div>
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".csv,.txt"
-        className="hidden"
-        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-      />
+      <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
       <Textarea
         value={rawText}
         onChange={(e) => onChange(e.target.value, parseText(e.target.value))}
         placeholder={"Ou cole os números (um por linha):\n5511999999999\n5511988888888, João Silva"}
-        className="text-xs font-mono h-28 resize-none"
+        className="text-xs font-mono h-24 resize-none"
         disabled={disabled}
       />
     </div>
@@ -139,7 +269,7 @@ function ModoDirecto({ sessions }: { sessions: Session[] }) {
   const [sessionId, setSessionId] = useState(sessions[0]?.session_id || "");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [rawText, setRawText] = useState("");
-  const [messages, setMessages] = useState<MsgBlock[]>([{ type: "text", content: "" }]);
+  const [blocks, setBlocks] = useState<MsgBlock[]>([makeBlock("text")]);
   const [intervalMs, setIntervalMs] = useState(3000);
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<JobStatus | null>(null);
@@ -148,18 +278,26 @@ function ModoDirecto({ sessions }: { sessions: Session[] }) {
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
+  function updateBlock(i: number, b: MsgBlock) {
+    setBlocks((prev) => prev.map((bl, idx) => idx === i ? b : bl));
+  }
+
+  function removeBlock(i: number) {
+    setBlocks((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
   async function startBroadcast() {
     if (!sessionId) { toast.error("Selecione uma sessão"); return; }
     if (!contacts.length) { toast.error("Adicione contatos"); return; }
-    const validMsgs = messages.filter((m) => m.content.trim());
-    if (!validMsgs.length) { toast.error("Adicione pelo menos uma mensagem"); return; }
+    const validBlocks = blocks.filter((b) => b.variations.some((v) => v.trim()));
+    if (!validBlocks.length) { toast.error("Adicione pelo menos uma mensagem"); return; }
 
     setLaunching(true);
     try {
       const result = await apiPost<{ job_id: string; total: number }>("/baileys-broadcast", {
         session_id: sessionId,
         contacts,
-        messages: validMsgs,
+        blocks: validBlocks,
         interval_ms: Math.max(500, intervalMs),
       });
       setJobId(result.job_id);
@@ -186,7 +324,7 @@ function ModoDirecto({ sessions }: { sessions: Session[] }) {
   function reset() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     setJobId(null); setJob(null); setContacts([]); setRawText("");
-    setMessages([{ type: "text", content: "" }]);
+    setBlocks([makeBlock("text")]);
   }
 
   const progress = job ? Math.round((job.sent / job.total) * 100) : 0;
@@ -194,58 +332,49 @@ function ModoDirecto({ sessions }: { sessions: Session[] }) {
 
   return (
     <div className="flex h-full overflow-hidden">
+      {/* Config */}
       <div className="w-80 flex flex-col border-r border-border bg-background shrink-0">
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-4">
+            {/* Sessão */}
             <div className="space-y-1.5">
               <Label className="text-xs">Sessão</Label>
               <Select value={sessionId} onValueChange={setSessionId} disabled={!!jobId}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {sessions.map((s) => (
-                    <SelectItem key={s.session_id} value={s.session_id}>
-                      {s.display_name || s.session_id}
-                    </SelectItem>
+                    <SelectItem key={s.session_id} value={s.session_id}>{s.display_name || s.session_id}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
             <ContactsInput
-              contacts={contacts}
-              rawText={rawText}
+              contacts={contacts} rawText={rawText}
               onChange={(raw, parsed) => { setRawText(raw); setContacts(parsed); }}
               disabled={!!jobId}
             />
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">Mensagens</Label>
-              <div className="space-y-2">
-                {messages.map((msg, i) => (
-                  <div key={i} className="border border-border rounded-md p-2 space-y-1.5 bg-muted/20">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-medium text-muted-foreground">#{i + 1}</span>
-                      {messages.length > 1 && (
-                        <button onClick={() => setMessages((m) => m.filter((_, idx) => idx !== i))} disabled={!!jobId} className="text-muted-foreground hover:text-destructive transition-colors">
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                    <Textarea
-                      value={msg.content}
-                      onChange={(e) => setMessages((m) => m.map((msg, idx) => idx === i ? { ...msg, content: e.target.value } : msg))}
-                      placeholder="Texto… use {{nome}} e {{telefone}}"
-                      className="text-xs h-20 resize-none"
-                      disabled={!!jobId}
-                    />
-                  </div>
-                ))}
-                <Button size="sm" variant="outline" className="w-full h-7 text-xs gap-1" onClick={() => setMessages((m) => [...m, { type: "text", content: "" }])} disabled={!!jobId}>
-                  <Plus className="h-3 w-3" /> Adicionar mensagem
-                </Button>
+            {/* Blocos */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Mensagens</Label>
+                <span className="text-[10px] text-muted-foreground">{blocks.length} bloco(s)</span>
               </div>
+              {blocks.map((block, i) => (
+                <BlockEditor
+                  key={i} block={block} index={i} total={blocks.length}
+                  disabled={!!jobId}
+                  onChange={(b) => updateBlock(i, b)}
+                  onRemove={() => removeBlock(i)}
+                />
+              ))}
+              <Button size="sm" variant="outline" className="w-full h-7 text-xs gap-1" onClick={() => setBlocks((b) => [...b, makeBlock()])} disabled={!!jobId}>
+                <Plus className="h-3 w-3" /> Adicionar bloco
+              </Button>
             </div>
 
+            {/* Intervalo */}
             <div className="space-y-1.5">
               <Label className="text-xs">Intervalo entre envios (ms)</Label>
               <Input type="number" value={intervalMs} onChange={(e) => setIntervalMs(Number(e.target.value))} className="h-8 text-xs" min={500} step={500} disabled={!!jobId} />
@@ -266,13 +395,14 @@ function ModoDirecto({ sessions }: { sessions: Session[] }) {
         </ScrollArea>
       </div>
 
+      {/* Status */}
       <div className="flex-1 flex flex-col bg-muted/10 overflow-hidden">
         {!job ? (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3">
             <Zap className="h-14 w-14 opacity-10" />
             <div className="text-center space-y-1">
               <p className="text-sm font-medium">Envio Direto</p>
-              <p className="text-xs opacity-60 max-w-xs">Importe uma lista e envie mensagens imediatamente</p>
+              <p className="text-xs opacity-60 max-w-xs">Blocos com variações sorteiam uma versão diferente para cada contato</p>
             </div>
           </div>
         ) : (
@@ -349,12 +479,8 @@ function ModoFunil({ sessions }: { sessions: Session[] }) {
   }
 
   function reset() {
-    setResult(null);
-    setContacts([]);
-    setRawText("");
+    setResult(null); setContacts([]); setRawText("");
   }
-
-  const activeFunnels = funnels.filter((f) => f.is_active);
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -364,13 +490,9 @@ function ModoFunil({ sessions }: { sessions: Session[] }) {
             <div className="space-y-1.5">
               <Label className="text-xs">Funil</Label>
               <Select value={funnelId} onValueChange={setFunnelId} disabled={enrolling}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Selecionar funil…" />
-                </SelectTrigger>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecionar funil…" /></SelectTrigger>
                 <SelectContent>
-                  {funnels.length === 0 && (
-                    <div className="px-2 py-3 text-xs text-muted-foreground text-center">Nenhum funil criado</div>
-                  )}
+                  {funnels.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground text-center">Nenhum funil criado</div>}
                   {funnels.map((f) => (
                     <SelectItem key={f.id} value={f.id}>
                       <div className="flex items-center gap-2">
@@ -381,7 +503,6 @@ function ModoFunil({ sessions }: { sessions: Session[] }) {
                   ))}
                 </SelectContent>
               </Select>
-
               {selectedFunnel && (
                 <div className="text-[10px] text-muted-foreground bg-muted/40 rounded-md px-2 py-1.5 space-y-0.5">
                   <p>{selectedFunnel.graph?.nodes?.length || 0} nós · {selectedFunnel.graph?.edges?.length || 0} conexões</p>
@@ -392,16 +513,14 @@ function ModoFunil({ sessions }: { sessions: Session[] }) {
             </div>
 
             <ContactsInput
-              contacts={contacts}
-              rawText={rawText}
+              contacts={contacts} rawText={rawText}
               onChange={(raw, parsed) => { setRawText(raw); setContacts(parsed); }}
               disabled={enrolling}
             />
 
             <div className="rounded-md bg-muted/30 border border-border p-3 text-[10px] text-muted-foreground space-y-1">
               <p className="font-medium text-foreground text-xs">Como funciona</p>
-              <p>Cada contato entra no início do funil selecionado e recebe a sequência completa com os delays configurados nos nós.</p>
-              <p>Contatos já enrollados no mesmo funil são ignorados.</p>
+              <p>Cada contato entra no início do funil e recebe a sequência com os delays dos nós. Contatos já enrollados são ignorados.</p>
             </div>
 
             {!result ? (
@@ -410,9 +529,7 @@ function ModoFunil({ sessions }: { sessions: Session[] }) {
                 Enrollar no Funil ({contacts.length})
               </Button>
             ) : (
-              <Button className="w-full" variant="outline" onClick={reset}>
-                Novo Disparo
-              </Button>
+              <Button className="w-full" variant="outline" onClick={reset}>Novo Disparo</Button>
             )}
           </div>
         </ScrollArea>
@@ -424,48 +541,43 @@ function ModoFunil({ sessions }: { sessions: Session[] }) {
             <GitBranch className="h-14 w-14 opacity-10" />
             <div className="text-center space-y-1">
               <p className="text-sm font-medium">Disparo via Funil</p>
-              <p className="text-xs opacity-60 max-w-xs">Selecione um funil e uma lista de contatos — cada pessoa receberá a sequência completa do workflow</p>
+              <p className="text-xs opacity-60 max-w-xs">Selecione um funil e uma lista — cada pessoa recebe a sequência completa do workflow</p>
             </div>
           </div>
         ) : (
           <div className="flex flex-col h-full p-6 gap-4">
-            <div className="space-y-3">
-              <p className="text-sm font-semibold">Resultado do Enrollment</p>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: "Total", value: result.total, color: "bg-muted text-foreground" },
-                  { label: "Enrollados", value: result.enrolled, color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" },
-                  { label: "Erros", value: result.errors.length, color: "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400" },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className={cn("rounded-lg p-3 text-center", color)}>
-                    <p className="text-2xl font-bold">{value}</p>
-                    <p className="text-[10px] font-medium opacity-70">{label}</p>
-                  </div>
-                ))}
-              </div>
+            <p className="text-sm font-semibold shrink-0">Resultado do Enrollment</p>
+            <div className="grid grid-cols-3 gap-3 shrink-0">
+              {[
+                { label: "Total", value: result.total, color: "bg-muted text-foreground" },
+                { label: "Enrollados", value: result.enrolled, color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" },
+                { label: "Erros", value: result.errors.length, color: "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400" },
+              ].map(({ label, value, color }) => (
+                <div key={label} className={cn("rounded-lg p-3 text-center", color)}>
+                  <p className="text-2xl font-bold">{value}</p>
+                  <p className="text-[10px] font-medium opacity-70">{label}</p>
+                </div>
+              ))}
             </div>
-
-            {result.errors.length > 0 && (
+            {result.errors.length > 0 ? (
               <div className="flex-1 overflow-hidden">
-                <p className="text-xs font-medium mb-2 text-muted-foreground">Erros ({result.errors.length})</p>
+                <p className="text-xs font-medium mb-2 text-muted-foreground">Erros</p>
                 <ScrollArea className="h-full border border-border rounded-md bg-background">
                   <div className="p-2 space-y-0.5">
                     {result.errors.map((e, i) => (
                       <div key={i} className="flex items-center gap-2 px-2 py-1 rounded text-xs bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400">
                         <XCircle className="h-3 w-3 shrink-0" />
                         <span className="font-mono">{e.phone}</span>
-                        <span className="ml-auto text-[10px] truncate max-w-[160px]" title={e.error}>{e.error}</span>
+                        <span className="ml-auto text-[10px] truncate max-w-[160px]">{e.error}</span>
                       </div>
                     ))}
                   </div>
                 </ScrollArea>
               </div>
-            )}
-
-            {result.errors.length === 0 && (
+            ) : (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center space-y-2">
-                  <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto opacity-80" />
+                  <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto" />
                   <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Todos enrollados com sucesso!</p>
                   <p className="text-xs text-muted-foreground">Os contatos receberão as mensagens conforme os delays do funil</p>
                 </div>
@@ -484,28 +596,20 @@ export function DisparoTab({ sessions }: { sessions: Session[] }) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Mode switcher */}
       <div className="flex gap-1 p-2 border-b border-border bg-background shrink-0">
         <button
           onClick={() => setMode("direto")}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
-            mode === "direto" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"
-          )}
+          className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors", mode === "direto" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
         >
           <Zap className="h-3 w-3" /> Envio Direto
         </button>
         <button
           onClick={() => setMode("funil")}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
-            mode === "funil" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"
-          )}
+          className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors", mode === "funil" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
         >
           <GitBranch className="h-3 w-3" /> Via Funil
         </button>
       </div>
-
       <div className="flex-1 overflow-hidden">
         {mode === "direto" ? <ModoDirecto sessions={sessions} /> : <ModoFunil sessions={sessions} />}
       </div>

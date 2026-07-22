@@ -2172,10 +2172,14 @@ app.post('/webhook/perfectpay/:token', async (req, reply) => {
 
 // ─── Disparo por Lista (Baileys broadcast) ────────────────────────────────────
 app.post('/baileys-broadcast', async (req, reply) => {
-  const { session_id, contacts, messages, interval_ms = 3000 } = req.body || {}
-  if (!session_id || !contacts?.length || !messages?.length) {
-    return reply.status(400).send({ error: 'session_id, contacts e messages obrigatórios' })
+  const { session_id, contacts, blocks = [], messages = [], interval_ms = 3000 } = req.body || {}
+  if (!session_id || !contacts?.length) {
+    return reply.status(400).send({ error: 'session_id e contacts obrigatórios' })
   }
+  // Suporta tanto o formato novo (blocks com variations) quanto o legado (messages)
+  const msgBlocks = blocks.length ? blocks : messages.map(m => ({ type: m.type || 'text', variations: [m.content || ''], buttons: m.buttons || [] }))
+  if (!msgBlocks.length) return reply.status(400).send({ error: 'blocks ou messages obrigatório' })
+
   const session = sessions.get(session_id)
   if (!session?.socket) return reply.status(400).send({ error: 'Sessão não conectada' })
 
@@ -2189,9 +2193,19 @@ app.post('/baileys-broadcast', async (req, reply) => {
       try {
         const jid = contact.phone + '@s.whatsapp.net'
         const vars = { nome: contact.name || contact.phone, telefone: contact.phone }
-        for (const msg of messages) {
-          const content = (msg.content || '').replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] || '')
-          await sendBaileysMessage(session.socket, jid, { ...msg, content })
+
+        for (const block of msgBlocks) {
+          // Sortear variação aleatória para este contato
+          const pool = (block.variations || []).filter(v => v && v.trim())
+          if (!pool.length) continue
+          const raw = pool[Math.floor(Math.random() * pool.length)]
+          const content = raw.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] || '')
+
+          await sendBaileysMessage(session.socket, jid, {
+            type: block.type || 'text',
+            content,
+            buttons: block.buttons || [],
+          })
           await sleep(800)
         }
         job.sent++
