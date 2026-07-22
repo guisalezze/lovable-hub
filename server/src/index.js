@@ -36,6 +36,8 @@ const sessions = new Map()
 const broadcastJobs = new Map()
 // Jobs de broadcast Baileys (disparo por lista)
 const baileysJobs = new Map()
+// Flows de botão criados via Disparo (in-memory, sessionId:buttonId → flow)
+const disparoButtonFlows = new Map()
 
 async function loadBaileys() {
   try {
@@ -566,9 +568,45 @@ async function sendBaileysMessage(sock, jid, msg) {
 
 // ─── Button flow processor ───────────────────────────────────────────────────
 // Called when a contact replies to a Baileys button message.
-// Looks up the matching flow by button_id and session, then sends follow-up msgs.
+// Checks disparo in-memory flows first, then falls back to webhook-based DB flows.
 async function processButtonFlow(sessionId, jid, buttonId) {
-  // Find webhooks that belong to this session
+  // Check disparo button flows first (set by /baileys-broadcast)
+  const disparoKey = `${sessionId}:${buttonId}`
+  const disparoFlow = disparoButtonFlows.get(disparoKey)
+  if (disparoFlow) {
+    const session = sessions.get(sessionId)
+    if (!session?.socket) return
+    if (disparoFlow.action === 'messages') {
+      for (const msg of disparoFlow.messages || []) {
+        await sendBaileysMessage(session.socket, jid, msg)
+        await sleep(1000)
+      }
+    } else if (disparoFlow.action === 'funnel' && disparoFlow.funnelId) {
+      const { data: funnel } = await sb.from('funnels').select('*').eq('id', disparoFlow.funnelId).single()
+      if (funnel) {
+        const graph = funnel.graph || { nodes: [], edges: [] }
+        const triggerNode = (graph.nodes || []).find(n => n.type === 'trigger')
+        const entryNode = triggerNode ? funnelNextNode(graph, triggerNode.id, null) : (graph.nodes || []).find(n => n.type !== 'trigger')
+        if (entryNode) {
+          const phone = jid.replace('@s.whatsapp.net', '').replace(/:\d+$/, '')
+          await sb.from('funnel_enrollments').upsert({
+            funnel_id: funnel.id,
+            phone,
+            jid,
+            current_node_id: entryNode.id,
+            current_step: 0,
+            next_send_at: funnelNextSendAt(entryNode),
+            status: 'active',
+            variables: {},
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'funnel_id,phone', ignoreDuplicates: true })
+        }
+      }
+    }
+    return
+  }
+
+  // Fallback: webhook-based flows from DB
   const { data: sessionWebhooks } = await sb.from('webhooks').select('id').eq('session_id', sessionId)
   if (!sessionWebhooks?.length) return
 
@@ -2187,6 +2225,21 @@ app.post('/baileys-broadcast', async (req, reply) => {
   const validContacts = contacts.filter(c => c.phone && c.phone.replace(/\D/g, '').length >= 10)
   baileysJobs.set(jobId, { total: validContacts.length, sent: 0, errors: [], status: 'running' })
 
+  // Register button follow-up flows in memory so processButtonFlow can handle them
+  for (const block of msgBlocks) {
+    if (block.type !== 'buttons') continue
+    for (const btn of block.buttons || []) {
+      if (!btn.id || !btn.action || btn.action === 'none') continue
+      disparoButtonFlows.set(`${session_id}:${btn.id}`, {
+        action: btn.action,
+        messages: btn.action === 'messages'
+          ? (btn.followUp || []).filter(Boolean).map(c => ({ type: 'text', content: c }))
+          : [],
+        funnelId: btn.funnelId || null,
+      })
+    }
+  }
+
   ;(async () => {
     const job = baileysJobs.get(jobId)
     for (const contact of validContacts) {
@@ -2239,12 +2292,13 @@ app.get('/funnels', async (req, reply) => {
 })
 
 app.post('/funnels', async (req, reply) => {
-  const { name, session_id, trigger_type, trigger_event_type, steps } = req.body || {}
+  const { name, session_id, trigger_type, trigger_event_type, graph, steps } = req.body || {}
   if (!name || !session_id) return reply.status(400).send({ error: 'name e session_id obrigatórios' })
   const { data, error } = await sb.from('funnels').insert({
     name, session_id,
     trigger_type: trigger_type || 'webhook_event',
     trigger_event_type: trigger_event_type || 'all',
+    graph: graph || { nodes: [], edges: [] },
     steps: steps || [],
   }).select('*').single()
   if (error) return reply.status(500).send({ error: error.message })
@@ -2252,9 +2306,9 @@ app.post('/funnels', async (req, reply) => {
 })
 
 app.put('/funnels/:id', async (req, reply) => {
-  const { name, session_id, trigger_type, trigger_event_type, steps, is_active } = req.body || {}
+  const { name, session_id, trigger_type, trigger_event_type, graph, steps, is_active } = req.body || {}
   const { data, error } = await sb.from('funnels').update({
-    name, session_id, trigger_type, trigger_event_type, steps, is_active,
+    name, session_id, trigger_type, trigger_event_type, graph, steps, is_active,
     updated_at: new Date().toISOString(),
   }).eq('id', req.params.id).select('*').single()
   if (error) return reply.status(500).send({ error: error.message })
