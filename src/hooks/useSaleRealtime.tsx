@@ -27,10 +27,10 @@ function SaleToast({
       className="flex items-center gap-3 bg-[#18181b] border border-emerald-500/30 rounded-xl px-4 py-3 shadow-2xl shadow-emerald-500/10 cursor-pointer min-w-[280px] max-w-[340px]"
       onClick={onDismiss}
     >
-      {/* Logo Solaryz */}
+      {/* Logo Vault CRM */}
       <img
         src="/logo.png"
-        alt="Solaryz"
+        alt="Vault CRM"
         className="flex-shrink-0 w-9 h-9 rounded-lg object-cover"
       />
 

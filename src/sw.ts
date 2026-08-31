@@ -73,7 +73,7 @@ self.addEventListener('push', (event) => {
     data = { title: 'Nova notificação' };
   }
 
-  const title = (data.title as string) || 'Solaryz';
+  const title = (data.title as string) || 'Vault CRM';
   const options: NotificationOptions = {
     body: (data.body as string) || 'Você tem uma nova notificação',
     icon: (data.icon as string) || '/logo.png',

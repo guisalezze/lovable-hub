@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Zap } from "lucide-react";
 import { toast } from "sonner";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
@@ -107,10 +106,12 @@ export default function AuthPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4 glow-primary">
-            <Zap className="h-6 w-6 text-primary" />
-          </div>
-          <h1 className="heading-display text-2xl text-primary">OpsCRM</h1>
+          <img
+            src="/logo.png"
+            alt="Vault CRM"
+            className="h-16 w-16 rounded-xl object-cover mx-auto mb-4 glow-primary"
+          />
+          <h1 className="heading-display text-2xl text-primary">Vault CRM</h1>
           <p className="text-sm italic text-muted-foreground mt-1">
             Entre na sua conta
           </p>

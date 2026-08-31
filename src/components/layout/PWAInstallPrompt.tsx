@@ -145,7 +145,7 @@ export function PWAInstallPrompt() {
     <div className="fixed bottom-20 left-0 right-0 z-[90] px-4 md:hidden safe-area-inset-bottom">
       <div className="bg-card border border-border rounded-lg shadow-lg p-4 flex items-center justify-between gap-3">
         <div className="flex-1">
-          <p className="text-sm font-medium text-foreground">Instalar Solaryz</p>
+          <p className="text-sm font-medium text-foreground">Instalar Vault CRM</p>
           {isIOS && !isSafari ? (
             <p className="text-xs text-muted-foreground">⚠️ Use o Safari para instalar no iOS</p>
           ) : isIOS && isSafari ? (
