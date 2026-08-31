@@ -18,13 +18,15 @@ import { ptBR } from "date-fns/locale";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { ProductGoalsSection } from "@/components/financeiro/ProductGoalsSection";
 
-function usePeriodSales(since: string, until: string) {
+function usePeriodSales(since: string, until: string, projectId: string | undefined) {
   return useQuery({
-    queryKey: ["period-sales", since, until],
+    queryKey: ["period-sales", since, until, projectId],
+    enabled: !!projectId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales").select("created_at, sale_amount, sale_status_enum")
         .eq("sale_status_enum", "approved")
+        .eq("project_id", projectId!)
         .gte("created_at", `${since}T00:00:00`)
         .lte("created_at", `${until}T23:59:59`);
       if (error) throw error;
@@ -169,6 +171,7 @@ function exportCSV(chartData: any[], since: string, until: string) {
 export default function FinanceiroPage() {
   const { currentProject } = useProject();
   const isNutra = currentProject?.slug === "nutra";
+  const isEducacional = currentProject?.slug === "educacional";
   const navigate = useNavigate();
 
   const [since, setSince] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
@@ -186,14 +189,14 @@ export default function FinanceiroPage() {
   const prevSince = format(subDays(parseISO(since), days), "yyyy-MM-dd");
 
   // Revenue: sales for educacional, nutra_sales for nutra
-  const { data: salesData } = usePeriodSales(since, until);
-  const { data: prevSalesData } = usePeriodSales(prevSince, prevUntil);
+  const { data: salesData } = usePeriodSales(since, until, currentProject?.id);
+  const { data: prevSalesData } = usePeriodSales(prevSince, prevUntil, currentProject?.id);
   const { data: nutraSalesData } = useNutraSalesRevenue(isNutra ? currentProject?.id : undefined, since, until);
   const { data: prevNutraSalesData } = useNutraSalesRevenue(isNutra ? currentProject?.id : undefined, prevSince, prevUntil);
 
   // Mentorias (só Educacional): filtradas por contract_start
-  const { data: mentoriasData } = usePeriodMentorias(since, until, !isNutra);
-  const { data: prevMentoriasData } = usePeriodMentorias(prevSince, prevUntil, !isNutra);
+  const { data: mentoriasData } = usePeriodMentorias(since, until, isEducacional);
+  const { data: prevMentoriasData } = usePeriodMentorias(prevSince, prevUntil, isEducacional);
 
   // Manual investments filtered by project
   const { data: invData } = usePeriodInvestments(currentProject?.id, since, until);
@@ -218,11 +221,11 @@ export default function FinanceiroPage() {
   const prevRevenueData = isNutra ? prevNutraSalesData : prevSalesData;
 
   const salesRevenue = revenueData?.totalRevenue ?? 0;
-  const mentoriasRevenue = !isNutra ? (mentoriasData?.totalRevenue ?? 0) : 0;
+  const mentoriasRevenue = isEducacional ? (mentoriasData?.totalRevenue ?? 0) : 0;
   const totalRevenue = salesRevenue + mentoriasRevenue;
 
   const prevSalesRevenue = prevRevenueData?.totalRevenue ?? 0;
-  const prevMentoriasRevenue = !isNutra ? (prevMentoriasData?.totalRevenue ?? 0) : 0;
+  const prevMentoriasRevenue = isEducacional ? (prevMentoriasData?.totalRevenue ?? 0) : 0;
   const prevRevenue = prevSalesRevenue + prevMentoriasRevenue;
 
   const manualInvestment = invData?.total ?? 0;
@@ -366,7 +369,7 @@ export default function FinanceiroPage() {
           <div className="flex items-center gap-2 text-muted-foreground"><DollarSign className="h-4 w-4" /><span className="text-xs font-medium">Receita</span></div>
           <p className="text-xl font-bold text-foreground">{fmtBRL(totalRevenue)}</p>
           <DeltaBadge current={totalRevenue} previous={prevRevenue} />
-          {!isNutra && mentoriasRevenue > 0 && (
+          {isEducacional && mentoriasRevenue > 0 && (
             <div className="text-[10px] text-muted-foreground space-y-0.5 pt-1 border-t border-border/30">
               <p>🛒 Vendas: {fmtShort(salesRevenue)}</p>
               <p>🎓 Mentorias: {fmtShort(mentoriasRevenue)}</p>
@@ -436,7 +439,7 @@ export default function FinanceiroPage() {
               <Tooltip formatter={(v: number) => fmtBRL(v)} labelFormatter={d => { try { return format(parseISO(d as string), "dd/MM/yyyy"); } catch { return d; }}} />
               <Legend />
               <Bar dataKey="vendas" name="Vendas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              {!isNutra && <Bar dataKey="mentorias" name="Mentorias" fill="#a855f7" radius={[4, 4, 0, 0]} />}
+              {isEducacional && <Bar dataKey="mentorias" name="Mentorias" fill="#a855f7" radius={[4, 4, 0, 0]} />}
               <Bar dataKey="investment" name="Gastos Manuais" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               <Bar dataKey="adSpend" name="Ads Spend" fill="#f59e0b" radius={[4, 4, 0, 0]} />
               <Line dataKey="profit" name="Lucro" stroke="#10b981" strokeWidth={2} dot={false} />
@@ -446,7 +449,7 @@ export default function FinanceiroPage() {
       )}
 
       {/* Product Goals - only for educacional */}
-      {!isNutra && <ProductGoalsSection since={since} until={until} />}
+      {isEducacional && <ProductGoalsSection since={since} until={until} />}
 
       {/* Manual Investment History */}
       {allInvestments.length > 0 && (
