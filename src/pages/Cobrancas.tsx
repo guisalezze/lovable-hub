@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { isBefore, isSameDay, startOfDay, parseISO, addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useProject } from "@/contexts/ProjectContext";
 
 // ── Types ──
 
@@ -84,13 +85,15 @@ function chargeOverallStatus(charge: Charge): "ok" | "overdue" | "due_today" | "
 
 // ── Hooks ──
 
-function useCharges() {
+function useCharges(projectId: string | undefined) {
   return useQuery<Charge[]>({
-    queryKey: ["charges"],
+    queryKey: ["charges", projectId],
+    enabled: !!projectId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("charges")
         .select(`*, charge_installments(*), profiles:assigned_to(id, full_name, email)`)
+        .eq("project_id", projectId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data as unknown as Charge[]) || [];
@@ -134,6 +137,7 @@ interface InstallmentRow {
 
 function ChargeModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient();
+  const { currentProject } = useProject();
   const { data: profiles = [] } = useProfiles();
   const [installments, setInstallments] = useState<InstallmentRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -197,6 +201,7 @@ function ChargeModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
           created_by: user?.id || null,
           notes: data.notes || null,
           status: "active",
+          project_id: currentProject?.id ?? null,
         } as any)
         .select()
         .single();
@@ -521,7 +526,8 @@ export default function CobrancasPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
-  const { data: charges = [], isLoading } = useCharges();
+  const { currentProject } = useProject();
+  const { data: charges = [], isLoading } = useCharges(currentProject?.id);
 
   const kpis = useMemo(() => {
     const active = charges.filter(c => c.status === "active");
