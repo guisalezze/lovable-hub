@@ -15,6 +15,7 @@ interface ProjectContextValue {
   currentProject: Project | null;
   setCurrentProject: (project: Project) => void;
   isLoading: boolean;
+  refreshProjects: () => Promise<void>;
 }
 
 const ProjectContext = createContext<ProjectContextValue>({
@@ -22,6 +23,7 @@ const ProjectContext = createContext<ProjectContextValue>({
   currentProject: null,
   setCurrentProject: () => {},
   isLoading: true,
+  refreshProjects: async () => {},
 });
 
 export function useProject() {
@@ -61,7 +63,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <ProjectContext.Provider value={{ projects, currentProject, setCurrentProject, isLoading }}>
+    <ProjectContext.Provider value={{ projects, currentProject, setCurrentProject, isLoading, refreshProjects: loadProjects }}>
       {children}
     </ProjectContext.Provider>
   );

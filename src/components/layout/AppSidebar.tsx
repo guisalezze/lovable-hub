@@ -146,7 +146,7 @@ interface AppSidebarProps {
 }
 
 function SidebarContent() {
-  const { projects, currentProject, setCurrentProject } = useProject();
+  const { projects, currentProject, setCurrentProject, refreshProjects } = useProject();
   const location = useLocation();
   const navigate = useNavigate();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ educacional: true });
@@ -296,7 +296,7 @@ function SidebarContent() {
       <CreateProjectDialog
         open={showCreateProject}
         onOpenChange={setShowCreateProject}
-        onCreated={(project) => setCurrentProject(project)}
+        onCreated={async (project) => { await refreshProjects(); setCurrentProject(project); }}
       />
     </>
   );
