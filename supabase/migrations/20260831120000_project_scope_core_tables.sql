@@ -28,20 +28,26 @@ ALTER TABLE public.project_products ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Authenticated can read project_products" ON public.project_products FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Admins can manage project_products" ON public.project_products FOR ALL USING (has_role(auth.uid(), 'admin'::app_role));
 
--- 3. client_ltv view: append project_id (derived from sales/charges, falling back to the
---    lead's project). Column order for pre-existing columns is UNCHANGED — CREATE OR REPLACE
---    VIEW only allows appending columns at the end.
+-- 3. client_ltv view: append project_id, PRESERVING the real current logic from
+--    supabase/migrations/20260309234827_03f07bd3-04cf-4ddc-a025-5eda003de4f4.sql (the migration
+--    that actually defines client_ltv today — NOT the earlier 20260309234018 one). That version
+--    counts total_purchases over ALL sales regardless of status (only sales_revenue is
+--    FILTER'ed to approved), and includes implementation-only clients (no sales, no charges) in
+--    all_emails via a 3-way union. Column order for the 14 pre-existing columns is UNCHANGED —
+--    CREATE OR REPLACE VIEW only allows appending columns at the end.
 CREATE OR REPLACE VIEW public.client_ltv AS
-WITH sales_data AS (
+WITH all_sale_emails AS (
+  SELECT DISTINCT lead_email AS email, project_id FROM public.sales
+),
+sales_data AS (
   SELECT
     lead_email AS email,
     project_id,
     COUNT(*) AS total_purchases,
-    COALESCE(SUM(sale_amount), 0) AS sales_revenue,
+    COALESCE(SUM(sale_amount) FILTER (WHERE sale_status_enum = 'approved'), 0) AS sales_revenue,
     MIN(date_created) AS first_purchase_at,
     MAX(date_created) AS last_purchase_at
   FROM public.sales
-  WHERE sale_status_enum = 'approved'
   GROUP BY lead_email, project_id
 ),
 charges_data AS (
@@ -64,9 +70,14 @@ impl_data AS (
   GROUP BY client_email
 ),
 all_emails AS (
-  SELECT email, project_id FROM sales_data
+  SELECT email, project_id FROM all_sale_emails
   UNION
   SELECT email, project_id FROM charges_data WHERE email IS NOT NULL
+  UNION
+  -- implementations has no project_id of its own — it only ever exists for Educacional
+  -- (Mentorias), so implementation-only clients are attributed to Educacional's project.
+  SELECT email, (SELECT id FROM public.projects WHERE slug = 'educacional') AS project_id
+  FROM impl_data WHERE email IS NOT NULL
 )
 SELECT
   ae.email,
@@ -88,7 +99,7 @@ SELECT
     WHEN COALESCE(sd.sales_revenue, 0) + COALESCE(cd.charges_revenue, 0) + COALESCE(id.impl_revenue, 0) >= 500 THEN 'regular'
     ELSE 'new'
   END AS segment,
-  COALESCE(ae.project_id, l.project_id) AS project_id
+  ae.project_id
 FROM all_emails ae
 LEFT JOIN public.leads l ON l.email = ae.email
 LEFT JOIN sales_data sd ON sd.email = ae.email AND sd.project_id = ae.project_id
