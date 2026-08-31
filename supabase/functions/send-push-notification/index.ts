@@ -5,7 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const VAPID_PUBLIC_KEY =
   Deno.env.get("VAPID_PUBLIC_KEY") || Deno.env.get("VITE_VAPID_PUBLIC_KEY") || "";
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") || "";
-const VAPID_SUBJECT = "mailto:support@solaryz.com";
+const VAPID_SUBJECT = "mailto:support@guisalezze.com";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://crm.guisalezze.com",
@@ -40,6 +40,23 @@ function concat(...arrays: Uint8Array[]): Uint8Array {
   return out;
 }
 
+// ─── Minimal DER (ASN.1) builder ───────────────────────────────────────────────
+
+function derLength(n: number): Uint8Array {
+  if (n < 0x80) return Uint8Array.from([n]);
+  const bytes: number[] = [];
+  let v = n;
+  while (v > 0) {
+    bytes.unshift(v & 0xff);
+    v >>= 8;
+  }
+  return Uint8Array.from([0x80 | bytes.length, ...bytes]);
+}
+
+function derTLV(tag: number, content: Uint8Array): Uint8Array {
+  return concat(Uint8Array.from([tag]), derLength(content.length), content);
+}
+
 // ─── HMAC-SHA-256 ────────────────────────────────────────────────────────────
 
 async function hmac(key: Uint8Array, data: Uint8Array): Promise<Uint8Array> {
@@ -51,30 +68,55 @@ async function hmac(key: Uint8Array, data: Uint8Array): Promise<Uint8Array> {
 
 // ─── VAPID JWT (ES256) ────────────────────────────────────────────────────────
 
-async function importVapidPrivateKey(rawB64url: string): Promise<CryptoKey> {
-  const raw = b64urlToBytes(rawB64url);
-  // Wrap 32-byte raw P-256 key in minimal PKCS#8 shell
-  const header = Uint8Array.from([
-    0x30, 0x41, 0x02, 0x01, 0x00, 0x30, 0x13, 0x06,
-    0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01,
-    0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03,
-    0x01, 0x07, 0x04, 0x27, 0x30, 0x25, 0x02, 0x01,
-    0x01, 0x04, 0x20,
-  ]);
-  const pkcs8 = new Uint8Array(header.length + raw.length);
-  pkcs8.set(header);
-  pkcs8.set(raw, header.length);
-  return await crypto.subtle.importKey(
-    "pkcs8",
-    pkcs8.buffer,
-    { name: "ECDSA", namedCurve: "P-256" },
-    false,
-    ["sign"]
-  );
+// id-ecPublicKey (1.2.840.10045.2.1)
+const OID_EC_PUBLIC_KEY = Uint8Array.from([0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01]);
+// prime256v1 / secp256r1 (1.2.840.10045.3.1.7)
+const OID_P256 = Uint8Array.from([0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07]);
+
+async function importVapidPrivateKey(rawB64url: string, pubB64url: string): Promise<CryptoKey> {
+  const raw = b64urlToBytes(rawB64url); // 32-byte private scalar
+  const pub = b64urlToBytes(pubB64url); // 65-byte uncompressed public point (0x04 || X || Y)
+  if (raw.length !== 32) {
+    throw new Error(`DIAG_RAW_KEY_LENGTH=${raw.length} (expected 32)`);
+  }
+  if (pub.length !== 65) {
+    throw new Error(`DIAG_PUB_KEY_LENGTH=${pub.length} (expected 65)`);
+  }
+
+  // RFC 5915 ECPrivateKey, INCLUDING the optional [1] publicKey field.
+  // Deno's WebCrypto (backed by the `ring` crate) rejects PKCS#8 EC keys
+  // that omit this field at sign() time with "InvalidEncoding", even
+  // though importKey() itself succeeds without it.
+  const ecPrivateKey = derTLV(0x30, concat(
+    derTLV(0x02, Uint8Array.from([0x01])), // version = 1
+    derTLV(0x04, raw), // privateKey OCTET STRING
+    derTLV(0xa1, derTLV(0x03, concat(Uint8Array.from([0x00]), pub))), // [1] publicKey BIT STRING
+  ));
+
+  const algorithmIdentifier = derTLV(0x30, concat(OID_EC_PUBLIC_KEY, OID_P256));
+
+  const pkcs8 = derTLV(0x30, concat(
+    derTLV(0x02, Uint8Array.from([0x00])), // version = 0
+    algorithmIdentifier,
+    derTLV(0x04, ecPrivateKey), // privateKey OCTET STRING (wraps ECPrivateKey)
+  ));
+
+  try {
+    return await crypto.subtle.importKey(
+      "pkcs8",
+      pkcs8.buffer,
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["sign"]
+    );
+  } catch (err: unknown) {
+    const e = err instanceof Error ? err : new Error(String(err));
+    throw new Error(`DIAG_IMPORT_KEY_FAILED name=${e.name} message=${e.message} raw_len=${raw.length} pkcs8_len=${pkcs8.length}`);
+  }
 }
 
 async function createVapidJwt(audience: string): Promise<string> {
-  const privateKey = await importVapidPrivateKey(VAPID_PRIVATE_KEY);
+  const privateKey = await importVapidPrivateKey(VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY);
   const now = Math.floor(Date.now() / 1000);
   const enc = new TextEncoder();
 
@@ -84,11 +126,17 @@ async function createVapidJwt(audience: string): Promise<string> {
   );
   const sigInput = `${headerB64}.${claimsB64}`;
 
-  const sig = await crypto.subtle.sign(
-    { name: "ECDSA", hash: "SHA-256" },
-    privateKey,
-    enc.encode(sigInput)
-  );
+  let sig: ArrayBuffer;
+  try {
+    sig = await crypto.subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" },
+      privateKey,
+      enc.encode(sigInput)
+    );
+  } catch (err: unknown) {
+    const e = err instanceof Error ? err : new Error(String(err));
+    throw new Error(`DIAG_SIGN_FAILED name=${e.name} message=${e.message}`);
+  }
   return `${sigInput}.${bytesToB64url(new Uint8Array(sig))}`;
 }
 
@@ -174,13 +222,26 @@ async function sendWebPush(
   const url = new URL(sub.endpoint);
   const audience = `${url.protocol}//${url.host}`;
 
-  const jwt = await createVapidJwt(audience);
+  let jwt: string;
+  try {
+    jwt = await createVapidJwt(audience);
+  } catch (err: unknown) {
+    const e = err instanceof Error ? err : new Error(String(err));
+    throw new Error(`STAGE=vapid_jwt name=${e.name} message=${e.message}`);
+  }
+
   // RFC 8291 (aes128gcm) — compatível com Apple iOS PWA, Chrome e Firefox
-  const encryptedBody = await encryptPayload(
-    JSON.stringify(payload),
-    sub.p256dh_key,
-    sub.auth_key
-  );
+  let encryptedBody: Uint8Array;
+  try {
+    encryptedBody = await encryptPayload(
+      JSON.stringify(payload),
+      sub.p256dh_key,
+      sub.auth_key
+    );
+  } catch (err: unknown) {
+    const e = err instanceof Error ? err : new Error(String(err));
+    throw new Error(`STAGE=encrypt_payload name=${e.name} message=${e.message} p256dh_len=${sub.p256dh_key?.length} auth_len=${sub.auth_key?.length}`);
+  }
 
   const res = await fetch(sub.endpoint, {
     method: "POST",
@@ -250,7 +311,7 @@ serve(async (req) => {
 
     try {
       const result = await sendWebPush(sub, {
-        title: "🔔 Teste de Push — Solaryz",
+        title: "🔔 Teste de Push — Vault CRM",
         body: "Se você recebeu isso, as notificações estão funcionando!",
         icon: "/logo.png",
         tag: `test-${Date.now()}`,
