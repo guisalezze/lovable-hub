@@ -55,6 +55,12 @@ const educacionalItems: NavItem[] = [
   { label: "Integrações", icon: Plug, to: "/integracoes" },
 ];
 
+// Same as educacionalItems, minus Mentorias and Onboarding — used by every project that
+// isn't Educacional.
+const standardProjectItems: NavItem[] = educacionalItems.filter(
+  (item) => item.label !== "Mentorias" && item.label !== "Onboarding"
+);
+
 
 const connectItems: NavItem[] = [
   { label: "WA Oficial", icon: MessageCircle, to: "/whatsapp-oficial" },
@@ -148,8 +154,6 @@ function SidebarContent() {
     navigate("/auth");
   };
 
-  const eduProject = projects.find((p) => p.slug === "educacional");
-
   const toggleGroup = (slug: string) => {
     setOpenGroups((prev) => ({ ...prev, [slug]: !prev[slug] }));
   };
@@ -160,28 +164,29 @@ function SidebarContent() {
       <div className="h-16 flex items-center px-4 border-b border-sidebar-border shrink-0 gap-3">
         <img
           src="/logo.png"
-          alt="Solaryz"
+          alt="Vault CRM"
           className="h-12 w-12 rounded-xl object-cover shrink-0"
         />
         <span className="heading-display text-foreground text-lg whitespace-nowrap">
-          Solaryz
+          Vault CRM
         </span>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 py-2 px-3 space-y-1 overflow-y-auto">
-        {/* Educacional Group */}
-        {eduProject && (
+        {/* Project groups — one per project, Educacional keeps its full item list */}
+        {projects.map((project) => (
           <ProjectGroup
-            project={eduProject}
-            items={educacionalItems}
-            isOpen={openGroups.educacional ?? true}
-            onToggle={() => toggleGroup("educacional")}
+            key={project.id}
+            project={project}
+            items={project.slug === "educacional" ? educacionalItems : standardProjectItems}
+            isOpen={openGroups[project.slug] ?? project.slug === "educacional"}
+            onToggle={() => toggleGroup(project.slug)}
             onSelectProject={setCurrentProject}
-            isActiveProject={currentProject?.slug === "educacional"}
+            isActiveProject={currentProject?.slug === project.slug}
             currentPath={location.pathname}
           />
-        )}
+        ))}
 
         {/* Divider */}
         <div className="h-px bg-sidebar-border/50 my-2" />
@@ -240,11 +245,11 @@ function SidebarContent() {
         <div className="flex items-center gap-3 px-3 py-2">
           <img
             src="/logo.png"
-            alt="Solaryz"
+            alt="Vault CRM"
             className="h-9 w-9 rounded-xl object-cover shrink-0"
           />
           <div className="min-w-0">
-            <p className="text-xs font-medium text-foreground truncate">Solaryz</p>
+            <p className="text-xs font-medium text-foreground truncate">Vault CRM</p>
             <p className="text-[10px] text-muted-foreground truncate">
               {currentProject?.name || "Carregando..."}
             </p>
