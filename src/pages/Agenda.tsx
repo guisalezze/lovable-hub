@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTasks, useCreateTask, type Task } from "@/hooks/useTasks";
 import { useGoogleAuth } from "@/hooks/useGoogleAuth";
+import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -61,20 +62,22 @@ interface Lead {
   full_name: string | null;
 }
 
-function useCalls() {
+function useCalls(projectId: string | undefined) {
   return useQuery({
-    queryKey: ["calls"],
+    queryKey: ["calls", projectId],
+    enabled: !!projectId,
     queryFn: async () => {
       const { data } = await supabase
         .from("calls")
         .select("*")
+        .eq("project_id", projectId!)
         .order("start_at", { ascending: true });
       return (data as Call[]) || [];
     },
   });
 }
 
-function useLeads() {
+function useLeads(projectId: string | undefined) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -91,11 +94,13 @@ function useLeads() {
   }, [queryClient]);
 
   return useQuery({
-    queryKey: ["leads-list"],
+    queryKey: ["leads-list", projectId],
+    enabled: !!projectId,
     queryFn: async () => {
       const { data } = await supabase
         .from("leads")
         .select("email, full_name")
+        .eq("project_id", projectId!)
         .order("full_name", { ascending: true });
       return (data as Lead[]) || [];
     },
@@ -111,9 +116,10 @@ export default function AgendaPage() {
   const [showEditCallDialog, setShowEditCallDialog] = useState(false);
   const [editingCall, setEditingCall] = useState<Call | null>(null);
 
-  const { data: calls = [], isLoading: loadingCalls } = useCalls();
+  const { currentProject } = useProject();
+  const { data: calls = [], isLoading: loadingCalls } = useCalls(currentProject?.id);
   const { data: tasks = [], isLoading: loadingTasks } = useTasks();
-  const { data: leads = [] } = useLeads();
+  const { data: leads = [] } = useLeads(currentProject?.id);
   const googleAuth = useGoogleAuth();
 
   const days = useMemo(() => {
@@ -370,6 +376,7 @@ export default function AgendaPage() {
         leads={leads}
         defaultDate={selectedDay || new Date()}
         googleAuth={googleAuth}
+        currentProjectId={currentProject?.id}
       />
 
       {/* New Task Dialog */}
@@ -401,12 +408,14 @@ function NewCallDialog({
   leads,
   defaultDate,
   googleAuth,
+  currentProjectId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   leads: Lead[];
   defaultDate: Date;
   googleAuth: ReturnType<typeof useGoogleAuth>;
+  currentProjectId: string | undefined;
 }) {
   const qc = useQueryClient();
   const [leadSearch, setLeadSearch] = useState("");
@@ -436,6 +445,7 @@ function NewCallDialog({
         meet_link: meetLink || null,
         notes: notes || null,
         owner_user_id: user?.id || null,
+        project_id: currentProjectId ?? null,
       }).select().single();
       if (error) throw error;
 
