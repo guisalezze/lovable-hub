@@ -70,11 +70,23 @@ export default function CreateProjectDialog({ open, onOpenChange, onCreated }: C
         return;
       }
 
-      const { data: admins } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
-      if (admins && admins.length > 0) {
-        await supabase.from("user_project_access").insert(
+      const { data: admins, error: adminsError } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "admin");
+      if (adminsError) {
+        toast.error(
+          `Projeto criado, mas não foi possível listar os admins para conceder acesso: ${adminsError.message}. Conceda acesso manualmente em Configurações.`
+        );
+      } else if (admins && admins.length > 0) {
+        const { error: grantError } = await supabase.from("user_project_access").insert(
           admins.map((a) => ({ user_id: a.user_id, project_id: project.id }))
         );
+        if (grantError) {
+          toast.error(
+            `Projeto criado, mas falhou ao conceder acesso aos admins: ${grantError.message}. Conceda acesso manualmente em Configurações.`
+          );
+        }
       }
 
       toast.success(`Projeto "${project.name}" criado!`);
