@@ -12,6 +12,7 @@ import { format, parseISO, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { LeadDetailModal } from "@/components/leads/LeadDetailModal";
 import { CreateCallFromLeadDialog } from "@/components/leads/CreateCallFromLeadDialog";
+import { useProject } from "@/contexts/ProjectContext";
 
 type LeadStatus = "novo" | "quase_comprou" | "comprou" | "perdido";
 
@@ -49,12 +50,13 @@ const SOURCE_OPTIONS = [
   { value: "other", label: "Outro", icon: "📌" },
 ];
 
-function useLeads() {
+function useLeads(projectId: string | undefined) {
   return useQuery({
-    queryKey: ["leads"],
+    queryKey: ["leads", projectId],
+    enabled: !!projectId,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("leads").select("*").order("created_at", { ascending: false });
+        .from("leads").select("*").eq("project_id", projectId!).order("created_at", { ascending: false });
       if (error) throw error;
       return (data as Lead[]) || [];
     },
@@ -91,7 +93,8 @@ export default function LeadsPage() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [callLead, setCallLead] = useState<Lead | null>(null);
 
-  const { data: leads = [], isLoading } = useLeads();
+  const { currentProject } = useProject();
+  const { data: leads = [], isLoading } = useLeads(currentProject?.id);
   const updateStatus = useUpdateLeadStatus();
 
   const products = useMemo(() => {
