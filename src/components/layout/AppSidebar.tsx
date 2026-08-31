@@ -25,6 +25,7 @@ import {
   Link2,
   Zap,
   Instagram,
+  Plus,
 } from "lucide-react";
 import { useProject, type Project } from "@/contexts/ProjectContext";
 import { useState, useEffect, useRef } from "react";
@@ -32,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
+import CreateProjectDialog from "./CreateProjectDialog";
 
 interface NavItem {
   label: string;
@@ -148,6 +150,23 @@ function SidebarContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ educacional: true });
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showCreateProject, setShowCreateProject] = useState(false);
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      setIsAdmin(!!data);
+    };
+    checkAdmin();
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -187,6 +206,16 @@ function SidebarContent() {
             currentPath={location.pathname}
           />
         ))}
+
+        {isAdmin && (
+          <button
+            onClick={() => setShowCreateProject(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium w-full text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Novo projeto
+          </button>
+        )}
 
         {/* Divider */}
         <div className="h-px bg-sidebar-border/50 my-2" />
@@ -263,6 +292,12 @@ function SidebarContent() {
           <span>Sair</span>
         </button>
       </div>
+
+      <CreateProjectDialog
+        open={showCreateProject}
+        onOpenChange={setShowCreateProject}
+        onCreated={(project) => setCurrentProject(project)}
+      />
     </>
   );
 }
