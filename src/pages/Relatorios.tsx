@@ -16,27 +16,32 @@ import {
 } from "recharts";
 import jsPDF from "jspdf";
 
-function useReportData(since: string, until: string, projectId: string | undefined) {
+function useReportData(since: string, until: string, projectId: string | undefined, isEducacional: boolean) {
   return useQuery({
-    queryKey: ["report", since, until, projectId],
+    queryKey: ["report", since, until, projectId, isEducacional],
     queryFn: async () => {
       // Investments filtrados por project_id
       const invQuery = supabase.from("investments").select("amount, date").gte("date", since).lte("date", until);
       const invQueryFinal = projectId ? invQuery.eq("project_id", projectId) : invQuery;
 
+      const salesQuery = supabase.from("sales").select("sale_amount, sale_status_enum, created_at, product_name")
+        .gte("created_at", `${since}T00:00:00`).lte("created_at", `${until}T23:59:59`);
+      const leadsQuery = supabase.from("leads").select("id, status, source, created_at")
+        .gte("created_at", `${since}T00:00:00`).lte("created_at", `${until}T23:59:59`);
+      const tasksQuery = supabase.from("tasks").select("id, status, completed_at, assigned_to")
+        .gte("created_at", `${since}T00:00:00`).lte("created_at", `${until}T23:59:59`);
+      const callsQuery = supabase.from("calls").select("id, status, start_at")
+        .gte("start_at", `${since}T00:00:00`).lte("start_at", `${until}T23:59:59`);
+
       const [salesRes, leadsRes, tasksRes, callsRes, invResFinal, teamRes, mentoriasRes] = await Promise.all([
-        supabase.from("sales").select("sale_amount, sale_status_enum, created_at, product_name")
-          .gte("created_at", `${since}T00:00:00`).lte("created_at", `${until}T23:59:59`),
-        supabase.from("leads").select("id, status, source, created_at")
-          .gte("created_at", `${since}T00:00:00`).lte("created_at", `${until}T23:59:59`),
-        supabase.from("tasks").select("id, status, completed_at, assigned_to")
-          .gte("created_at", `${since}T00:00:00`).lte("created_at", `${until}T23:59:59`),
-        supabase.from("calls").select("id, status, start_at")
-          .gte("start_at", `${since}T00:00:00`).lte("start_at", `${until}T23:59:59`),
+        projectId ? salesQuery.eq("project_id", projectId) : salesQuery,
+        projectId ? leadsQuery.eq("project_id", projectId) : leadsQuery,
+        projectId ? tasksQuery.eq("project_id", projectId) : tasksQuery,
+        projectId ? callsQuery.eq("project_id", projectId) : callsQuery,
         invQueryFinal,
         supabase.from("profiles").select("id, full_name, email"),
         // Mentorias: paid_amount filtrado por contract_start (só Educacional)
-        projectId ? (supabase as any).from("implementations").select("paid_amount, contract_start")
+        isEducacional ? (supabase as any).from("implementations").select("paid_amount, contract_start")
           .gte("contract_start", since).lte("contract_start", until) : Promise.resolve({ data: [], error: null }),
       ]);
 
@@ -145,7 +150,7 @@ export default function RelatoriosPage() {
   const [until, setUntil] = useState(format(new Date(), "yyyy-MM-dd"));
   const [exporting, setExporting] = useState(false);
 
-  const { data, isLoading } = useReportData(since, until, currentProject?.id);
+  const { data, isLoading } = useReportData(since, until, currentProject?.id, currentProject?.slug === "educacional");
 
   function exportPDF() {
     if (!data) return;
@@ -299,7 +304,7 @@ export default function RelatoriosPage() {
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(16);
       pdf.setTextColor(255, 255, 255);
-      pdf.text("OpsCRM — Relatório de Performance", MARGIN, 12);
+      pdf.text("Vault CRM — Relatório de Performance", MARGIN, 12);
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
       pdf.setTextColor(200, 200, 235);
@@ -398,7 +403,7 @@ export default function RelatoriosPage() {
       checkY(10);
       pdf.setFont("helvetica", "italic"); pdf.setFontSize(7.5); pdf.setTextColor(150, 150, 170);
       pdf.text(
-        `Relatório gerado pelo OpsCRM · ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}`,
+        `Relatório gerado pelo Vault CRM · ${format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}`,
         W / 2, y + 6, { align: "center" }
       );
 
@@ -449,7 +454,7 @@ export default function RelatoriosPage() {
         {/* Report header */}
         <div className="glass-card p-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-foreground">OpsCRM — Relatório de Performance</h2>
+            <h2 className="text-lg font-bold text-foreground">Vault CRM — Relatório de Performance</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
               {format(parseISO(since), "d 'de' MMMM", { locale: ptBR })} até{" "}
               {format(parseISO(until), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
@@ -539,7 +544,7 @@ export default function RelatoriosPage() {
 
         {/* Footer */}
         <p className="text-[10px] text-muted-foreground text-center py-2">
-          Relatório gerado pelo OpsCRM · {format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
+          Relatório gerado pelo Vault CRM · {format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
         </p>
       </div>
     </div>
