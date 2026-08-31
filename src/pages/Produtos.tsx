@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useProject } from "@/contexts/ProjectContext";
 import { Package } from "lucide-react";
 
 interface ProductSummary {
@@ -10,14 +11,17 @@ interface ProductSummary {
 }
 
 export default function ProdutosPage() {
+  const { currentProject } = useProject();
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!currentProject?.id) return;
     async function fetch() {
       const { data } = await supabase
         .from("lead_products")
-        .select("product_code, product_name, total_purchases_count, total_paid_amount");
+        .select("product_code, product_name, total_purchases_count, total_paid_amount")
+        .eq("project_id", currentProject!.id);
 
       if (data) {
         const map = new Map<string, ProductSummary>();
@@ -40,7 +44,7 @@ export default function ProdutosPage() {
       setLoading(false);
     }
     fetch();
-  }, []);
+  }, [currentProject?.id]);
 
   return (
     <div className="space-y-6 max-w-5xl">
