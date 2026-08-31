@@ -59,6 +59,33 @@ const PAYMENT_METHOD_MAP: Record<number, string> = {
   14: "fort_brasil",
 };
 
+async function resolveProjectId(
+  req: Request,
+  productCode: string | undefined,
+  supabase: ReturnType<typeof createClient>
+): Promise<string> {
+  const url = new URL(req.url);
+  const queryProjectId = url.searchParams.get("project_id");
+  if (queryProjectId) return queryProjectId;
+
+  if (productCode) {
+    const { data: mapping } = await supabase
+      .from("project_products")
+      .select("project_id")
+      .eq("source", "perfectpay")
+      .eq("product_code", productCode)
+      .maybeSingle();
+    if (mapping) return mapping.project_id as string;
+  }
+
+  const { data: eduProject } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("slug", "educacional")
+    .single();
+  return eduProject!.id as string;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -87,6 +114,7 @@ Deno.serve(async (req) => {
 
     const customer = payload.customer || {};
     const product = payload.product || {};
+    const projectId = await resolveProjectId(req, product.code as string | undefined, supabase);
     const plan = payload.plan || {};
     const metadata = payload.metadata || {};
 
@@ -171,6 +199,7 @@ Deno.serve(async (req) => {
     // Build lead data from customer fields per Perfect Pay docs
     const leadData: Record<string, unknown> = {
       email,
+      project_id: projectId,
       full_name: customer.full_name || null,
       phone_e164: customer.phone_formated_ddi || phoneFromParts,
       phone_formatted:
@@ -203,10 +232,11 @@ Deno.serve(async (req) => {
       .from("leads")
       .select("id")
       .eq("email", email)
+      .eq("project_id", projectId)
       .maybeSingle();
 
     if (existingLead) {
-      await supabase.from("leads").update(leadData).eq("email", email);
+      await supabase.from("leads").update(leadData).eq("email", email).eq("project_id", projectId);
     } else {
       await supabase.from("leads").insert(leadData);
     }
@@ -215,6 +245,7 @@ Deno.serve(async (req) => {
     const { error: saleError } = await supabase.from("sales").upsert(
       {
         code: saleCode,
+        project_id: projectId,
         lead_email: email,
         sale_amount: saleAmount,
         sale_status_enum: saleStatus,
@@ -246,6 +277,7 @@ Deno.serve(async (req) => {
         .select("*")
         .eq("lead_email", email)
         .eq("product_code", product.code)
+        .eq("project_id", projectId)
         .maybeSingle();
 
       if (existingProduct) {
@@ -270,6 +302,7 @@ Deno.serve(async (req) => {
           total_paid_amount: saleAmount,
           last_purchase_at: new Date().toISOString(),
           last_status_enum: saleStatus,
+          project_id: projectId,
         });
       }
     }
@@ -280,7 +313,8 @@ Deno.serve(async (req) => {
         .from("lead_products")
         .update({ last_status_enum: saleStatus })
         .eq("lead_email", email)
-        .eq("product_code", product.code);
+        .eq("product_code", product.code)
+        .eq("project_id", projectId);
     }
 
     // ── Auto-create onboarding task + record on approved sale ──────────────
@@ -289,6 +323,7 @@ Deno.serve(async (req) => {
         .from("leads")
         .select("id, assigned_to, full_name")
         .eq("email", email)
+        .eq("project_id", projectId)
         .single();
 
       if (lead) {
@@ -299,6 +334,7 @@ Deno.serve(async (req) => {
         try {
           await supabase.from("tasks").insert({
             title: `Onboarding: ${buyerName} — ${productName}`,
+            project_id: projectId,
             description: `Nova venda aprovada. Enviar link de onboarding e realizar primeira reunião.`,
             assigned_to: lead.assigned_to,
             status: "backlog",
@@ -311,6 +347,7 @@ Deno.serve(async (req) => {
         try {
           await supabase.from("onboarding_responses").insert({
             lead_id: lead.id,
+            project_id: projectId,
             assigned_to: lead.assigned_to,
           });
         } catch (_) {}
@@ -333,6 +370,7 @@ Deno.serve(async (req) => {
           .from("leads")
           .select("id, full_name, assigned_to")
           .eq("email", email)
+          .eq("project_id", projectId)
           .single();
 
         if (lead) {
@@ -341,6 +379,7 @@ Deno.serve(async (req) => {
           try {
             const { data: charge } = await supabase.from("charges").insert({
               product_name: product.name || "Produto",
+              project_id: projectId,
               client_name: lead.full_name || email,
               total_ticket: saleAmount,
               entry_paid: installmentValue,
