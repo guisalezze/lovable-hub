@@ -43,11 +43,13 @@ const Dashboard = () => {
   const { data: spendData, isLoading: spendLoading, error: spendError } = useMetaSpend({ since, until });
   const { data: campaignData, isLoading: campaignLoading, error: campaignError } = useMetaCampaigns({ since, until });
 
-  // Educacional
-  const { data: eduKpis, isLoading: eduKpisLoading } = useDashboardKpis({ since, until });
-  const { data: eduDailyRevenue, isLoading: eduRevenueLoading } = useDailyRevenue({ since, until });
-  const { data: eduSalesByProduct, isLoading: eduProductsLoading } = useSalesByProduct({ since, until });
-  const { data: eduPrevKpis } = usePreviousPeriodKpis({ since, until });
+  // Educacional-style path (used by Educacional and any new non-Nutra project)
+  const isEducacional = currentProject?.slug === "educacional";
+  const eduProjectId = !isNutra ? currentProject?.id : undefined;
+  const { data: eduKpis, isLoading: eduKpisLoading } = useDashboardKpis({ since, until, projectId: eduProjectId, includeMentorias: isEducacional });
+  const { data: eduDailyRevenue, isLoading: eduRevenueLoading } = useDailyRevenue({ since, until, projectId: eduProjectId, includeMentorias: isEducacional });
+  const { data: eduSalesByProduct, isLoading: eduProductsLoading } = useSalesByProduct({ since, until, projectId: eduProjectId, includeMentorias: isEducacional });
+  const { data: eduPrevKpis } = usePreviousPeriodKpis({ since, until, projectId: eduProjectId, includeMentorias: isEducacional });
 
   // Nutra
   const nutraProjectId = isNutra ? currentProject?.id : undefined;
@@ -87,7 +89,14 @@ const Dashboard = () => {
   const goalBarColor = goalPct >= 100 ? "bg-emerald-500" : goalPct >= 70 ? "bg-primary" : goalPct >= 40 ? "bg-yellow-500" : "bg-destructive";
 
   return (
-    <div className="space-y-4 sm:space-y-6 w-full max-w-7xl mx-auto">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-7xl mx-auto relative">
+      <div
+        className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-[420px] opacity-60 dark:opacity-30"
+        style={{
+          background:
+            "radial-gradient(60% 100% at 20% 0%, hsl(var(--primary) / 0.10), transparent), radial-gradient(50% 80% at 85% 0%, hsl(var(--accent-foreground) / 0.10), transparent)",
+        }}
+      />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
           <p className="eyebrow">{format(new Date(), "MMMM yyyy")}</p>
@@ -111,7 +120,7 @@ const Dashboard = () => {
 
       {/* Revenue Goal Bar */}
       {revenueGoal > 0 || editingGoal ? (
-        <div className="glass-card p-4 animate-fade-in">
+        <div className="material-card p-4 animate-material-in">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Target className="h-4 w-4 text-primary" />
@@ -186,13 +195,13 @@ const Dashboard = () => {
       )}
 
       {/* Gráficos — Meta Ads (compartilhado) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 stagger-in">
         <InvestmentChart daily={spendData?.daily} isLoading={spendLoading} error={spendError} />
         <CampaignTable campaigns={campaignData?.campaigns} isLoading={campaignLoading} error={campaignError} />
       </div>
 
       {/* Gráficos — Receita e Produtos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 stagger-in">
         <RevenueChart data={dailyRevenue} isLoading={revenueLoading} />
         <SalesChart data={salesByProduct} isLoading={productsLoading} />
       </div>
@@ -200,11 +209,11 @@ const Dashboard = () => {
       {/* Seções exclusivas do Educacional */}
       {!isNutra && (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 stagger-in">
             <RecentLeads />
             <ChargesHealthCard />
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 stagger-in">
             <LtvSummaryCard />
           </div>
         </>
