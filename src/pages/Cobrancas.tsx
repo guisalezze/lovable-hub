@@ -184,6 +184,10 @@ function ChargeModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
       toast.error("Gere as parcelas antes de salvar.");
       return;
     }
+    if (!currentProject?.id) {
+      toast.error("Selecione um projeto antes de criar uma cobrança.");
+      return;
+    }
     setSubmitting(true);
     try {
       const user = (await supabase.auth.getUser()).data.user;

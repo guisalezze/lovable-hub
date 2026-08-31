@@ -4,22 +4,25 @@ import { CheckSquare, AlertTriangle, Phone, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
+import { useProject } from "@/contexts/ProjectContext";
 
 export function OperationCards() {
   const today = format(new Date(), "yyyy-MM-dd");
   const navigate = useNavigate();
+  const { currentProject } = useProject();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["operation-cards", today],
+    queryKey: ["operation-cards", today, currentProject?.id],
+    enabled: !!currentProject?.id,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return { myTasks: [], overdue: [], todayCalls: [], pendingLeads: [] };
 
       const [myTasksRes, overdueRes, callsRes, leadsRes] = await Promise.all([
-        supabase.from("tasks").select("id, title, priority, status").eq("assigned_to", user.id).neq("status", "concluido").order("created_at", { ascending: false }).limit(5),
-        supabase.from("tasks").select("id, title, priority, due_date").lt("due_date", today).neq("status", "concluido").order("due_date", { ascending: true }).limit(5),
-        supabase.from("calls").select("id, start_at, lead_email, status").gte("start_at", `${today}T00:00:00`).lte("start_at", `${today}T23:59:59`).eq("status", "scheduled").order("start_at"),
-        supabase.from("leads").select("id, full_name, email, last_sale_status_enum").in("last_sale_status_enum", ["pending"]).limit(5),
+        supabase.from("tasks").select("id, title, priority, status").eq("assigned_to", user.id).eq("project_id", currentProject!.id).neq("status", "concluido").order("created_at", { ascending: false }).limit(5),
+        supabase.from("tasks").select("id, title, priority, due_date").eq("project_id", currentProject!.id).lt("due_date", today).neq("status", "concluido").order("due_date", { ascending: true }).limit(5),
+        supabase.from("calls").select("id, start_at, lead_email, status").eq("project_id", currentProject!.id).gte("start_at", `${today}T00:00:00`).lte("start_at", `${today}T23:59:59`).eq("status", "scheduled").order("start_at"),
+        supabase.from("leads").select("id, full_name, email, last_sale_status_enum").eq("project_id", currentProject!.id).in("last_sale_status_enum", ["pending"]).limit(5),
       ]);
 
       return {
@@ -80,11 +83,11 @@ export function OperationCards() {
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-in">
       {cards.map((card) => (
         <div
           key={card.label}
-          className="glass-card p-3 cursor-pointer hover:shadow-md transition-shadow"
+          className="material-card press-scale p-3 cursor-pointer"
           onClick={card.onClick}
         >
           <div className="flex items-center justify-between mb-1">

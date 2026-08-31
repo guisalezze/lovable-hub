@@ -1,5 +1,6 @@
 import { User } from "lucide-react";
 import { useRecentLeads } from "@/hooks/useDashboardData";
+import { useProject } from "@/contexts/ProjectContext";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const statusStyles: Record<string, string> = {
@@ -15,10 +16,11 @@ const statusStyles: Record<string, string> = {
 };
 
 export function RecentLeads() {
-  const { data: leads, isLoading } = useRecentLeads();
+  const { currentProject } = useProject();
+  const { data: leads, isLoading } = useRecentLeads(currentProject?.id);
 
   return (
-    <div className="glass-card p-5 animate-fade-in">
+    <div className="material-card p-5">
       <h3 className="text-sm font-semibold text-foreground mb-4">Leads Recentes</h3>
       <div className="space-y-3">
         {isLoading ? (

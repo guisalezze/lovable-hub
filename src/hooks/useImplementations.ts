@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, addMonths, parseISO } from "date-fns";
+import { useProject } from "@/contexts/ProjectContext";
 
 export interface ImplementationStep {
   id: string;
@@ -133,6 +134,7 @@ export function useImplementationTemplates() {
 
 export function useCreateImplementation() {
   const qc = useQueryClient();
+  const { currentProject } = useProject();
   return useMutation({
     mutationFn: async (payload: {
       impl: {
@@ -241,6 +243,7 @@ export function useCreateImplementation() {
               notes: chargeNotes || null,
               entry_receipt_url: payload.charge?.entry_receipt_url || null,
               status: "active",
+              project_id: currentProject?.id ?? null,
             })
             .select()
             .single();

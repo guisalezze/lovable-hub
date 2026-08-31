@@ -34,29 +34,35 @@ export function useProjectRevenueTotal() {
         // Nutra não tem mentorias
         mentoriasTotal = 0;
       } else {
-        // Educacional — tabela sales (acumulado total, sem filtro de data)
-        const { data: salesData } = await supabase.from("sales").select("sale_amount, sale_status_enum");
+        const isEducacional = currentProject.slug === "educacional";
+
+        // Vendas — tabela sales, filtrada por projeto (acumulado total, sem filtro de data)
+        const { data: salesData } = await supabase
+          .from("sales")
+          .select("sale_amount, sale_status_enum")
+          .eq("project_id", currentProject.id);
 
         salesTotal = (salesData || [])
           .filter((s) => isApprovedSaleStatus(s.sale_status_enum))
           .reduce((acc, s) => acc + Number(s.sale_amount || 0), 0);
 
         // Mentorias/Implementações — paid_amount registrado (só Educacional)
-        // Se a coluna ainda não existe (migration pendente), o erro é ignorado e mentoriasTotal = 0
-        try {
-          const { data: implData, error: implErr } = await (supabase as any)
-            .from("implementations")
-            .select("paid_amount");
+        if (isEducacional) {
+          try {
+            const { data: implData, error: implErr } = await (supabase as any)
+              .from("implementations")
+              .select("paid_amount");
 
-          if (!implErr) {
-            mentoriasTotal = (implData || []).reduce(
-              (acc: number, i: any) => acc + Number(i.paid_amount ?? 0),
-              0
-            );
+            if (!implErr) {
+              mentoriasTotal = (implData || []).reduce(
+                (acc: number, i: any) => acc + Number(i.paid_amount ?? 0),
+                0
+              );
+            }
+          } catch (_) {
+            // Coluna não existe ainda — ignora
+            mentoriasTotal = 0;
           }
-        } catch (_) {
-          // Coluna não existe ainda — ignora
-          mentoriasTotal = 0;
         }
       }
 

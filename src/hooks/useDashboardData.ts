@@ -362,13 +362,15 @@ export function usePreviousPeriodNutraKpis({ since, until, projectId }: NutraDas
   });
 }
 
-export function useRecentLeads() {
+export function useRecentLeads(projectId: string | undefined) {
   return useQuery({
-    queryKey: ["recent-leads"],
+    queryKey: ["recent-leads", projectId],
+    enabled: !!projectId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("leads")
         .select("full_name, email, last_product, last_sale_status_enum, created_at")
+        .eq("project_id", projectId!)
         .order("created_at", { ascending: false })
         .limit(5);
 
