@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { useClientLtvByEmail } from "@/hooks/useClientLtv";
+import { useProject } from "@/contexts/ProjectContext";
 
 const SEGMENT_CONFIG = {
   vip: { label: "VIP", className: "bg-amber-500/20 text-amber-700 border-amber-500/30" },
@@ -20,7 +21,8 @@ interface LtvBadgeProps {
 }
 
 export function LtvBadge({ email, segment: propSegment, ltv: propLtv, showLtv = true, size = "sm" }: LtvBadgeProps) {
-  const { data } = useClientLtvByEmail(!propSegment ? email : undefined);
+  const { currentProject } = useProject();
+  const { data } = useClientLtvByEmail(!propSegment ? email : undefined, currentProject?.id);
 
   const segment = propSegment || data?.segment || "new";
   const ltv = propLtv ?? data?.ltv ?? 0;

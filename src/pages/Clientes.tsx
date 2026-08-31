@@ -10,6 +10,7 @@ import { LtvBadge } from "@/components/shared/LtvBadge";
 import { ClientDetailSheet } from "@/components/clients/ClientDetailSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useProject } from "@/contexts/ProjectContext";
 
 const fmtBRL = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -24,9 +25,10 @@ export default function ClientesPage() {
   const [waClient, setWaClient] = useState<ClientLtv | null>(null);
   const [waMessage, setWaMessage] = useState("");
   const [waSending, setWaSending] = useState(false);
+  const { currentProject } = useProject();
 
-  const { data: clients = [], isLoading } = useClientLtvList(search.length >= 2 ? search : undefined);
-  const { data: kpis } = useClientLtvKpis();
+  const { data: clients = [], isLoading } = useClientLtvList(search.length >= 2 ? search : undefined, currentProject?.id);
+  const { data: kpis } = useClientLtvKpis(currentProject?.id);
 
   const handleSendWhatsApp = async () => {
     if (!waClient?.phone || !waMessage.trim()) return;

@@ -3,19 +3,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useClientLtvKpis } from "@/hooks/useClientLtv";
 import { LtvBadge } from "@/components/shared/LtvBadge";
 import { useNavigate } from "react-router-dom";
+import { useProject } from "@/contexts/ProjectContext";
 
 const fmtBRL = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 export function LtvSummaryCard() {
-  const { data, isLoading } = useClientLtvKpis();
+  const { currentProject } = useProject();
+  const { data, isLoading } = useClientLtvKpis(currentProject?.id);
   const navigate = useNavigate();
 
   if (isLoading) return <Skeleton className="h-64 rounded-lg" />;
 
   if (!data || data.totalClients === 0) {
     return (
-      <div className="glass-card p-5">
+      <div className="material-card p-5">
         <div className="flex items-center gap-2 mb-3">
           <Crown className="h-4 w-4 text-amber-500" />
           <h3 className="text-sm font-semibold text-foreground">Top Clientes (LTV)</h3>
@@ -27,7 +29,7 @@ export function LtvSummaryCard() {
 
   return (
     <div
-      className="glass-card p-5 cursor-pointer hover:shadow-md transition-shadow"
+      className="material-card press-scale p-5 cursor-pointer"
       onClick={() => navigate("/clientes")}
     >
       <div className="flex items-center justify-between mb-4">

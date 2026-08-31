@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, ShoppingCart, Receipt, Briefcase } from "lucide-react";
 import { useClientLtvByEmail, useClientHistory } from "@/hooks/useClientLtv";
 import { LtvBadge } from "@/components/shared/LtvBadge";
+import { useProject } from "@/contexts/ProjectContext";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -24,8 +25,9 @@ const STATUS_LABELS: Record<string, string> = {
 export function ClientDetailSheet({
   email, open, onClose,
 }: { email: string; open: boolean; onClose: () => void }) {
-  const { data: client, isLoading: clientLoading } = useClientLtvByEmail(email);
-  const { data: history, isLoading: historyLoading } = useClientHistory(email);
+  const { currentProject } = useProject();
+  const { data: client, isLoading: clientLoading } = useClientLtvByEmail(email, currentProject?.id);
+  const { data: history, isLoading: historyLoading } = useClientHistory(email, currentProject?.id);
 
   const isLoading = clientLoading || historyLoading;
 

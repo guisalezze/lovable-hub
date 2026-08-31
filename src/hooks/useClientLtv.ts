@@ -18,21 +18,23 @@ export interface ClientLtv {
   segment: "vip" | "premium" | "regular" | "new";
 }
 
-export function useClientLtvList(search?: string) {
+export function useClientLtvList(search: string | undefined, projectId: string | undefined) {
   return useQuery({
-    queryKey: ["client-ltv", search],
+    queryKey: ["client-ltv", search, projectId],
+    enabled: !!projectId,
     queryFn: async () => {
       if (search && search.trim().length >= 2) {
         const { data, error } = await supabase.rpc("search_clients", {
           search_term: search.trim(),
+          p_project_id: projectId,
         });
         if (error) throw error;
         return (data || []) as ClientLtv[];
       }
-      // Use raw SQL via the view
       const { data, error } = await supabase
         .from("client_ltv" as any)
         .select("*")
+        .eq("project_id", projectId!)
         .order("ltv", { ascending: false })
         .limit(100);
       if (error) throw error;
@@ -41,15 +43,16 @@ export function useClientLtvList(search?: string) {
   });
 }
 
-export function useClientLtvByEmail(email: string | null | undefined) {
+export function useClientLtvByEmail(email: string | null | undefined, projectId: string | undefined) {
   return useQuery({
-    queryKey: ["client-ltv", "email", email],
-    enabled: !!email,
+    queryKey: ["client-ltv", "email", email, projectId],
+    enabled: !!email && !!projectId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("client_ltv" as any)
         .select("*")
         .eq("email", email!)
+        .eq("project_id", projectId!)
         .maybeSingle();
       if (error) throw error;
       return data as unknown as ClientLtv | null;
@@ -57,13 +60,15 @@ export function useClientLtvByEmail(email: string | null | undefined) {
   });
 }
 
-export function useClientLtvKpis() {
+export function useClientLtvKpis(projectId: string | undefined) {
   return useQuery({
-    queryKey: ["client-ltv-kpis"],
+    queryKey: ["client-ltv-kpis", projectId],
+    enabled: !!projectId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("client_ltv" as any)
-        .select("*");
+        .select("*")
+        .eq("project_id", projectId!);
       if (error) throw error;
       const clients = (data || []) as unknown as ClientLtv[];
       const totalClients = clients.length;
@@ -77,21 +82,23 @@ export function useClientLtvKpis() {
   });
 }
 
-export function useClientHistory(email: string | null | undefined) {
+export function useClientHistory(email: string | null | undefined, projectId: string | undefined) {
   return useQuery({
-    queryKey: ["client-history", email],
-    enabled: !!email,
+    queryKey: ["client-history", email, projectId],
+    enabled: !!email && !!projectId,
     queryFn: async () => {
       const [salesRes, chargesRes, implRes] = await Promise.all([
         supabase
           .from("sales")
           .select("id, code, product_name, sale_amount, sale_status_enum, date_created")
           .eq("lead_email", email!)
+          .eq("project_id", projectId!)
           .order("date_created", { ascending: false }),
         supabase
           .from("charges")
           .select("id, client_name, product_name, total_ticket, status, created_at")
           .eq("client_email", email!)
+          .eq("project_id", projectId!)
           .order("created_at", { ascending: false }),
         supabase
           .from("implementations")
