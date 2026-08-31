@@ -36,25 +36,25 @@ export function isApprovedSaleStatus(status: string | null | undefined): boolean
 async function fetchSalesTouchingBrazilPeriod(
   startIso: string,
   endIso: string,
-  columns: string
+  columns: string,
+  projectId: string | undefined
 ): Promise<Record<string, unknown>[]> {
   const col = columns.includes("id") ? columns : `id, ${columns}`;
+  const base = () => {
+    let q: any = supabase.from("sales").select(col);
+    if (projectId) q = q.eq("project_id", projectId);
+    return q;
+  };
   const [byApprovedAt, byOrderDate, byRowCreated] = await Promise.all([
-    supabase
-      .from("sales")
-      .select(col)
+    base()
       .not("date_approved", "is", null)
       .gte("date_approved", startIso)
       .lte("date_approved", endIso),
-    supabase
-      .from("sales")
-      .select(col)
+    base()
       .not("date_created", "is", null)
       .gte("date_created", startIso)
       .lte("date_created", endIso),
-    supabase
-      .from("sales")
-      .select(col)
+    base()
       .gte("created_at", startIso)
       .lte("created_at", endIso),
   ]);
@@ -73,6 +73,8 @@ async function fetchSalesTouchingBrazilPeriod(
 interface DashboardFilters {
   since: string;
   until: string;
+  projectId: string | undefined;
+  includeMentorias: boolean;
 }
 
 interface NutraDashboardFilters {
@@ -81,15 +83,16 @@ interface NutraDashboardFilters {
   projectId: string | undefined;
 }
 
-export function useDashboardKpis({ since, until }: DashboardFilters) {
+export function useDashboardKpis({ since, until, projectId, includeMentorias }: DashboardFilters) {
   return useQuery({
-    queryKey: ["dashboard-kpis", since, until],
+    queryKey: ["dashboard-kpis", since, until, projectId, includeMentorias],
     queryFn: async () => {
       const { startIso, endIso } = brazilCivilRangeUtcIso(since, until);
       const sales = await fetchSalesTouchingBrazilPeriod(
         startIso,
         endIso,
-        "sale_amount, sale_status_enum, date_approved, date_created, created_at"
+        "sale_amount, sale_status_enum, date_approved, date_created, created_at",
+        projectId
       );
 
       const approved = sales?.filter((s) => isApprovedSaleStatus(s.sale_status_enum as string)) || [];
@@ -99,17 +102,19 @@ export function useDashboardKpis({ since, until }: DashboardFilters) {
 
       const salesRevenue = approved.reduce((sum, s) => sum + Number(s.sale_amount || 0), 0);
 
-      // Mentorias: paid_amount atribuído pela data de início do contrato (contract_start)
+      // Mentorias: paid_amount atribuído pela data de início do contrato (contract_start) — Educacional only
       let mentoriasRevenue = 0;
-      try {
-        const { data: impls } = await (supabase as any)
-          .from("implementations")
-          .select("paid_amount")
-          .gte("contract_start", since)
-          .lte("contract_start", until);
-        mentoriasRevenue = (impls || []).reduce((sum: number, i: any) => sum + Number(i.paid_amount || 0), 0);
-      } catch {
-        mentoriasRevenue = 0;
+      if (includeMentorias) {
+        try {
+          const { data: impls } = await (supabase as any)
+            .from("implementations")
+            .select("paid_amount")
+            .gte("contract_start", since)
+            .lte("contract_start", until);
+          mentoriasRevenue = (impls || []).reduce((sum: number, i: any) => sum + Number(i.paid_amount || 0), 0);
+        } catch {
+          mentoriasRevenue = 0;
+        }
       }
 
       return {
@@ -123,18 +128,20 @@ export function useDashboardKpis({ since, until }: DashboardFilters) {
       };
     },
     staleTime: 5 * 60 * 1000,
+    enabled: !!projectId,
   });
 }
 
-export function useDailyRevenue({ since, until }: DashboardFilters) {
+export function useDailyRevenue({ since, until, projectId, includeMentorias }: DashboardFilters) {
   return useQuery({
-    queryKey: ["daily-revenue", since, until],
+    queryKey: ["daily-revenue", since, until, projectId, includeMentorias],
     queryFn: async () => {
       const { startIso, endIso } = brazilCivilRangeUtcIso(since, until);
       const raw = await fetchSalesTouchingBrazilPeriod(
         startIso,
         endIso,
-        "sale_amount, sale_status_enum, date_approved, date_created, created_at"
+        "sale_amount, sale_status_enum, date_approved, date_created, created_at",
+        projectId
       );
       const sales = raw.filter((s) => isApprovedSaleStatus(s.sale_status_enum as string));
 
@@ -148,24 +155,26 @@ export function useDailyRevenue({ since, until }: DashboardFilters) {
       });
 
       // Mentorias: atribuídas ao contract_start
-      try {
-        const { data: impls } = await (supabase as any)
-          .from("implementations")
-          .select("paid_amount, contract_start")
-          .gte("contract_start", since)
-          .lte("contract_start", until);
-        (impls || []).forEach((i: any) => {
-          if (i.contract_start && Number(i.paid_amount || 0) > 0) {
-            const day = dayLabelBrazil(
-              typeof i.contract_start === "string" && i.contract_start.length <= 10
-                ? `${i.contract_start}T12:00:00.000Z`
-                : i.contract_start
-            );
-            byDay[day] = (byDay[day] || 0) + Number(i.paid_amount || 0);
-          }
-        });
-      } catch {
-        // paid_amount column may not exist yet — skip
+      if (includeMentorias) {
+        try {
+          const { data: impls } = await (supabase as any)
+            .from("implementations")
+            .select("paid_amount, contract_start")
+            .gte("contract_start", since)
+            .lte("contract_start", until);
+          (impls || []).forEach((i: any) => {
+            if (i.contract_start && Number(i.paid_amount || 0) > 0) {
+              const day = dayLabelBrazil(
+                typeof i.contract_start === "string" && i.contract_start.length <= 10
+                  ? `${i.contract_start}T12:00:00.000Z`
+                  : i.contract_start
+              );
+              byDay[day] = (byDay[day] || 0) + Number(i.paid_amount || 0);
+            }
+          });
+        } catch {
+          // paid_amount column may not exist yet — skip
+        }
       }
 
       return Object.entries(byDay)
@@ -173,18 +182,20 @@ export function useDailyRevenue({ since, until }: DashboardFilters) {
         .sort((a, b) => a.date.localeCompare(b.date));
     },
     staleTime: 5 * 60 * 1000,
+    enabled: !!projectId,
   });
 }
 
-export function useSalesByProduct({ since, until }: DashboardFilters) {
+export function useSalesByProduct({ since, until, projectId }: DashboardFilters) {
   return useQuery({
-    queryKey: ["sales-by-product", since, until],
+    queryKey: ["sales-by-product", since, until, projectId],
     queryFn: async () => {
       const { startIso, endIso } = brazilCivilRangeUtcIso(since, until);
       const raw = await fetchSalesTouchingBrazilPeriod(
         startIso,
         endIso,
-        "product_name, sale_status_enum, date_approved, date_created, created_at"
+        "product_name, sale_status_enum, date_approved, date_created, created_at",
+        projectId
       );
       const sales = raw.filter((s) => isApprovedSaleStatus(s.sale_status_enum as string));
 
@@ -199,12 +210,13 @@ export function useSalesByProduct({ since, until }: DashboardFilters) {
         .sort((a, b) => b.vendas - a.vendas);
     },
     staleTime: 5 * 60 * 1000,
+    enabled: !!projectId,
   });
 }
 
-export function usePreviousPeriodKpis({ since, until }: DashboardFilters) {
+export function usePreviousPeriodKpis({ since, until, projectId, includeMentorias }: DashboardFilters) {
   return useQuery({
-    queryKey: ["previous-period-kpis", since, until],
+    queryKey: ["previous-period-kpis", since, until, projectId, includeMentorias],
     queryFn: async () => {
       const days = differenceInDays(parseISO(until), parseISO(since)) + 1;
       const prevUntil = format(subDays(parseISO(since), 1), "yyyy-MM-dd");
@@ -214,27 +226,31 @@ export function usePreviousPeriodKpis({ since, until }: DashboardFilters) {
       const sales = await fetchSalesTouchingBrazilPeriod(
         prevStart,
         prevEnd,
-        "sale_amount, sale_status_enum, date_approved, date_created, created_at"
+        "sale_amount, sale_status_enum, date_approved, date_created, created_at",
+        projectId
       );
 
       const approved = sales?.filter((s) => isApprovedSaleStatus(s.sale_status_enum as string)) || [];
       const salesRevenue = approved.reduce((sum, s) => sum + Number(s.sale_amount || 0), 0);
 
       let mentoriasRevenue = 0;
-      try {
-        const { data: impls } = await (supabase as any)
-          .from("implementations")
-          .select("paid_amount")
-          .gte("contract_start", prevSince)
-          .lte("contract_start", prevUntil);
-        mentoriasRevenue = (impls || []).reduce((sum: number, i: any) => sum + Number(i.paid_amount || 0), 0);
-      } catch {
-        mentoriasRevenue = 0;
+      if (includeMentorias) {
+        try {
+          const { data: impls } = await (supabase as any)
+            .from("implementations")
+            .select("paid_amount")
+            .gte("contract_start", prevSince)
+            .lte("contract_start", prevUntil);
+          mentoriasRevenue = (impls || []).reduce((sum: number, i: any) => sum + Number(i.paid_amount || 0), 0);
+        } catch {
+          mentoriasRevenue = 0;
+        }
       }
 
       return { previousRevenue: salesRevenue + mentoriasRevenue };
     },
     staleTime: 5 * 60 * 1000,
+    enabled: !!projectId,
   });
 }
 
