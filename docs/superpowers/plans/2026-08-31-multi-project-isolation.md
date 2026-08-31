@@ -89,20 +89,26 @@ ALTER TABLE public.project_products ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Authenticated can read project_products" ON public.project_products FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Admins can manage project_products" ON public.project_products FOR ALL USING (has_role(auth.uid(), 'admin'::app_role));
 
--- 3. client_ltv view: append project_id (derived from sales/charges, falling back to the
---    lead's project). Column order for pre-existing columns is UNCHANGED — CREATE OR REPLACE
---    VIEW only allows appending columns at the end.
+-- 3. client_ltv view: append project_id, PRESERVING the real current logic from
+--    supabase/migrations/20260309234827_03f07bd3-04cf-4ddc-a025-5eda003de4f4.sql (the migration
+--    that actually defines client_ltv today — NOT the earlier 20260309234018 one). That version
+--    counts total_purchases over ALL sales regardless of status (only sales_revenue is
+--    FILTER'ed to approved), and includes implementation-only clients (no sales, no charges) in
+--    all_emails via a 3-way union. Column order for the 14 pre-existing columns is UNCHANGED —
+--    CREATE OR REPLACE VIEW only allows appending columns at the end.
 CREATE OR REPLACE VIEW public.client_ltv AS
-WITH sales_data AS (
+WITH all_sale_emails AS (
+  SELECT DISTINCT lead_email AS email, project_id FROM public.sales
+),
+sales_data AS (
   SELECT
     lead_email AS email,
     project_id,
     COUNT(*) AS total_purchases,
-    COALESCE(SUM(sale_amount), 0) AS sales_revenue,
+    COALESCE(SUM(sale_amount) FILTER (WHERE sale_status_enum = 'approved'), 0) AS sales_revenue,
     MIN(date_created) AS first_purchase_at,
     MAX(date_created) AS last_purchase_at
   FROM public.sales
-  WHERE sale_status_enum = 'approved'
   GROUP BY lead_email, project_id
 ),
 charges_data AS (
@@ -125,9 +131,14 @@ impl_data AS (
   GROUP BY client_email
 ),
 all_emails AS (
-  SELECT email, project_id FROM sales_data
+  SELECT email, project_id FROM all_sale_emails
   UNION
   SELECT email, project_id FROM charges_data WHERE email IS NOT NULL
+  UNION
+  -- implementations has no project_id of its own — it only ever exists for Educacional
+  -- (Mentorias), so implementation-only clients are attributed to Educacional's project.
+  SELECT email, (SELECT id FROM public.projects WHERE slug = 'educacional') AS project_id
+  FROM impl_data WHERE email IS NOT NULL
 )
 SELECT
   ae.email,
@@ -149,7 +160,7 @@ SELECT
     WHEN COALESCE(sd.sales_revenue, 0) + COALESCE(cd.charges_revenue, 0) + COALESCE(id.impl_revenue, 0) >= 500 THEN 'regular'
     ELSE 'new'
   END AS segment,
-  COALESCE(ae.project_id, l.project_id) AS project_id
+  ae.project_id
 FROM all_emails ae
 LEFT JOIN public.leads l ON l.email = ae.email
 LEFT JOIN sales_data sd ON sd.email = ae.email AND sd.project_id = ae.project_id
@@ -787,17 +798,62 @@ export function ClientDetailSheet({
   const { data: history, isLoading: historyLoading } = useClientHistory(email, currentProject?.id);
 ```
 
-- [ ] **Step 7: Build and verify**
+- [ ] **Step 7: Wire `LtvSummaryCard.tsx` up to pass `currentProject.id`**
+
+This component (a dashboard widget, unrelated to the Clientes page) also calls
+`useClientLtvKpis()` and was missed when this task was first scoped — it must be updated too or
+its call now has the wrong arity and, since the hook is `enabled: !!projectId`, the widget will
+stop fetching data entirely once Step 2's edit lands.
+
+Add `import { useProject } from "@/contexts/ProjectContext";` to the imports in
+`src/components/dashboard/LtvSummaryCard.tsx`.
+
+Replace (`LtvSummaryCard.tsx:10-12`):
+```tsx
+export function LtvSummaryCard() {
+  const { data, isLoading } = useClientLtvKpis();
+  const navigate = useNavigate();
+```
+With:
+```tsx
+export function LtvSummaryCard() {
+  const { currentProject } = useProject();
+  const { data, isLoading } = useClientLtvKpis(currentProject?.id);
+  const navigate = useNavigate();
+```
+
+- [ ] **Step 8: Wire `LtvBadge.tsx` up to pass `currentProject.id`**
+
+Same issue — `LtvBadge` (a shared component rendered in several places, including inside
+`LtvSummaryCard` itself) calls `useClientLtvByEmail(email)` with the old 1-arg signature.
+
+Add `import { useProject } from "@/contexts/ProjectContext";` to the imports in
+`src/components/shared/LtvBadge.tsx`.
+
+Replace (`LtvBadge.tsx:22-23`):
+```tsx
+export function LtvBadge({ email, segment: propSegment, ltv: propLtv, showLtv = true, size = "sm" }: LtvBadgeProps) {
+  const { data } = useClientLtvByEmail(!propSegment ? email : undefined);
+```
+With:
+```tsx
+export function LtvBadge({ email, segment: propSegment, ltv: propLtv, showLtv = true, size = "sm" }: LtvBadgeProps) {
+  const { currentProject } = useProject();
+  const { data } = useClientLtvByEmail(!propSegment ? email : undefined, currentProject?.id);
+```
+
+- [ ] **Step 9: Build and verify**
 
 Run: `npx vite build`
 Expected: no TypeScript errors. Manually open the Clientes page for Educacional, confirm the
-client list and KPIs still populate as before, and click into a client to confirm the detail
-sheet (purchases/charges history) still loads.
+client list and KPIs still populate as before, click into a client to confirm the detail sheet
+(purchases/charges history) still loads, and open the Dashboard to confirm the "Top Clientes
+(LTV)" card still populates (it renders `LtvBadge` internally too, so this also covers Step 8).
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
-git add src/hooks/useClientLtv.ts src/pages/Clientes.tsx src/components/clients/ClientDetailSheet.tsx
+git add src/hooks/useClientLtv.ts src/pages/Clientes.tsx src/components/clients/ClientDetailSheet.tsx src/components/dashboard/LtvSummaryCard.tsx src/components/shared/LtvBadge.tsx
 git commit -m "Scope client LTV data to the current project"
 ```
 
@@ -1986,11 +2042,14 @@ git commit -m "Render a sidebar group for every project, not just Educacional"
 **Files:**
 - Create: `src/components/layout/CreateProjectDialog.tsx`
 - Modify: `src/components/layout/AppSidebar.tsx`
+- Modify: `src/contexts/ProjectContext.tsx`
 
 **Interfaces:**
 - Produces: `CreateProjectDialog({ open, onOpenChange, onCreated }: { open: boolean;
   onOpenChange: (v: boolean) => void; onCreated: (project: Project) => void })` — a React
   component exported as default.
+- Produces: `useProject()` gains `refreshProjects: () => Promise<void>` — re-runs the existing
+  project-loading query and updates `projects` in place.
 - Consumes: `Project` type from `@/contexts/ProjectContext`.
 
 - [ ] **Step 1: Write the dialog component**
@@ -2169,8 +2228,90 @@ At the end of `SidebarContent`'s returned JSX (right before its closing `</>`), 
       <CreateProjectDialog
         open={showCreateProject}
         onOpenChange={setShowCreateProject}
-        onCreated={(project) => setCurrentProject(project)}
+        onCreated={async (project) => { await refreshProjects(); setCurrentProject(project); }}
       />
+```
+
+- [ ] **Step 2b: Make `ProjectContext` refreshable so a newly created project actually appears**
+
+`onCreated` alone does not work: `ProjectContext` only ever loads `projects` once on mount, and
+exposes no way to refresh that list. Without a fix, a new project is created successfully in the
+database but never appears in the sidebar until a full page reload — which defeats the point of
+the button. Add a `refreshProjects` function to the context, reusing the existing `loadProjects`
+logic (no duplicated fetch code).
+
+Replace (`src/contexts/ProjectContext.tsx`, the `ProjectContextValue` interface):
+```ts
+interface ProjectContextValue {
+  projects: Project[];
+  currentProject: Project | null;
+  setCurrentProject: (project: Project) => void;
+  isLoading: boolean;
+}
+```
+With:
+```ts
+interface ProjectContextValue {
+  projects: Project[];
+  currentProject: Project | null;
+  setCurrentProject: (project: Project) => void;
+  isLoading: boolean;
+  refreshProjects: () => Promise<void>;
+}
+```
+
+Replace the `createContext` default:
+```ts
+const ProjectContext = createContext<ProjectContextValue>({
+  projects: [],
+  currentProject: null,
+  setCurrentProject: () => {},
+  isLoading: true,
+});
+```
+With:
+```ts
+const ProjectContext = createContext<ProjectContextValue>({
+  projects: [],
+  currentProject: null,
+  setCurrentProject: () => {},
+  isLoading: true,
+  refreshProjects: async () => {},
+});
+```
+
+Replace the provider's returned value:
+```tsx
+  return (
+    <ProjectContext.Provider value={{ projects, currentProject, setCurrentProject, isLoading }}>
+      {children}
+    </ProjectContext.Provider>
+  );
+```
+With:
+```tsx
+  return (
+    <ProjectContext.Provider value={{ projects, currentProject, setCurrentProject, isLoading, refreshProjects: loadProjects }}>
+      {children}
+    </ProjectContext.Provider>
+  );
+```
+
+Note on ordering: `loadProjects` resets `currentProject` from localStorage/first-item on every
+call, so `refreshProjects()` alone would NOT select the newly created project — but since
+`onCreated` (above) calls `setCurrentProject(project)` immediately after `await refreshProjects()`
+resolves, the explicit selection always wins and runs last. No change to `loadProjects`'s
+internal logic is needed.
+
+Then update `AppSidebar.tsx`'s destructure of `useProject()` to include the new value.
+
+Replace:
+```ts
+  const { projects, currentProject, setCurrentProject } = useProject();
+```
+With:
+```ts
+  const { projects, currentProject, setCurrentProject, refreshProjects } = useProject();
 ```
 
 - [ ] **Step 3: Build and manually verify**
@@ -2193,6 +2334,6 @@ Log in as (or simulate) a non-admin team member and confirm the "+ Novo projeto"
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/components/layout/CreateProjectDialog.tsx src/components/layout/AppSidebar.tsx
+git add src/components/layout/CreateProjectDialog.tsx src/components/layout/AppSidebar.tsx src/contexts/ProjectContext.tsx
 git commit -m "Add admin-only new-project button and dialog"
 ```
