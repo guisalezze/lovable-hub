@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { Plug, CheckCircle, Copy, LogOut, Calendar as CalendarIcon, TrendingUp, Loader2, Save, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,52 @@ export default function IntegracoesPage() {
   // Date range for initial extraction
   const [dateFrom, setDateFrom] = useState<Date>(subDays(new Date(), 7));
   const [dateTo, setDateTo] = useState<Date>(new Date());
+
+  const [newProductCode, setNewProductCode] = useState("");
+  const [newProductName, setNewProductName] = useState("");
+
+  const { data: projectProducts = [], refetch: refetchProjectProducts } = useQuery({
+    queryKey: ["project-products", currentProject?.id],
+    enabled: !!currentProject?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("project_products")
+        .select("id, product_code, product_name")
+        .eq("project_id", currentProject!.id)
+        .eq("source", "perfectpay")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const addProjectProduct = async () => {
+    if (!newProductCode.trim() || !currentProject?.id) return;
+    const { error } = await supabase.from("project_products").insert({
+      project_id: currentProject.id,
+      source: "perfectpay",
+      product_code: newProductCode.trim(),
+      product_name: newProductName.trim() || null,
+    });
+    if (error) {
+      toast.error("Erro ao vincular produto: " + error.message);
+      return;
+    }
+    setNewProductCode("");
+    setNewProductName("");
+    toast.success("Produto vinculado a este projeto!");
+    refetchProjectProducts();
+  };
+
+  const removeProjectProduct = async (id: string) => {
+    const { error } = await supabase.from("project_products").delete().eq("id", id);
+    if (error) {
+      toast.error("Erro ao remover vínculo");
+      return;
+    }
+    toast.success("Vínculo removido");
+    refetchProjectProducts();
+  };
 
   const since = format(dateFrom, "yyyy-MM-dd");
   const until = format(dateTo, "yyyy-MM-dd");
@@ -84,7 +131,9 @@ export default function IntegracoesPage() {
     loadConfig();
   }, [currentProject?.id]);
 
-  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/perfectpay-webhook`;
+  const webhookUrl = currentProject?.id
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/perfectpay-webhook?project_id=${currentProject.id}`
+    : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/perfectpay-webhook`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -166,6 +215,44 @@ export default function IntegracoesPage() {
             <Copy className="h-4 w-4" />
           </Button>
         </div>
+      </div>
+
+      {/* Produtos deste projeto (fallback de roteamento por produto) */}
+      <div className="glass-card p-5">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Produtos deste projeto</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Usado apenas se a mesma URL de webhook for compartilhada entre projetos — vendas com
+            um destes códigos de produto caem aqui mesmo sem o parâmetro na URL.
+          </p>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <Input
+            placeholder="Código do produto"
+            value={newProductCode}
+            onChange={(e) => setNewProductCode(e.target.value)}
+            className="text-sm"
+          />
+          <Input
+            placeholder="Nome (opcional)"
+            value={newProductName}
+            onChange={(e) => setNewProductName(e.target.value)}
+            className="text-sm"
+          />
+          <Button onClick={addProjectProduct} disabled={!newProductCode.trim()}>Adicionar</Button>
+        </div>
+        {projectProducts.length > 0 && (
+          <div className="mt-4 space-y-2">
+            {projectProducts.map((p) => (
+              <div key={p.id} className="flex items-center justify-between p-2 rounded-md bg-secondary/50 text-sm">
+                <span>{p.product_code}{p.product_name ? ` — ${p.product_name}` : ""}</span>
+                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeProjectProduct(p.id)}>
+                  Remover
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Google Calendar + Meet */}
