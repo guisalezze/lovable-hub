@@ -93,3 +93,23 @@ starting the other).
   `--ease-in-out-apple` token via `var(...)` in `AppSidebar.tsx`/`AppLayout.tsx`, so it doesn't
   need to sequence strictly against 002/003's `index.css` edits, but keep it in the chain anyway
   since it precedes 005/007/010 which do share files with it directly.
+
+## Final whole-branch review (all 14 plans)
+
+Reviewed clean — **Ready to merge**. No Critical or Important findings. Two Minor items,
+neither actioned (both pre-existing patterns, not regressions from this batch):
+
+- `.press-scale`'s `transition: transform ...` shorthand fully overrides
+  `transition-property` on any element that also carries Tailwind's `transition-colors`
+  (e.g. the sidebar nav links from Plan 005) — one of the two wins the cascade, not both.
+  This shorthand-vs-cascade behavior predates this batch (same shape existed before Plan 007's
+  asymmetric-timing rewrite); a real fix means explicitly combining each consumer's transitioned
+  properties, which is a design decision, not a mechanical one — left as a known follow-up.
+- Progress-bar `transition-transform` fills (Plan 008) aren't covered by the
+  `prefers-reduced-motion` block — matches the pre-existing `ui/progress.tsx` baseline, not a
+  regression.
+
+No implementer had live browser/device access this batch — every plan's manual "feel check" is
+unverified. Recommended human spot-checks, in priority order: Plan 012's Kanban card entrance on
+a real status change (`/leads`), Plan 011's sale-toast timer/hover-pause sync, Plan 005's sidebar
+hover feel, Plan 004's closed-sidebar tab order.
