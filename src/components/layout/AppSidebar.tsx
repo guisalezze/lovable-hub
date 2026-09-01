@@ -344,6 +344,7 @@ export function AppSidebar({ open, onToggle }: AppSidebarProps) {
         open ? "translate-x-0" : "-translate-x-full"
       )}
       aria-hidden={!open}
+      {...(!open ? { inert: "" } : {})}
     >
       <SidebarContent />
     </aside>
