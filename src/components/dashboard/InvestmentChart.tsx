@@ -21,7 +21,7 @@ export function InvestmentChart({ daily, isLoading, error }: InvestmentChartProp
   }));
 
   return (
-    <div className="glass-card p-5 animate-fade-in">
+    <div className="material-card p-5">
       <h3 className="text-sm font-semibold text-foreground mb-4">Investimento por Dia</h3>
       <div className="h-64">
         {isLoading ? (

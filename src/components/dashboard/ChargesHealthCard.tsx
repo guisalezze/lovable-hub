@@ -53,7 +53,7 @@ export function ChargesHealthCard() {
   const { overdue, dueToday, next30, totalNext30, totalOverdue } = data;
 
   return (
-    <div className="glass-card p-5 animate-fade-in">
+    <div className="material-card p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-foreground">Saúde das Cobranças</h3>
         <Button variant="ghost" size="sm" className="text-xs gap-1 h-7" onClick={() => navigate("/cobrancas")}>

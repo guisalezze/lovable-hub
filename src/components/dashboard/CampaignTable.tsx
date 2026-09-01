@@ -29,7 +29,7 @@ export function CampaignTable({ campaigns, isLoading, error }: CampaignTableProp
   );
 
   return (
-    <div className="glass-card p-5 animate-fade-in">
+    <div className="material-card p-5">
       <h3 className="text-sm font-semibold text-foreground mb-4">Gasto por Campanha</h3>
 
       {isLoading ? (

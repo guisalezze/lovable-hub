@@ -17,7 +17,7 @@ export function KpiCard({ label, value, change, changeType = "neutral", icon: Ic
       : "text-muted-foreground";
 
   return (
-    <div className="glass-card p-5 animate-fade-in">
+    <div className="material-card p-5">
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           {label}

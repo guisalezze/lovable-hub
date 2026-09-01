@@ -8,7 +8,7 @@ interface SalesChartProps {
 
 export function SalesChart({ data, isLoading }: SalesChartProps) {
   return (
-    <div className="glass-card p-5 animate-fade-in">
+    <div className="material-card p-5">
       <h3 className="text-sm font-semibold text-foreground mb-4">Vendas por Produto</h3>
       <div className="h-64">
         {isLoading ? (

@@ -35,9 +35,9 @@ export function OperationalCards({
   const totalSales = approvedCount + pendingCount + refundCount + chargebackCount;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger-in">
       {/* Investimento */}
-      <div className="glass-card p-4">
+      <div className="material-card p-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] font-semibold text-muted-foreground tracking-wider">INVESTIMENTO (META ADS)</span>
           <div className="h-7 w-7 rounded-md bg-primary/10 flex items-center justify-center">
@@ -49,7 +49,7 @@ export function OperationalCards({
       </div>
 
       {/* Vendas Aprovadas */}
-      <div className="glass-card p-4">
+      <div className="material-card p-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] font-semibold text-muted-foreground tracking-wider">VENDAS APROVADAS</span>
           <div className="h-7 w-7 rounded-md bg-emerald-500/10 flex items-center justify-center">
@@ -64,7 +64,7 @@ export function OperationalCards({
       </div>
 
       {/* Pendentes */}
-      <div className={`glass-card p-4 ${pendingCount > 5 ? "border-amber-400/50 border" : ""}`}>
+      <div className={`material-card p-4 ${pendingCount > 5 ? "border-amber-400/50 border" : ""}`}>
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] font-semibold text-muted-foreground tracking-wider">PENDENTES</span>
           <div className="h-7 w-7 rounded-md bg-amber-500/10 flex items-center justify-center">
@@ -78,7 +78,7 @@ export function OperationalCards({
       </div>
 
       {/* Refunds + Chargebacks */}
-      <div className={`glass-card p-4 ${chargebackCount > 0 ? "border-red-400/50 border" : ""}`}>
+      <div className={`material-card p-4 ${chargebackCount > 0 ? "border-red-400/50 border" : ""}`}>
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] font-semibold text-muted-foreground tracking-wider">REFUNDS + CHARGEBACKS</span>
           <div className={`h-7 w-7 rounded-md flex items-center justify-center ${chargebackCount > 0 ? "bg-red-500/10" : "bg-muted"}`}>
