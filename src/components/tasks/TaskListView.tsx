@@ -71,7 +71,7 @@ export function TaskListView({ tasks, onTaskClick, members, compact, isOverdue }
               <Checkbox checked={task.status === "concluido"} />
             </div>
             <div className="min-w-0">
-              <p className={`text-sm font-medium truncate ${task.status === "concluido" ? "line-through text-muted-foreground" : "text-foreground"}`}>
+              <p className={`text-sm font-medium truncate transition-colors duration-200 ${task.status === "concluido" ? "line-through text-muted-foreground" : "text-foreground"}`}>
                 {task.title}
               </p>
               {!compact && task.tags?.length > 0 && (
