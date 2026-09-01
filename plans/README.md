@@ -11,7 +11,7 @@ Produced by the `improve-animations` skill audit. Commit stamp for all plans: `a
 | 003 | Gate hover-triggered transforms behind `(hover: hover) and (pointer: fine)` | HIGH | DONE | [003-hover-touch-gate.md](003-hover-touch-gate.md) |
 | 004 | Move sidebar collapse off width/margin thrash onto `--ease-in-out-apple` | HIGH | DONE | [004-sidebar-collapse-transform.md](004-sidebar-collapse-transform.md) |
 | 005 | Add press feedback to primary sidebar navigation controls | HIGH | DONE | [005-sidebar-press-feedback.md](005-sidebar-press-feedback.md) |
-| 006 | Make hover-only action buttons reachable on touch and keyboard | HIGH | TODO | [006-touch-invisible-buttons.md](006-touch-invisible-buttons.md) |
+| 006 | Make hover-only action buttons reachable on touch and keyboard | HIGH | DONE | [006-touch-invisible-buttons.md](006-touch-invisible-buttons.md) |
 | 007 | Asymmetric press/release timing + consolidate duplicated easing literal | MEDIUM | TODO | [007-button-asymmetric-timing.md](007-button-asymmetric-timing.md) |
 | 008 | Progress bars: animate `transform` not `width` (mirror `ui/progress.tsx`) | MEDIUM | DONE | [008-progress-bars-transform.md](008-progress-bars-transform.md) |
 | 009 | Sheet/drawer: dedicated `--ease-drawer` curve instead of bare `ease-in-out` | MEDIUM | TODO | [009-sheet-drawer-easing.md](009-sheet-drawer-easing.md) |
