@@ -245,7 +245,17 @@
   }
   .material-card:hover {
     @apply shadow-md border-border/90;
-    transform: translateY(-2px);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .material-card:hover {
+      transform: translateY(-2px);
+    }
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .hero-metric-hover:hover {
+      transform: translateY(-0.125rem); /* matches Tailwind's -translate-y-0.5 (0.125rem) */
+    }
   }
 
   /* Instant-feedback press scale for non-Button pressable elements */

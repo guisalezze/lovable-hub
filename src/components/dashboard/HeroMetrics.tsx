@@ -93,7 +93,7 @@ export function HeroMetrics({ revenue, profit, roas, previousRevenue, investment
       {cards.map((card) => (
         <div
           key={card.label}
-          className={`rounded-xl border border-border/60 border-l-4 ${card.border} bg-gradient-to-br ${card.bg} backdrop-blur-xl p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-[box-shadow,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]`}
+          className={`rounded-xl border border-border/60 border-l-4 ${card.border} bg-gradient-to-br ${card.bg} backdrop-blur-xl p-6 shadow-sm hover:shadow-md hero-metric-hover transition-[box-shadow,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]`}
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-semibold text-muted-foreground tracking-wider">{card.label}</span>
