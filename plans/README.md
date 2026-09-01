@@ -14,7 +14,7 @@ Produced by the `improve-animations` skill audit. Commit stamp for all plans: `a
 | 006 | Make hover-only action buttons reachable on touch and keyboard | HIGH | DONE | [006-touch-invisible-buttons.md](006-touch-invisible-buttons.md) |
 | 007 | Asymmetric press/release timing + consolidate duplicated easing literal | MEDIUM | DONE | [007-button-asymmetric-timing.md](007-button-asymmetric-timing.md) |
 | 008 | Progress bars: animate `transform` not `width` (mirror `ui/progress.tsx`) | MEDIUM | DONE | [008-progress-bars-transform.md](008-progress-bars-transform.md) |
-| 009 | Sheet/drawer: dedicated `--ease-drawer` curve instead of bare `ease-in-out` | MEDIUM | TODO | [009-sheet-drawer-easing.md](009-sheet-drawer-easing.md) |
+| 009 | Sheet/drawer: dedicated `--ease-drawer` curve instead of bare `ease-in-out` | MEDIUM | DONE | [009-sheet-drawer-easing.md](009-sheet-drawer-easing.md) |
 | 010 | Introduce a shared duration-token scale (scoped proof-of-concept only) | MEDIUM | DONE | [010-duration-tokens.md](010-duration-tokens.md) |
 | 011 | Sync sale-toast progress bar to Sonner's real timer, add celebratory entrance | MEDIUM-HIGH | DONE | [011-sale-toast-timer-sync.md](011-sale-toast-timer-sync.md) |
 | 012 | Give Kanban lead cards an entrance cue when their status changes | MEDIUM | DONE | [012-kanban-card-move-transition.md](012-kanban-card-move-transition.md) |
