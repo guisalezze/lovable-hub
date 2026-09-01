@@ -301,6 +301,8 @@
   .stagger-in > *:nth-child(4) { animation-delay: 180ms; }
   .stagger-in > *:nth-child(5) { animation-delay: 240ms; }
   .stagger-in > *:nth-child(6) { animation-delay: 300ms; }
+  .stagger-in > *:nth-child(7) { animation-delay: 360ms; }
+  .stagger-in > *:nth-child(8) { animation-delay: 420ms; }
 
   /* Same entrance, for a single standalone card outside a stagger grid */
   .animate-material-in {

@@ -466,7 +466,7 @@ export default function RelatoriosPage() {
         </div>
 
         {/* KPI grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 stagger-in">
           {kpis.map(k => (
             <div key={k.label} className="glass-card p-4 space-y-1">
               <div className="flex items-center justify-between">
