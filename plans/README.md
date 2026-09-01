@@ -19,7 +19,7 @@ Produced by the `improve-animations` skill audit. Commit stamp for all plans: `a
 | 011 | Sync sale-toast progress bar to Sonner's real timer, add celebratory entrance | MEDIUM-HIGH | DONE | [011-sale-toast-timer-sync.md](011-sale-toast-timer-sync.md) |
 | 012 | Give Kanban lead cards an entrance cue when their status changes | MEDIUM | DONE | [012-kanban-card-move-transition.md](012-kanban-card-move-transition.md) |
 | 013 | Give task-completion checkbox and title a small motion budget | LOW-MEDIUM | DONE | [013-task-complete-animation.md](013-task-complete-animation.md) |
-| 014 | Add entrance stagger to Relatórios KPI grid, matching Dashboard's pattern | LOW | TODO | [014-relatorios-kpi-stagger.md](014-relatorios-kpi-stagger.md) |
+| 014 | Add entrance stagger to Relatórios KPI grid, matching Dashboard's pattern | LOW | DONE | [014-relatorios-kpi-stagger.md](014-relatorios-kpi-stagger.md) |
 
 Explicitly excluded from this batch: the `.glass-card` → `.material-card` cohesion finding
 (29 files still on the old system vs. 11 on the new one) — that's a full redesign rollout, not a
