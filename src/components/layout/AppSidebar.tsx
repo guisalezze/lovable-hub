@@ -97,7 +97,7 @@ function ProjectGroup({ project, items, isOpen, onToggle, onSelectProject, isAct
       <button
         onClick={onToggle}
         className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-md text-sm font-semibold w-full transition-colors",
+          "flex items-center gap-2 px-3 py-2 rounded-md text-sm font-semibold w-full transition-colors press-scale",
           "hover:bg-sidebar-accent/50 text-sidebar-foreground"
         )}
       >
@@ -122,7 +122,7 @@ function ProjectGroup({ project, items, isOpen, onToggle, onSelectProject, isAct
                 onClick={() => onSelectProject(project)}
                 className={() =>
                   cn(
-                    "flex items-center gap-3 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap",
+                    "flex items-center gap-3 px-3 py-1.5 rounded-md text-sm font-medium transition-colors press-scale whitespace-nowrap",
                     isItemActive(item.to)
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
@@ -231,7 +231,7 @@ function SidebarContent() {
                 end={false}
                 className={({ isActive }) =>
                   cn(
-                    "flex items-center gap-3 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap",
+                    "flex items-center gap-3 px-3 py-1.5 rounded-md text-sm font-medium transition-colors press-scale whitespace-nowrap",
                     isActive
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
@@ -256,7 +256,7 @@ function SidebarContent() {
             end={item.to === "/"}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap",
+                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors press-scale whitespace-nowrap",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
                   : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
@@ -286,7 +286,7 @@ function SidebarContent() {
         </div>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium w-full transition-colors text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium w-full transition-colors press-scale text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
         >
           <LogOut className="h-4 w-4 shrink-0" />
           <span>Sair</span>
