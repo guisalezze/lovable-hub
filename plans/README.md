@@ -17,7 +17,7 @@ Produced by the `improve-animations` skill audit. Commit stamp for all plans: `a
 | 009 | Sheet/drawer: dedicated `--ease-drawer` curve instead of bare `ease-in-out` | MEDIUM | TODO | [009-sheet-drawer-easing.md](009-sheet-drawer-easing.md) |
 | 010 | Introduce a shared duration-token scale (scoped proof-of-concept only) | MEDIUM | TODO | [010-duration-tokens.md](010-duration-tokens.md) |
 | 011 | Sync sale-toast progress bar to Sonner's real timer, add celebratory entrance | MEDIUM-HIGH | DONE | [011-sale-toast-timer-sync.md](011-sale-toast-timer-sync.md) |
-| 012 | Give Kanban lead cards an entrance cue when their status changes | MEDIUM | TODO | [012-kanban-card-move-transition.md](012-kanban-card-move-transition.md) |
+| 012 | Give Kanban lead cards an entrance cue when their status changes | MEDIUM | DONE | [012-kanban-card-move-transition.md](012-kanban-card-move-transition.md) |
 | 013 | Give task-completion checkbox and title a small motion budget | LOW-MEDIUM | DONE | [013-task-complete-animation.md](013-task-complete-animation.md) |
 | 014 | Add entrance stagger to Relatórios KPI grid, matching Dashboard's pattern | LOW | TODO | [014-relatorios-kpi-stagger.md](014-relatorios-kpi-stagger.md) |
 
