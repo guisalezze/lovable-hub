@@ -78,6 +78,7 @@
     /* Apple-style motion curves (apple-design skill) */
     --ease-out-apple: cubic-bezier(0.23, 1, 0.32, 1);
     --ease-in-out-apple: cubic-bezier(0.77, 0, 0.175, 1);
+    --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); /* iOS-like drawer curve (AUDIT.md §2) */
 
     /* Shared duration scale — maps to AUDIT.md's duration budget tiers.
        Consume via Tailwind arbitrary value syntax, e.g. duration-[var(--duration-press)].
