@@ -1,7 +1,7 @@
 # 012 — Execution Report
 
 - **Status**: DONE_WITH_CONCERNS
-- **Commit**: (see below, filled after commit)
+- **Commit**: c69d9a6
 - **Plan**: `plans/012-kanban-card-move-transition.md`
 
 ## What was done
