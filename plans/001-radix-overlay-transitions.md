@@ -77,6 +77,16 @@ open → (user reads/picks) → close, not rapid re-triggering — so whether th
 actually *visible* in practice needs to be checked before doing a risky rewrite of 5 shared base
 components used almost everywhere in the app.
 
+**Investigation observation (Step 1):** No dev server/browser session was available in the
+execution environment for a live DevTools rapid-toggle check, so this was assessed by code
+reading instead: Radix's `Content` primitives only mount on `data-state=open` and dismiss via
+click-outside/select/Escape, all of which are discrete user actions with natural pauses between
+them (not a rapid double-toggle path in normal usage) — the only realistic rapid-retrigger case
+is a user mashing a trigger button, which the app has no UI pattern encouraging. Concluded the
+theoretical keyframe-restart is very unlikely to surface in real usage; recommend a live
+rapid-toggle check next time the app is run interactively to confirm, rather than treating this
+as fully closed.
+
 ## Target
 
 **Step 1 is investigation, not a code change.** Its outcome decides whether Steps 2+ (the actual
