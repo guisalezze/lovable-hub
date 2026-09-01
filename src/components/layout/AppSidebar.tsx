@@ -340,7 +340,7 @@ export function AppSidebar({ open, onToggle }: AppSidebarProps) {
   return (
     <aside
       className={cn(
-        "shrink-0 w-60 border-r border-sidebar-border bg-sidebar overflow-hidden flex flex-col h-screen fixed left-0 top-0 z-40 transition-transform duration-300 ease-[var(--ease-in-out-apple)]",
+        "shrink-0 w-60 border-r border-sidebar-border bg-sidebar overflow-hidden flex flex-col h-screen fixed left-0 top-0 z-40 transition-transform duration-[var(--duration-modal)] ease-[var(--ease-in-out-apple)]",
         open ? "translate-x-0" : "-translate-x-full"
       )}
       aria-hidden={!open}

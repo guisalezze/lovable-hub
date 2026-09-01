@@ -66,7 +66,7 @@ export function AppLayout() {
       {/* Sidebar: no mobile é Sheet (overlay), no desktop é aside fixo */}
       <AppSidebar open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       <main className={cn(
-        "flex flex-col min-h-screen overflow-hidden transition-[margin-left] duration-300 ease-[var(--ease-in-out-apple)]",
+        "flex flex-col min-h-screen overflow-hidden transition-[margin-left] duration-[var(--duration-modal)] ease-[var(--ease-in-out-apple)]",
         isMobile ? "w-full" : "flex-1",
         !isMobile && sidebarOpen && "ml-60" // Compensar espaço do sidebar fixo no desktop
       )}>

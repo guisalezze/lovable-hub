@@ -78,6 +78,15 @@
     /* Apple-style motion curves (apple-design skill) */
     --ease-out-apple: cubic-bezier(0.23, 1, 0.32, 1);
     --ease-in-out-apple: cubic-bezier(0.77, 0, 0.175, 1);
+
+    /* Shared duration scale — maps to AUDIT.md's duration budget tiers.
+       Consume via Tailwind arbitrary value syntax, e.g. duration-[var(--duration-press)].
+       Defining these does not itself change any component; see plans/010 for
+       the proof-of-concept consumers and plans/007/008/009 for related work. */
+    --duration-press: 150ms;    /* Button press feedback — AUDIT budget 100-160ms. Matches button.tsx's/​.press-scale's pre-Plan-007 150-160ms baseline; Plan 007 makes Button/.press-scale press/release asymmetric (120ms/180ms) and supersedes this token for those two spots specifically. */
+    --duration-popover: 200ms;  /* Tooltips, small popovers — AUDIT budget 125-200ms */
+    --duration-dropdown: 200ms; /* Dropdowns, selects — AUDIT budget 150-250ms. Matches dialog.tsx/alert-dialog.tsx/accordion.tsx/navigation-menu.tsx/sidebar.tsx's existing duration-200 */
+    --duration-modal: 300ms;    /* Modals, drawers, and drawer-like panels (e.g. sidebar collapse) — AUDIT budget 200-500ms. Matches AppLayout.tsx/AppSidebar.tsx's existing duration-300 and Sheet's duration-300 close */
   }
 
   .dark {
@@ -273,6 +282,7 @@
      are positional against Button's transition-property list:
      color, background-color, border-color, transform
      (AUDIT.md §4 — asymmetric timing, symmetric press/release is a finding). */
+  /* Supersedes --duration-press (150ms) for Button specifically — see plans/007. */
   .btn-press {
     transition-duration: 150ms, 150ms, 150ms, 180ms; /* transform release/resting duration = 180ms */
   }
