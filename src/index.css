@@ -74,6 +74,10 @@
 
     --tracking-normal: -0.015em;
     --spacing: 0.25rem;
+
+    /* Apple-style motion curves (apple-design skill) */
+    --ease-out-apple: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out-apple: cubic-bezier(0.77, 0, 0.175, 1);
   }
 
   .dark {
@@ -231,6 +235,65 @@
 
   .kpi-teal-bar {
     background: linear-gradient(90deg, hsl(var(--accent-foreground)), transparent);
+  }
+
+  /* Apple-style translucent material card (additive — .glass-card is left untouched) */
+  .material-card {
+    @apply bg-card/70 border border-border/60 rounded-xl shadow-sm backdrop-blur-xl;
+    transition: transform 220ms var(--ease-out-apple), box-shadow 220ms var(--ease-out-apple),
+      border-color 220ms var(--ease-out-apple), background-color 220ms var(--ease-out-apple);
+  }
+  .material-card:hover {
+    @apply shadow-md border-border/90;
+    transform: translateY(-2px);
+  }
+
+  /* Instant-feedback press scale for non-Button pressable elements */
+  .press-scale {
+    transition: transform 160ms var(--ease-out-apple);
+  }
+  .press-scale:active {
+    transform: scale(0.97);
+  }
+
+  /* Staggered entrance for sibling cards — apply to the grid/flex container */
+  .stagger-in > * {
+    animation: material-in 420ms var(--ease-out-apple) backwards;
+  }
+  .stagger-in > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-in > *:nth-child(2) { animation-delay: 60ms; }
+  .stagger-in > *:nth-child(3) { animation-delay: 120ms; }
+  .stagger-in > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger-in > *:nth-child(5) { animation-delay: 240ms; }
+  .stagger-in > *:nth-child(6) { animation-delay: 300ms; }
+
+  /* Same entrance, for a single standalone card outside a stagger grid */
+  .animate-material-in {
+    animation: material-in 420ms var(--ease-out-apple) backwards;
+  }
+}
+
+@keyframes material-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger-in > *,
+  .animate-material-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .material-card,
+  .press-scale {
+    transition: none !important;
   }
 }
 
