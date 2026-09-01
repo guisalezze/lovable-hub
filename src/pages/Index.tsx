@@ -159,7 +159,7 @@ const Dashboard = () => {
           ) : (
             <div className="flex items-center gap-3">
               <div className="flex-1 h-2.5 bg-secondary rounded-full overflow-hidden">
-                <div className={`h-full ${goalBarColor} rounded-full transition-all duration-500`} style={{ width: `${goalPct}%` }} />
+                <div className={`h-full w-full ${goalBarColor} rounded-full transition-transform duration-300 ease-out`} style={{ transform: `translateX(-${100 - goalPct}%)` }} />
               </div>
               <span className="text-xs font-bold text-foreground">{goalPct}%</span>
             </div>

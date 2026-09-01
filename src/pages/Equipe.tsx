@@ -217,7 +217,7 @@ export default function Equipe() {
                             <span>Tarefas</span><span>{member.tasksCompleted}/{member.taskGoal}</span>
                           </div>
                           <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                            <div className={`h-full rounded-full transition-all ${progressColor(taskPct)}`} style={{ width: `${taskPct}%` }} />
+                            <div className={`h-full w-full rounded-full transition-transform duration-300 ease-out ${progressColor(taskPct)}`} style={{ transform: `translateX(-${100 - taskPct}%)` }} />
                           </div>
                         </div>
                         <div>
@@ -225,7 +225,7 @@ export default function Equipe() {
                             <span>Calls</span><span>{member.callsDone}/{member.callGoal}</span>
                           </div>
                           <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                            <div className={`h-full rounded-full transition-all ${progressColor(callPct)}`} style={{ width: `${callPct}%` }} />
+                            <div className={`h-full w-full rounded-full transition-transform duration-300 ease-out ${progressColor(callPct)}`} style={{ transform: `translateX(-${100 - callPct}%)` }} />
                           </div>
                         </div>
                       </div>

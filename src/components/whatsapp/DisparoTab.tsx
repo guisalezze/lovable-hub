@@ -532,7 +532,7 @@ function ModoDirecto({ sessions }: { sessions: Session[] }) {
                 <span className="text-xs text-muted-foreground font-mono">{job.sent}/{job.total}</span>
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div className={cn("h-full rounded-full transition-all duration-500", job.status === "done" ? "bg-emerald-500" : "bg-primary")} style={{ width: `${progress}%` }} />
+                <div className={cn("h-full w-full rounded-full transition-transform duration-300 ease-out", job.status === "done" ? "bg-emerald-500" : "bg-primary")} style={{ transform: `translateX(-${100 - progress}%)` }} />
               </div>
               <div className="flex gap-4 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" />{job.sent - job.errors.length} enviados</span>

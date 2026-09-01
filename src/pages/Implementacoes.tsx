@@ -149,10 +149,10 @@ function ImplementationCard({ impl, onClick }: { impl: Implementation; onClick: 
         </div>
         <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all ${
+            className={`h-full w-full rounded-full transition-transform duration-300 ease-out ${
               progress >= 100 ? "bg-emerald-500" : progress >= 60 ? "bg-primary" : "bg-yellow-500"
             }`}
-            style={{ width: `${progress}%` }}
+            style={{ transform: `translateX(-${100 - progress}%)` }}
           />
         </div>
       </div>

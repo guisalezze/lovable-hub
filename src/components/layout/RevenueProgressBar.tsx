@@ -57,10 +57,10 @@ export function RevenueBarStrip() {
       aria-hidden
     >
       <div
-        className={`h-full ${barColor} transition-all duration-700 ease-out ${
+        className={`h-full w-full ${barColor} transition-transform duration-300 ease-out ${
           isLoading ? "animate-pulse opacity-60" : ""
         }`}
-        style={{ width: `${pct}%` }}
+        style={{ transform: `translateX(-${100 - pct}%)` }}
       />
     </div>
   );
@@ -119,8 +119,8 @@ export function RevenueProgressBar() {
               </p>
               <div className="h-1.5 bg-secondary rounded-full overflow-hidden mt-1.5">
                 <div
-                  className={`h-full ${barColor} rounded-full transition-all duration-500`}
-                  style={{ width: `${pct}%` }}
+                  className={`h-full w-full ${barColor} rounded-full transition-transform duration-300 ease-out`}
+                  style={{ transform: `translateX(-${100 - pct}%)` }}
                 />
               </div>
               <p className="text-muted-foreground text-[10px] mt-1">
@@ -163,8 +163,8 @@ export function RevenueProgressBar() {
         {/* Minibar inline (só quando há espaço) */}
         <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden min-w-[40px] max-w-[100px] hidden md:block">
           <div
-            className={`h-full ${barColor} rounded-full transition-all duration-700`}
-            style={{ width: `${pct}%` }}
+            className={`h-full w-full ${barColor} rounded-full transition-transform duration-300 ease-out`}
+            style={{ transform: `translateX(-${100 - pct}%)` }}
           />
         </div>
       </div>

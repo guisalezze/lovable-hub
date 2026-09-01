@@ -550,7 +550,7 @@ export function ImplementationDetailSheet({
                     <span>{progress}%</span>
                   </div>
                   <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full transition-all ${progress >= 100 ? "bg-emerald-500" : "bg-primary"}`} style={{ width: `${progress}%` }} />
+                    <div className={`h-full w-full rounded-full transition-transform duration-300 ease-out ${progress >= 100 ? "bg-emerald-500" : "bg-primary"}`} style={{ transform: `translateX(-${100 - progress}%)` }} />
                   </div>
                   <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                     <span>{format(parseISO(impl.contract_start), "d MMM yyyy", { locale: ptBR })} → {format(parseISO(impl.contract_end), "d MMM yyyy", { locale: ptBR })}</span>

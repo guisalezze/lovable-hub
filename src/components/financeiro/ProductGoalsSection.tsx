@@ -80,10 +80,10 @@ export function ProductGoalsSection({ since, until }: Props) {
               </div>
               <div className="h-2 rounded-full bg-secondary overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${
+                  className={`h-full w-full rounded-full transition-transform duration-300 ease-out ${
                     g.pct >= 100 ? "bg-emerald-500" : g.pct >= 60 ? "bg-primary" : "bg-destructive"
                   }`}
-                  style={{ width: `${g.pct}%` }}
+                  style={{ transform: `translateX(-${100 - g.pct}%)` }}
                 />
               </div>
               {g.pct >= 100 && <p className="text-xs text-emerald-500 font-medium">🎯 Meta batida! +{fmt(g.current - g.goal_amount)}</p>}
