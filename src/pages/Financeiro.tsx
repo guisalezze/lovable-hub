@@ -479,7 +479,7 @@ export default function FinanceiroPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
+                    className="h-7 w-7 opacity-100 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:focus:opacity-100 text-destructive hover:text-destructive"
                     onClick={async () => {
                       if (!confirm(`Excluir gasto "${inv.description || "Gasto manual"}" de ${fmtBRL(Number(inv.amount))}?`)) return;
                       const { error } = await supabase.from("investments").delete().eq("id", inv.id);

@@ -131,7 +131,7 @@ function ImplementationCard({ impl, onClick }: { impl: Implementation; onClick: 
               <p className="text-[10px] text-muted-foreground">recebido</p>
               <Button
                 size="sm" variant="ghost"
-                className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground opacity-100 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:transition-opacity [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:focus:opacity-100"
                 onClick={() => { setPaidInput(String(impl.paid_amount ?? 0)); setEditingPaid(true); }}
                 title="Atualizar valor recebido"
               >

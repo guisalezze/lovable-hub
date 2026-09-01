@@ -260,7 +260,7 @@ export default function LeadsPage() {
                             {format(parseISO(lead.follow_up_at), "d MMM", { locale: ptBR })}
                           </div>
                         )}
-                        <div className="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1 mt-2 opacity-100 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:transition-opacity [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:focus-within:opacity-100">
                           {lead.phone_e164 && (
                             <a href={`https://wa.me/${lead.phone_e164.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-emerald-500" title="WhatsApp" onClick={e => e.stopPropagation()}>
                               <Phone className="h-3.5 w-3.5" />
@@ -288,7 +288,7 @@ export default function LeadsPage() {
                             <button
                               key={c.status}
                               onClick={(e) => { e.stopPropagation(); handleStatusChange(lead.id, c.status); }}
-                              className={`text-[9px] px-1.5 py-0.5 rounded ${c.color} opacity-0 group-hover:opacity-100 transition-opacity`}
+                              className={`text-[9px] px-1.5 py-0.5 rounded ${c.color} opacity-100 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:transition-opacity [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:focus:opacity-100`}
                             >
                               {c.label}
                             </button>

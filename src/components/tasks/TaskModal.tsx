@@ -206,7 +206,7 @@ export function TaskModal({ open, onOpenChange, task }: Props) {
                     <CheckSquare className={`h-4 w-4 ${item.done ? "text-success" : "text-muted-foreground"}`} />
                   </button>
                   <span className={`text-sm flex-1 ${item.done ? "line-through text-muted-foreground" : "text-foreground"}`}>{item.text}</span>
-                  <button onClick={() => removeCheckItem(i)} className="opacity-0 group-hover:opacity-100">
+                  <button onClick={() => removeCheckItem(i)} className="opacity-100 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:focus:opacity-100">
                     <Trash2 className="h-3 w-3 text-destructive" />
                   </button>
                 </div>

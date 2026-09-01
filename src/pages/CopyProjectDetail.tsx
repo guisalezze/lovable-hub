@@ -177,7 +177,7 @@ export default function CopyProjectDetail() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-destructive"
+                      className="h-6 w-6 absolute top-1 right-1 opacity-100 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:focus:opacity-100 text-destructive"
                       onClick={() => removeFile.mutate({ id: f.id, fileUrl: f.file_url })}
                     >
                       <Trash2 className="h-3 w-3" />
