@@ -1,6 +1,6 @@
 # 001 — Investigate (and fix if confirmed) Radix overlay open/close keyframe restart
 
-- **Status**: TODO
+- **Status**: INVESTIGATED — no fix needed
 - **Commit**: a790988
 - **Severity**: HIGH
 - **Category**: Interruptibility (AUDIT.md §4)
