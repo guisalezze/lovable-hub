@@ -38,7 +38,7 @@ function SaleToast({
         <p className="text-xs font-semibold text-white leading-tight">
           Venda aprovada! 🎉
         </p>
-        <p className="text-[11px] text-emerald-400 font-medium mt-0.5">
+        <p className="text-[11px] text-emerald-400 font-medium mt-0.5 animate-in fade-in-0 zoom-in-95 duration-300">
           {fmtBRL(amount)}
         </p>
         {productName && (
@@ -48,14 +48,23 @@ function SaleToast({
         )}
       </div>
 
-      {/* Barra animada de progresso na base */}
+      {/* Barra animada de progresso na base — sincronizada com o hover-pause do Sonner */}
       <style>{`
         @keyframes shrink-bar {
           from { width: 100%; }
           to   { width: 0%; }
         }
         .sale-progress-bar {
-          animation: shrink-bar 6s linear forwards;
+          animation: shrink-bar 6000ms linear forwards;
+        }
+        [data-sonner-toaster]:hover .sale-progress-bar {
+          animation-play-state: paused;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sale-progress-bar {
+            animation: none;
+            width: 100%;
+          }
         }
       `}</style>
       <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-b-xl overflow-hidden bg-emerald-900/30">
