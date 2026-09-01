@@ -229,9 +229,9 @@ export default function LeadsPage() {
                     const sourceInfo = SOURCE_OPTIONS.find(s => s.value === lead.source);
                     return (
                       <div
-                        key={lead.id}
+                        key={`${lead.id}-${lead.status}`}
                         onClick={() => setSelectedLead(lead)}
-                        className="glass-card p-4 hover:border-primary/30 transition-colors cursor-pointer group"
+                        className="glass-card p-4 hover:border-primary/30 transition-colors cursor-pointer group animate-in fade-in-0 slide-in-from-top-1 duration-200"
                       >
                         <div className="flex items-start justify-between mb-2">
                           <div className="min-w-0">
