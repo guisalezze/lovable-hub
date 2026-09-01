@@ -258,12 +258,26 @@
     }
   }
 
-  /* Instant-feedback press scale for non-Button pressable elements */
+  /* Instant-feedback press scale for non-Button pressable elements.
+     Press snaps in fast; release eases back out slightly slower
+     (AUDIT.md §4 — asymmetric timing, symmetric press/release is a finding). */
   .press-scale {
-    transition: transform 160ms var(--ease-out-apple);
+    transition: transform 180ms var(--ease-out-apple); /* release / resting-state duration */
   }
   .press-scale:active {
+    transition-duration: 120ms; /* press duration — snappier than release */
     transform: scale(0.97);
+  }
+
+  /* Asymmetric press/release timing for Button. transition-duration values
+     are positional against Button's transition-property list:
+     color, background-color, border-color, transform
+     (AUDIT.md §4 — asymmetric timing, symmetric press/release is a finding). */
+  .btn-press {
+    transition-duration: 150ms, 150ms, 150ms, 180ms; /* transform release/resting duration = 180ms */
+  }
+  .btn-press:active {
+    transition-duration: 150ms, 150ms, 150ms, 120ms; /* transform press duration = 120ms, snappier */
   }
 
   /* Staggered entrance for sibling cards — apply to the grid/flex container */
@@ -302,7 +316,8 @@
     transform: none !important;
   }
   .material-card,
-  .press-scale {
+  .press-scale,
+  .btn-press {
     transition: none !important;
   }
 
