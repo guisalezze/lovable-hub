@@ -295,6 +295,26 @@
   .press-scale {
     transition: none !important;
   }
+
+  /* Tailwind-config keyframe utilities (tailwind.config.ts) */
+  .animate-fade-in,
+  .animate-slide-in,
+  .animate-accordion-down,
+  .animate-accordion-up {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  /* Radix overlay entrance/exit driven by tailwindcss-animate (Select, Popover, DropdownMenu,
+     ContextMenu, Menubar, Sheet, NavigationMenu, Dialog, AlertDialog, Tooltip, HoverCard,
+     Accordion — anything using data-[state]:animate-in/animate-out) */
+  [data-state="open"].animate-in,
+  [data-state="closed"].animate-out,
+  [class*="animate-in"],
+  [class*="animate-out"] {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+  }
 }
 
 /* Scrollbar */
