@@ -115,11 +115,15 @@ export function usePushNotifications() {
         return;
       }
 
-      // Criar subscription
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
-      });
+      // Reaproveitar subscription existente deste navegador/dispositivo em vez de criar
+      // uma nova a cada clique — endpoints antigos não expiram sozinhos e cada um recebe
+      // push separadamente, então acumular gera notificações duplicadas no mesmo aparelho.
+      const subscription =
+        (await registration.pushManager.getSubscription()) ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
+        }));
 
       const subscriptionData = subscriptionToObject(subscription);
 
