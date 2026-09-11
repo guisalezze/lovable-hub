@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { format, subDays } from "date-fns";
-import { RefreshCw, Play, Pause, Settings2, BarChart3, AlertTriangle, ArrowRight } from "lucide-react";
+import { RefreshCw, Play, Pause, Settings2, BarChart3, AlertTriangle, ArrowRight, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useMetaAdAccounts, useMetaAdCampaigns, useSyncMetaAds, useMetaAction, useMetaConnection } from "@/hooks/useMetaAds";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useMetaAdAccounts, useMetaAdCampaigns, useSyncMetaAds, useMetaAction, useMetaConnection, useAdPerformance } from "@/hooks/useMetaAds";
 import { MetaRulesDialog } from "@/components/nutra/MetaRulesDialog";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -28,6 +29,7 @@ export default function MetaAdsPage() {
   const { data: campaigns = [], isLoading: campaignsLoading } = useMetaAdCampaigns(activeAccount?.id, since, until);
   const syncMutation = useSyncMetaAds();
   const actionMutation = useMetaAction();
+  const { data: adPerformance = [], isLoading: adPerformanceLoading } = useAdPerformance(activeAccount?.id, since, until);
 
   const totalSpend = campaigns.reduce((s, c) => s + Number(c.spend || 0), 0);
   const totalClicks = campaigns.reduce((s, c) => s + Number(c.clicks || 0), 0);
@@ -130,8 +132,17 @@ export default function MetaAdsPage() {
           </Button>
         </div>
       ) : (
-        <div className="glass-card overflow-hidden">
-          <Table>
+        <Tabs defaultValue="campanhas">
+          <TabsList>
+            <TabsTrigger value="campanhas">Campanhas</TabsTrigger>
+            <TabsTrigger value="atribuicao">
+              <Link2 className="h-3.5 w-3.5 mr-1.5" />
+              Atribuição
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="campanhas">
+            <div className="glass-card overflow-hidden">
+              <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Campanha</TableHead>
@@ -194,8 +205,62 @@ export default function MetaAdsPage() {
                 ))
               )}
             </TableBody>
-          </Table>
-        </div>
+              </Table>
+            </div>
+          </TabsContent>
+          <TabsContent value="atribuicao">
+            <div className="glass-card overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Anúncio</TableHead>
+                    <TableHead>Conjunto</TableHead>
+                    <TableHead>Campanha</TableHead>
+                    <TableHead className="text-right">Gasto</TableHead>
+                    <TableHead className="text-right">Vendas</TableHead>
+                    <TableHead className="text-right">Receita</TableHead>
+                    <TableHead className="text-right">CPA</TableHead>
+                    <TableHead className="text-right">ROAS</TableHead>
+                    <TableHead className="text-right">Lucro</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {adPerformanceLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        {Array.from({ length: 9 }).map((_, j) => (
+                          <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : adPerformance.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-8">
+                        Nenhum anúncio com dados de atribuição no período
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    adPerformance.map((a: any) => (
+                      <TableRow key={`${a.ad_id}-${a.date}`}>
+                        <TableCell className="font-medium text-sm max-w-[200px] truncate">{a.ad_name || a.ad_id}</TableCell>
+                        <TableCell className="text-sm max-w-[160px] truncate">{a.adset_name || "–"}</TableCell>
+                        <TableCell className="text-sm max-w-[160px] truncate">{a.campaign_name || "–"}</TableCell>
+                        <TableCell className="text-right text-sm">{fmtBRL(Number(a.spend || 0))}</TableCell>
+                        <TableCell className="text-right text-sm">{Number(a.sales_count || 0)}</TableCell>
+                        <TableCell className="text-right text-sm">{fmtBRL(Number(a.revenue || 0))}</TableCell>
+                        <TableCell className="text-right text-sm">{a.cpa != null ? fmtBRL(Number(a.cpa)) : "–"}</TableCell>
+                        <TableCell className="text-right text-sm">{a.roas != null ? `${Number(a.roas).toFixed(2)}x` : "–"}</TableCell>
+                        <TableCell className={`text-right text-sm ${Number(a.profit || 0) < 0 ? "text-destructive" : "text-green-600"}`}>
+                          {fmtBRL(Number(a.profit || 0))}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+        </Tabs>
       )}
 
       {activeAccount && (

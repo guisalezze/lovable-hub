@@ -134,3 +134,23 @@ export function useNutraSales(since?: string, until?: string) {
     enabled: !!currentProject,
   });
 }
+
+export function useAdPerformance(accountId?: string, since?: string, until?: string) {
+  return useQuery({
+    queryKey: ["ad-performance", accountId, since, until],
+    queryFn: async () => {
+      if (!accountId) return [];
+      let query = supabase
+        .from("ad_performance")
+        .select("*")
+        .eq("ad_account_id", accountId)
+        .order("date", { ascending: false });
+      if (since) query = query.gte("date", since);
+      if (until) query = query.lte("date", until);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!accountId,
+  });
+}
