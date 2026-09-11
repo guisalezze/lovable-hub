@@ -54,6 +54,9 @@ verify_jwt = false
 [functions.cartpanda-s2s]
 verify_jwt = false
 
+[functions.ad-collect]
+verify_jwt = false
+
 [functions.clickbank-webhook]
 verify_jwt = false
 
