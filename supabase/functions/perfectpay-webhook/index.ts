@@ -59,6 +59,64 @@ const PAYMENT_METHOD_MAP: Record<number, string> = {
   14: "fort_brasil",
 };
 
+const ID_RE = /^\d{6,}$/;
+function splitNameId(value?: string | null): { name: string | null; id: string | null } {
+  if (!value) return { name: null, id: null };
+  const raw = decodeURIComponent(String(value).replace(/\+/g, " ")).trim();
+  if (!raw) return { name: null, id: null };
+  const cut = raw.lastIndexOf("|");
+  if (cut === -1) return ID_RE.test(raw) ? { name: null, id: raw } : { name: raw, id: null };
+  const name = raw.slice(0, cut).trim() || null;
+  const tail = raw.slice(cut + 1).trim();
+  return { name, id: ID_RE.test(tail) ? tail : null };
+}
+
+async function resolveAttribution(
+  supabase: ReturnType<typeof createClient>,
+  metadata: Record<string, unknown>
+): Promise<{
+  utm_source: string | null; utm_medium: string | null; utm_campaign: string | null; utm_content: string | null;
+  fbclid: string | null; fbp: string | null; fbc: string | null;
+  campaign_id: string | null; adset_id: string | null; ad_id: string | null;
+}> {
+  const utm_source = (metadata.utm_source as string) || null;
+  const utm_medium = (metadata.utm_medium as string) || null;
+  const utm_campaign = (metadata.utm_campaign as string) || null;
+  const utm_content = (metadata.utm_content as string) || null;
+  let fbclid = (metadata.fbclid as string) || null;
+  let fbp = (metadata.fbp as string) || null;
+  let fbc = (metadata.fbc as string) || null;
+
+  let campaign = splitNameId(utm_campaign);
+  let adset = splitNameId(utm_medium);
+  let ad = splitNameId(utm_content);
+
+  const rtVid = (metadata.rt_vid as string) || null;
+  if ((!ad.id || !fbclid) && rtVid) {
+    const { data: visit } = await supabase
+      .from("ad_visits")
+      .select("*")
+      .eq("rt_vid", rtVid)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (visit) {
+      campaign = campaign.id ? campaign : { name: visit.campaign_name, id: visit.campaign_id };
+      adset = adset.id ? adset : { name: visit.adset_name, id: visit.adset_id };
+      ad = ad.id ? ad : { name: visit.ad_name, id: visit.ad_id };
+      fbclid = fbclid || visit.fbclid;
+      fbp = fbp || visit.fbp;
+      fbc = fbc || visit.fbc;
+    }
+  }
+
+  return {
+    utm_source, utm_medium, utm_campaign, utm_content,
+    fbclid, fbp, fbc,
+    campaign_id: campaign.id, adset_id: adset.id, ad_id: ad.id,
+  };
+}
+
 async function resolveProjectId(
   req: Request,
   productCode: string | undefined,
@@ -117,6 +175,7 @@ Deno.serve(async (req) => {
     const projectId = await resolveProjectId(req, product.code as string | undefined, supabase);
     const plan = payload.plan || {};
     const metadata = payload.metadata || {};
+    const attribution = await resolveAttribution(supabase, metadata as Record<string, unknown>);
 
     const email = (customer.email || "")?.toLowerCase()?.trim();
     
@@ -262,12 +321,39 @@ Deno.serve(async (req) => {
         // Garantir que date_approved nunca fica null em vendas aprovadas
         date_approved: payload.date_approved ||
           (saleStatus === "approved" ? (payload.date_created || new Date().toISOString()) : null),
+        utm_source: attribution.utm_source,
+        utm_medium: attribution.utm_medium,
+        utm_campaign: attribution.utm_campaign,
+        utm_content: attribution.utm_content,
+        fbclid: attribution.fbclid,
+        fbp: attribution.fbp,
+        fbc: attribution.fbc,
+        campaign_id: attribution.campaign_id,
+        adset_id: attribution.adset_id,
+        ad_id: attribution.ad_id,
       },
       { onConflict: "code" }
     );
 
     if (saleError) {
       console.error("Sale upsert error:", saleError);
+    }
+
+    if (!saleError && saleStatus === "approved") {
+      fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project: "educacional",
+          event_name: "Purchase",
+          order_id: saleCode,
+          value: saleAmount,
+          currency: "BRL",
+          email,
+          fbp: attribution.fbp,
+          fbc: attribution.fbc,
+        }),
+      }).catch((err) => console.error("meta-capi call failed:", err));
     }
 
     // Update lead_products if approved
