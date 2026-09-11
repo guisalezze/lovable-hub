@@ -11,6 +11,15 @@ window.addEventListener('unhandledrejection', (event) => {
   console.error('Promise rejeitada não tratada:', event.reason);
 });
 
+// No iOS (inclusive em modo standalone/"Adicionar à Tela de Início"), o WebKit pode
+// limpar localStorage/IndexedDB por política de ITP se a origem não pedir storage
+// persistente — isso derruba a sessão do Supabase (fica salva em localStorage) a cada
+// abertura do PWA. Pedimos persistência assim que o app inicia; best-effort, sem
+// bloquear nada se o navegador não suportar ou negar.
+if (typeof navigator !== "undefined" && navigator.storage?.persist) {
+  navigator.storage.persist().catch(() => {});
+}
+
 const rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("Elemento root não encontrado");
