@@ -4,6 +4,51 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+const ID_RE = /^\d{6,}$/;
+function splitNameId(value?: string | null): { name: string | null; id: string | null } {
+  if (!value) return { name: null, id: null };
+  const raw = decodeURIComponent(String(value).replace(/\+/g, " ")).trim();
+  if (!raw) return { name: null, id: null };
+  const cut = raw.lastIndexOf("|");
+  if (cut === -1) return ID_RE.test(raw) ? { name: null, id: raw } : { name: raw, id: null };
+  const name = raw.slice(0, cut).trim() || null;
+  const tail = raw.slice(cut + 1).trim();
+  return { name, id: ID_RE.test(tail) ? tail : null };
+}
+
+async function resolveAttribution(adminClient: any, payload: any) {
+  const findAttr = (key: string) =>
+    payload[key] || payload.note_attributes?.find((n: any) => n.name === key)?.value || null;
+
+  const utm_campaign = findAttr("utm_campaign");
+  const utm_medium = findAttr("utm_medium");
+  const utm_content = findAttr("utm_content");
+  let fbclid = findAttr("fbclid");
+  let fbp = findAttr("fbp");
+  let fbc = findAttr("fbc");
+
+  let campaign = splitNameId(utm_campaign);
+  let adset = splitNameId(utm_medium);
+  let ad = splitNameId(utm_content);
+
+  const rtVid = findAttr("rt_vid");
+  if ((!ad.id || !fbclid) && rtVid) {
+    const { data: visit } = await adminClient
+      .from("ad_visits").select("*").eq("rt_vid", rtVid)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (visit) {
+      campaign = campaign.id ? campaign : { name: visit.campaign_name, id: visit.campaign_id };
+      adset = adset.id ? adset : { name: visit.adset_name, id: visit.adset_id };
+      ad = ad.id ? ad : { name: visit.ad_name, id: visit.ad_id };
+      fbclid = fbclid || visit.fbclid;
+      fbp = fbp || visit.fbp;
+      fbc = fbc || visit.fbc;
+    }
+  }
+
+  return { fbclid, fbp, fbc, campaign_id: campaign.id, adset_id: adset.id, ad_id: ad.id };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -47,6 +92,7 @@ Deno.serve(async (req) => {
     }
 
     // Cartpanda S2S payload mapping
+    const attribution = await resolveAttribution(adminClient, payload);
     const sale = {
       project_id: nutraProject.id,
       source: "cartpanda",
@@ -64,6 +110,12 @@ Deno.serve(async (req) => {
       utm_source: payload.utm_source || payload.note_attributes?.find((n: any) => n.name === "utm_source")?.value,
       utm_medium: payload.utm_medium || payload.note_attributes?.find((n: any) => n.name === "utm_medium")?.value,
       utm_campaign: payload.utm_campaign || payload.note_attributes?.find((n: any) => n.name === "utm_campaign")?.value,
+      fbclid: attribution.fbclid,
+      fbp: attribution.fbp,
+      fbc: attribution.fbc,
+      campaign_id: attribution.campaign_id,
+      adset_id: attribution.adset_id,
+      ad_id: attribution.ad_id,
       raw_payload: payload,
     };
 
@@ -83,6 +135,23 @@ Deno.serve(async (req) => {
       }
     } else {
       await adminClient.from("nutra_sales").insert(sale);
+    }
+
+    if (sale.status === "approved") {
+      fetch(`${Deno.env.get("SUPABASE_URL")!}/functions/v1/meta-capi`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project: "nutra",
+          event_name: "Purchase",
+          order_id: sale.order_id || `cartpanda-${Date.now()}`,
+          value: sale.amount,
+          currency: sale.currency,
+          email: sale.customer_email,
+          fbp: sale.fbp,
+          fbc: sale.fbc,
+        }),
+      }).catch((err) => console.error("meta-capi call failed:", err));
     }
 
     return new Response(JSON.stringify({ success: true }), {
