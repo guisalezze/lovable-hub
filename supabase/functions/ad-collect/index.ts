@@ -20,7 +20,13 @@ function corsHeadersFor(origin: string | null) {
 const ID_RE = /^\d{6,}$/;
 function splitNameId(value?: string | null): { name: string | null; id: string | null } {
   if (!value) return { name: null, id: null };
-  const raw = decodeURIComponent(String(value).replace(/\+/g, " ")).trim();
+  let raw: string;
+  try {
+    raw = decodeURIComponent(String(value).replace(/\+/g, " ")).trim();
+  } catch {
+    // Malformed percent-encoding, treat as literal string
+    raw = String(value).replace(/\+/g, " ").trim();
+  }
   if (!raw) return { name: null, id: null };
   const cut = raw.lastIndexOf("|");
   if (cut === -1) return ID_RE.test(raw) ? { name: null, id: raw } : { name: raw, id: null };
