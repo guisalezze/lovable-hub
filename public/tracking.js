@@ -10,14 +10,18 @@
     "https://lqrlvefeznfaauwgvubl.supabase.co/functions/v1/ad-collect";
 
   function getCookie(name) {
-    var m = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
-    return m ? decodeURIComponent(m[1]) : null;
+    try {
+      var m = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
+      return m ? decodeURIComponent(m[1]) : null;
+    } catch (e) { return null; }
   }
   function setCookie(name, value, days) {
-    var d = new Date();
-    d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
-    document.cookie = name + "=" + encodeURIComponent(value) +
-      "; expires=" + d.toUTCString() + "; path=/; SameSite=Lax";
+    try {
+      var d = new Date();
+      d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+      document.cookie = name + "=" + encodeURIComponent(value) +
+        "; expires=" + d.toUTCString() + "; path=/; SameSite=Lax";
+    } catch (e) { /* never break the LP */ }
   }
   function uuidv4() {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
