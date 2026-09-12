@@ -1,4 +1,3 @@
-__CM_FS__:238130
 export type Json =
   | string
   | number
@@ -1821,10 +1820,15 @@ export type Database = {
           created_at: string
           creative_thumbnail_url: string | null
           date: string
+          follows: number | null
           id: string
           impressions: number | null
+          initiate_checkout: number | null
           spend: number | null
           status: string | null
+          video_p75_watched: number | null
+          video_plays: number | null
+          video_view: number | null
         }
         Insert: {
           ad_id: string
@@ -1835,10 +1839,15 @@ export type Database = {
           created_at?: string
           creative_thumbnail_url?: string | null
           date?: string
+          follows?: number | null
           id?: string
           impressions?: number | null
+          initiate_checkout?: number | null
           spend?: number | null
           status?: string | null
+          video_p75_watched?: number | null
+          video_plays?: number | null
+          video_view?: number | null
         }
         Update: {
           ad_id?: string
@@ -1849,12 +1858,24 @@ export type Database = {
           created_at?: string
           creative_thumbnail_url?: string | null
           date?: string
+          follows?: number | null
           id?: string
           impressions?: number | null
+          initiate_checkout?: number | null
           spend?: number | null
           status?: string | null
+          video_p75_watched?: number | null
+          video_plays?: number | null
+          video_view?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "meta_ads_adset_id_fkey"
+            columns: ["adset_id"]
+            isOneToOne: false
+            referencedRelation: "adset_performance"
+            referencedColumns: ["adset_uuid"]
+          },
           {
             foreignKeyName: "meta_ads_adset_id_fkey"
             columns: ["adset_id"]
@@ -1868,46 +1889,81 @@ export type Database = {
         Row: {
           adset_id: string
           adset_name: string | null
+          bid_amount: number | null
           campaign_id: string
           clicks: number | null
           conversions: number | null
           created_at: string
           daily_budget: number | null
           date: string
+          follows: number | null
           id: string
           impressions: number | null
+          initiate_checkout: number | null
+          lifetime_budget: number | null
           spend: number | null
           status: string | null
+          video_p75_watched: number | null
+          video_plays: number | null
+          video_view: number | null
         }
         Insert: {
           adset_id: string
           adset_name?: string | null
+          bid_amount?: number | null
           campaign_id: string
           clicks?: number | null
           conversions?: number | null
           created_at?: string
           daily_budget?: number | null
           date?: string
+          follows?: number | null
           id?: string
           impressions?: number | null
+          initiate_checkout?: number | null
+          lifetime_budget?: number | null
           spend?: number | null
           status?: string | null
+          video_p75_watched?: number | null
+          video_plays?: number | null
+          video_view?: number | null
         }
         Update: {
           adset_id?: string
           adset_name?: string | null
+          bid_amount?: number | null
           campaign_id?: string
           clicks?: number | null
           conversions?: number | null
           created_at?: string
           daily_budget?: number | null
           date?: string
+          follows?: number | null
           id?: string
           impressions?: number | null
+          initiate_checkout?: number | null
+          lifetime_budget?: number | null
           spend?: number | null
           status?: string | null
+          video_p75_watched?: number | null
+          video_plays?: number | null
+          video_view?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "meta_adsets_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "adset_performance"
+            referencedColumns: ["campaign_uuid"]
+          },
+          {
+            foreignKeyName: "meta_adsets_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_performance"
+            referencedColumns: ["campaign_uuid"]
+          },
           {
             foreignKeyName: "meta_adsets_campaign_id_fkey"
             columns: ["campaign_id"]
@@ -1920,6 +1976,7 @@ export type Database = {
       meta_campaigns: {
         Row: {
           ad_account_id: string
+          bid_amount: number | null
           campaign_id: string
           campaign_name: string | null
           clicks: number | null
@@ -1928,8 +1985,10 @@ export type Database = {
           created_at: string
           daily_budget: number | null
           date: string
+          follows: number | null
           id: string
           impressions: number | null
+          initiate_checkout: number | null
           lifetime_budget: number | null
           objective: string | null
           revenue: number | null
@@ -1937,9 +1996,13 @@ export type Database = {
           spend: number | null
           status: string | null
           updated_at: string
+          video_p75_watched: number | null
+          video_plays: number | null
+          video_view: number | null
         }
         Insert: {
           ad_account_id: string
+          bid_amount?: number | null
           campaign_id: string
           campaign_name?: string | null
           clicks?: number | null
@@ -1948,8 +2011,10 @@ export type Database = {
           created_at?: string
           daily_budget?: number | null
           date?: string
+          follows?: number | null
           id?: string
           impressions?: number | null
+          initiate_checkout?: number | null
           lifetime_budget?: number | null
           objective?: string | null
           revenue?: number | null
@@ -1957,9 +2022,13 @@ export type Database = {
           spend?: number | null
           status?: string | null
           updated_at?: string
+          video_p75_watched?: number | null
+          video_plays?: number | null
+          video_view?: number | null
         }
         Update: {
           ad_account_id?: string
+          bid_amount?: number | null
           campaign_id?: string
           campaign_name?: string | null
           clicks?: number | null
@@ -1968,8 +2037,10 @@ export type Database = {
           created_at?: string
           daily_budget?: number | null
           date?: string
+          follows?: number | null
           id?: string
           impressions?: number | null
+          initiate_checkout?: number | null
           lifetime_budget?: number | null
           objective?: string | null
           revenue?: number | null
@@ -1977,6 +2048,9 @@ export type Database = {
           spend?: number | null
           status?: string | null
           updated_at?: string
+          video_p75_watched?: number | null
+          video_plays?: number | null
+          video_view?: number | null
         }
         Relationships: [
           {
@@ -3674,6 +3748,60 @@ export type Database = {
           },
         ]
       }
+      adset_performance: {
+        Row: {
+          ad_account_id: string | null
+          adset_id: string | null
+          adset_name: string | null
+          adset_uuid: string | null
+          campaign_name: string | null
+          campaign_uuid: string | null
+          clicks: number | null
+          cpa: number | null
+          date: string | null
+          impressions: number | null
+          profit: number | null
+          revenue: number | null
+          roas: number | null
+          sales_count: number | null
+          spend: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_campaigns_ad_account_id_fkey"
+            columns: ["ad_account_id"]
+            isOneToOne: false
+            referencedRelation: "meta_ad_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_performance: {
+        Row: {
+          ad_account_id: string | null
+          campaign_id: string | null
+          campaign_name: string | null
+          campaign_uuid: string | null
+          clicks: number | null
+          cpa: number | null
+          date: string | null
+          impressions: number | null
+          profit: number | null
+          revenue: number | null
+          roas: number | null
+          sales_count: number | null
+          spend: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_campaigns_ad_account_id_fkey"
+            columns: ["ad_account_id"]
+            isOneToOne: false
+            referencedRelation: "meta_ad_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_ltv: {
         Row: {
           charges_revenue: number | null
@@ -3908,5 +4036,3 @@ export const Constants = {
     },
   },
 } as const
-__CM_FS__:2069
-__CM_FS__:2928578
