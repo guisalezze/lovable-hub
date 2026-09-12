@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { format, subDays } from "date-fns";
-import { RefreshCw, Play, Pause, Settings2, BarChart3, AlertTriangle, ArrowRight, Link2 } from "lucide-react";
+import { RefreshCw, Settings2, BarChart3, AlertTriangle, ArrowRight, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useMetaAdAccounts, useMetaAdCampaigns, useSyncMetaAds, useMetaAction, useMetaConnection, useAdPerformance } from "@/hooks/useMetaAds";
+import { useMetaAdAccounts, useMetaAdCampaigns, useSyncMetaAds, useMetaConnection, useAdPerformance } from "@/hooks/useMetaAds";
 import { MetaRulesDialog } from "@/components/nutra/MetaRulesDialog";
+import { CampaignMetricsTable } from "@/components/nutra/CampaignMetricsTable";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 
@@ -28,7 +28,6 @@ export default function MetaAdsPage() {
   const legacyConnected = !activeAccount && !accountsLoading && connection?.configured === true;
   const { data: campaigns = [], isLoading: campaignsLoading } = useMetaAdCampaigns(activeAccount?.id, since, until);
   const syncMutation = useSyncMetaAds();
-  const actionMutation = useMetaAction();
   const { data: adPerformance = [], isLoading: adPerformanceLoading } = useAdPerformance(activeAccount?.id, since, until);
 
   const totalSpend = campaigns.reduce((s, c) => s + Number(c.spend || 0), 0);
@@ -43,16 +42,6 @@ export default function MetaAdsPage() {
       onSuccess: () => toast({ title: "Sincronização concluída" }),
       onError: (e) => toast({ title: "Erro na sincronização", description: String(e), variant: "destructive" }),
     });
-  };
-
-  const handleAction = (campaignId: string, action: string) => {
-    actionMutation.mutate(
-      { action, campaign_id: campaignId },
-      {
-        onSuccess: () => toast({ title: `Ação "${action}" executada` }),
-        onError: (e) => toast({ title: "Erro", description: String(e), variant: "destructive" }),
-      }
-    );
   };
 
   return (
@@ -141,72 +130,7 @@ export default function MetaAdsPage() {
             </TabsTrigger>
           </TabsList>
           <TabsContent value="campanhas">
-            <div className="glass-card overflow-hidden">
-              <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Campanha</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Gasto</TableHead>
-                <TableHead className="text-right">Cliques</TableHead>
-                <TableHead className="text-right">Conv.</TableHead>
-                <TableHead className="text-right">CPA</TableHead>
-                <TableHead className="text-right">ROAS</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {campaignsLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
-                      <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : campaigns.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
-                    Nenhuma campanha encontrada no período
-                  </TableCell>
-                </TableRow>
-              ) : (
-                campaigns.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell className="font-medium text-sm max-w-[200px] truncate">{c.campaign_name}</TableCell>
-                    <TableCell>
-                      <Badge variant={c.status === "ACTIVE" ? "default" : "secondary"} className="text-[10px]">
-                        {c.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right text-sm">{fmtBRL(Number(c.spend || 0))}</TableCell>
-                    <TableCell className="text-right text-sm">{Number(c.clicks || 0).toLocaleString()}</TableCell>
-                    <TableCell className="text-right text-sm">{Number(c.conversions || 0)}</TableCell>
-                    <TableCell className="text-right text-sm">
-                      {Number(c.conversions || 0) > 0 ? fmtBRL(Number(c.spend || 0) / Number(c.conversions)) : "–"}
-                    </TableCell>
-                    <TableCell className="text-right text-sm">
-                      {Number(c.spend || 0) > 0 ? `${(Number(c.revenue || 0) / Number(c.spend)).toFixed(2)}x` : "–"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center gap-1 justify-end">
-                        {c.status === "ACTIVE" ? (
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleAction(c.campaign_id, "pause")}>
-                            <Pause className="h-3.5 w-3.5" />
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleAction(c.campaign_id, "resume")}>
-                            <Play className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-              </Table>
-            </div>
+            <CampaignMetricsTable accountId={activeAccount?.id} since={since} until={until} />
           </TabsContent>
           <TabsContent value="atribuicao">
             <div className="glass-card overflow-hidden">
