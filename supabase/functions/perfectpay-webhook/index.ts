@@ -348,7 +348,10 @@ Deno.serve(async (req) => {
     if (!saleError && saleStatus === "approved") {
       fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": Deno.env.get("META_CAPI_INTERNAL_SECRET") ?? "",
+        },
         body: JSON.stringify({
           project: "educacional",
           event_name: "Purchase",

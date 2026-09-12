@@ -34,6 +34,14 @@ Deno.serve(async (req) => {
     });
   }
 
+  const internalSecret = Deno.env.get("META_CAPI_INTERNAL_SECRET");
+  const providedSecret = req.headers.get("x-internal-secret");
+  if (!internalSecret || providedSecret !== internalSecret) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   let body: CapiPayload;
   try {
     body = await req.json();
