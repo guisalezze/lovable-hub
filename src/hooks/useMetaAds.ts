@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
+import type { MetricRow } from "@/lib/metaMetrics";
 
 /** Verifica se o projeto tem uma conta Meta Ads configurada (via meta_ad_accounts OU via app_settings legado) */
 export function useMetaConnection() {
@@ -152,5 +153,147 @@ export function useAdPerformance(accountId?: string, since?: string, until?: str
       return data || [];
     },
     enabled: !!accountId,
+  });
+}
+
+export function useCampaignMetrics(accountId?: string, since?: string, until?: string) {
+  return useQuery({
+    queryKey: ["meta-campaign-metrics", accountId, since, until],
+    queryFn: async (): Promise<MetricRow[]> => {
+      if (!accountId) return [];
+      let rawQuery = supabase.from("meta_campaigns").select("*").eq("ad_account_id", accountId);
+      if (since) rawQuery = rawQuery.gte("date", since);
+      if (until) rawQuery = rawQuery.lte("date", until);
+      const { data: raw, error: rawErr } = await rawQuery;
+      if (rawErr) throw rawErr;
+
+      let perfQuery = supabase.from("campaign_performance").select("*").eq("ad_account_id", accountId);
+      if (since) perfQuery = perfQuery.gte("date", since);
+      if (until) perfQuery = perfQuery.lte("date", until);
+      const { data: perf, error: perfErr } = await perfQuery;
+      if (perfErr) throw perfErr;
+
+      const perfMap = new Map((perf || []).map((p: any) => [`${p.campaign_uuid}-${p.date}`, p]));
+
+      return (raw || []).map((c: any) => {
+        const p: any = perfMap.get(`${c.id}-${c.date}`);
+        return {
+          id: c.id, graphId: c.campaign_id, name: c.campaign_name, status: c.status, date: c.date,
+          spend: Number(c.spend || 0), impressions: Number(c.impressions || 0), clicks: Number(c.clicks || 0),
+          initiate_checkout: Number(c.initiate_checkout || 0), video_view: Number(c.video_view || 0),
+          video_plays: Number(c.video_plays || 0), video_p75_watched: Number(c.video_p75_watched || 0),
+          follows: Number(c.follows || 0), bid_amount: c.bid_amount != null ? Number(c.bid_amount) : null,
+          daily_budget: c.daily_budget != null ? Number(c.daily_budget) : null,
+          lifetime_budget: c.lifetime_budget != null ? Number(c.lifetime_budget) : null,
+          conversions: Number(p?.sales_count || 0), revenue: p ? Number(p.revenue || 0) : 0,
+          cpa: p?.cpa != null ? Number(p.cpa) : null, roas: p?.roas != null ? Number(p.roas) : null,
+          profit: p?.profit != null ? Number(p.profit) : (p ? 0 - Number(c.spend || 0) : null),
+        };
+      });
+    },
+    enabled: !!accountId,
+  });
+}
+
+export function useAdsetMetrics(accountId?: string, since?: string, until?: string) {
+  return useQuery({
+    queryKey: ["meta-adset-metrics", accountId, since, until],
+    queryFn: async (): Promise<MetricRow[]> => {
+      if (!accountId) return [];
+      let rawQuery = supabase
+        .from("meta_adsets")
+        .select("*, meta_campaigns!inner(ad_account_id, campaign_name)")
+        .eq("meta_campaigns.ad_account_id", accountId);
+      if (since) rawQuery = rawQuery.gte("date", since);
+      if (until) rawQuery = rawQuery.lte("date", until);
+      const { data: raw, error: rawErr } = await rawQuery;
+      if (rawErr) throw rawErr;
+
+      let perfQuery = supabase.from("adset_performance").select("*").eq("ad_account_id", accountId);
+      if (since) perfQuery = perfQuery.gte("date", since);
+      if (until) perfQuery = perfQuery.lte("date", until);
+      const { data: perf, error: perfErr } = await perfQuery;
+      if (perfErr) throw perfErr;
+
+      const perfMap = new Map((perf || []).map((p: any) => [`${p.adset_uuid}-${p.date}`, p]));
+
+      return (raw || []).map((a: any) => {
+        const p: any = perfMap.get(`${a.id}-${a.date}`);
+        return {
+          id: a.id, graphId: a.adset_id, name: a.adset_name, status: a.status, date: a.date,
+          campaignName: a.meta_campaigns?.campaign_name ?? null,
+          spend: Number(a.spend || 0), impressions: Number(a.impressions || 0), clicks: Number(a.clicks || 0),
+          initiate_checkout: Number(a.initiate_checkout || 0), video_view: Number(a.video_view || 0),
+          video_plays: Number(a.video_plays || 0), video_p75_watched: Number(a.video_p75_watched || 0),
+          follows: Number(a.follows || 0), bid_amount: a.bid_amount != null ? Number(a.bid_amount) : null,
+          daily_budget: a.daily_budget != null ? Number(a.daily_budget) : null,
+          lifetime_budget: a.lifetime_budget != null ? Number(a.lifetime_budget) : null,
+          conversions: Number(p?.sales_count || 0), revenue: p ? Number(p.revenue || 0) : 0,
+          cpa: p?.cpa != null ? Number(p.cpa) : null, roas: p?.roas != null ? Number(p.roas) : null,
+          profit: p?.profit != null ? Number(p.profit) : (p ? 0 - Number(a.spend || 0) : null),
+        };
+      });
+    },
+    enabled: !!accountId,
+  });
+}
+
+export function useAdMetrics(accountId?: string, since?: string, until?: string) {
+  return useQuery({
+    queryKey: ["meta-ad-metrics", accountId, since, until],
+    queryFn: async (): Promise<MetricRow[]> => {
+      if (!accountId) return [];
+      let rawQuery = supabase
+        .from("meta_ads")
+        .select("*, meta_adsets!inner(adset_name, meta_campaigns!inner(ad_account_id, campaign_name))")
+        .eq("meta_adsets.meta_campaigns.ad_account_id", accountId);
+      if (since) rawQuery = rawQuery.gte("date", since);
+      if (until) rawQuery = rawQuery.lte("date", until);
+      const { data: raw, error: rawErr } = await rawQuery;
+      if (rawErr) throw rawErr;
+
+      let perfQuery = supabase.from("ad_performance").select("*").eq("ad_account_id", accountId);
+      if (since) perfQuery = perfQuery.gte("date", since);
+      if (until) perfQuery = perfQuery.lte("date", until);
+      const { data: perf, error: perfErr } = await perfQuery;
+      if (perfErr) throw perfErr;
+
+      const perfMap = new Map((perf || []).map((p: any) => [`${p.ad_id}-${p.date}`, p]));
+
+      return (raw || []).map((a: any) => {
+        const p: any = perfMap.get(`${a.ad_id}-${a.date}`);
+        return {
+          id: a.id, graphId: a.ad_id, name: a.ad_name, status: a.status, date: a.date,
+          adsetName: a.meta_adsets?.adset_name ?? null,
+          campaignName: a.meta_adsets?.meta_campaigns?.campaign_name ?? null,
+          spend: Number(a.spend || 0), impressions: Number(a.impressions || 0), clicks: Number(a.clicks || 0),
+          initiate_checkout: Number(a.initiate_checkout || 0), video_view: Number(a.video_view || 0),
+          video_plays: Number(a.video_plays || 0), video_p75_watched: Number(a.video_p75_watched || 0),
+          follows: Number(a.follows || 0), bid_amount: null,
+          daily_budget: null, lifetime_budget: null,
+          conversions: Number(p?.sales_count || 0), revenue: p ? Number(p.revenue || 0) : 0,
+          cpa: p?.cpa != null ? Number(p.cpa) : null, roas: p?.roas != null ? Number(p.roas) : null,
+          profit: p?.profit != null ? Number(p.profit) : (p ? 0 - Number(a.spend || 0) : null),
+        };
+      });
+    },
+    enabled: !!accountId,
+  });
+}
+
+export function useUpdateBudget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { level: "campaign" | "adset"; id: string; budget_type: "daily" | "lifetime"; value: number }) => {
+      const res = await supabase.functions.invoke("meta-action", {
+        body: { action: "budget", ...params },
+      });
+      if (res.error) throw res.error;
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["meta-campaign-metrics"] });
+      qc.invalidateQueries({ queryKey: ["meta-adset-metrics"] });
+    },
   });
 }
