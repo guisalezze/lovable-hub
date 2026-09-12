@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useMetaAdAccounts, useMetaAdCampaigns, useSyncMetaAds, useMetaConnection, useAdPerformance } from "@/hooks/useMetaAds";
+import { useMetaAdAccounts, useCampaignMetrics, useSyncMetaAds, useMetaConnection, useAdPerformance } from "@/hooks/useMetaAds";
 import { MetaRulesDialog } from "@/components/nutra/MetaRulesDialog";
 import { CampaignMetricsTable } from "@/components/nutra/CampaignMetricsTable";
 import { useToast } from "@/hooks/use-toast";
@@ -26,14 +26,14 @@ export default function MetaAdsPage() {
   const activeAccount = accounts[0];
   // Conta conectada via legado (app_settings) mas ainda não migrada para meta_ad_accounts
   const legacyConnected = !activeAccount && !accountsLoading && connection?.configured === true;
-  const { data: campaigns = [], isLoading: campaignsLoading } = useMetaAdCampaigns(activeAccount?.id, since, until);
+  const { data: campaignRows = [] } = useCampaignMetrics(activeAccount?.id, since, until);
   const syncMutation = useSyncMetaAds();
   const { data: adPerformance = [], isLoading: adPerformanceLoading } = useAdPerformance(activeAccount?.id, since, until);
 
-  const totalSpend = campaigns.reduce((s, c) => s + Number(c.spend || 0), 0);
-  const totalClicks = campaigns.reduce((s, c) => s + Number(c.clicks || 0), 0);
-  const totalConversions = campaigns.reduce((s, c) => s + Number(c.conversions || 0), 0);
-  const totalRevenue = campaigns.reduce((s, c) => s + Number(c.revenue || 0), 0);
+  const totalSpend = campaignRows.reduce((s, r) => s + r.spend, 0);
+  const totalClicks = campaignRows.reduce((s, r) => s + r.clicks, 0);
+  const totalConversions = campaignRows.reduce((s, r) => s + r.conversions, 0);
+  const totalRevenue = campaignRows.reduce((s, r) => s + (r.revenue || 0), 0);
   const avgRoas = totalSpend > 0 ? (totalRevenue / totalSpend).toFixed(2) : "–";
 
   const handleSync = () => {

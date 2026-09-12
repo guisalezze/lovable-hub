@@ -291,9 +291,25 @@ export function useUpdateBudget() {
       if (res.error) throw res.error;
       return res.data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["meta-campaign-metrics"] });
-      qc.invalidateQueries({ queryKey: ["meta-adset-metrics"] });
+    onSuccess: (_data, variables) => {
+      // meta-action only writes to the Meta Graph API, not our DB — the next scheduled
+      // meta-sync run (up to 20 min later) is what actually persists this. Patch the
+      // cache directly with the value we just set instead of invalidating (which would
+      // refetch the still-stale DB row and make the edit look like it silently failed).
+      const queryKeyPrefix = variables.level === "campaign" ? "meta-campaign-metrics" : "meta-adset-metrics";
+      qc.setQueriesData<MetricRow[]>({ queryKey: [queryKeyPrefix] }, (old) => {
+        if (!old) return old;
+        return old.map((row) =>
+          row.graphId === variables.id
+            ? {
+                ...row,
+                ...(variables.budget_type === "daily"
+                  ? { daily_budget: variables.value }
+                  : { lifetime_budget: variables.value }),
+              }
+            : row
+        );
+      });
     },
   });
 }
