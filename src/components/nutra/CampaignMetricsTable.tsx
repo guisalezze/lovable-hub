@@ -163,9 +163,11 @@ export function CampaignMetricsTable({ accountId, since, until }: CampaignMetric
                   {showActions && (
                     <TableCell className="text-right">
                       <div className="flex items-center gap-1 justify-end">
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleToggleStatus(row)}>
-                          {row.status === "ACTIVE" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                        </Button>
+                        {level === "campaign" && (
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleToggleStatus(row)}>
+                            {row.status === "ACTIVE" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="ghost"
