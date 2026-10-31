@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
         if (!r.ok || j.error) {
           return json({ error: `Token recusado pelo Instagram: ${j.error?.message || `HTTP ${r.status}`}` }, 400);
         }
-        igUserId = String(j.user_id || j.id || "");
+        igUserId = String(j.user_id || "");
         username = j.username ?? null;
       } catch (e) {
         return json({ error: `Não foi possível validar o token: ${(e as Error).message}` }, 502);
@@ -199,7 +199,8 @@ Deno.serve(async (req) => {
         { onConflict: "instagram_user_id" },
       );
       if (upErr) return json({ error: `Erro ao salvar a conta: ${upErr.message}` }, 500);
-      await supabase.from("ig_config").delete().neq("instagram_user_id", igUserId);
+      const { error: delErr } = await supabase.from("ig_config").delete().neq("instagram_user_id", igUserId);
+      const cleanupError = delErr ? delErr.message : undefined;
 
       // 4) assina o webhook da conta; falha aqui é reportada, não fatal
       let subscribed = false;
@@ -217,7 +218,7 @@ Deno.serve(async (req) => {
       }
 
       // nunca devolve o token
-      return json({ ok: true, username, subscribed, ...(subscribeError ? { subscribe_error: subscribeError } : {}) });
+      return json({ ok: true, username, subscribed, ...(subscribeError ? { subscribe_error: subscribeError } : {}), ...(cleanupError ? { cleanup_error: cleanupError } : {}) });
     }
 
     return json({ error: "Ação desconhecida" }, 400);
