@@ -42,6 +42,7 @@ import Encurtador from "./pages/Encurtador";
 import WebhooksAutomacoes from "./pages/WebhooksAutomacoes";
 import PerfectPay from "./pages/PerfectPay";
 import InstagramAutomacoes from "./pages/InstagramAutomacoes";
+import InstagramFluxoEditor from "./pages/InstagramFluxoEditor";
 import Privacidade from "./pages/Privacidade";
 import ExclusaoDados from "./pages/ExclusaoDados";
 import DesignPreview from "./pages/DesignPreview";
@@ -233,6 +234,7 @@ const App = () => (
             <Route path="/webhooks-automacoes" element={<WebhooksAutomacoes />} />
             <Route path="/perfectpay" element={<PerfectPay />} />
             <Route path="/instagram-automacoes" element={<InstagramAutomacoes />} />
+            <Route path="/instagram-automacoes/:id" element={<InstagramFluxoEditor />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

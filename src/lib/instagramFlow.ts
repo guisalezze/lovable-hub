@@ -211,3 +211,47 @@ export function validateRule(draft: RuleDraft): { rule: ValidatedRule; errors: s
     errors,
   };
 }
+
+// ---------- avisos ao vivo no construtor (spec §10.2) ----------
+
+export interface WarnRule {
+  trigger: string;
+  public_replies?: string[] | null;
+}
+
+const HTTP_RE = /^https?:\/\/\S+/i;
+
+/** Avisos por bloco (id -> mensagens). Bloco sem aviso não aparece no resultado. */
+export function nodeWarnings(flow: Flow, rule: WarnRule): Record<string, string[]> {
+  const nodes = flow.nodes;
+  const out: Record<string, string[]> = {};
+  const add = (id: string, msg: string) => (out[id] ||= []).push(msg);
+  const reach = reachable(nodes);
+  const hasReplies = (rule.public_replies ?? []).some((r) => r.trim());
+
+  for (const n of Object.values(nodes)) {
+    if (n.type === "start") {
+      if (!n.next && !hasReplies) add(n.id, "Ligue o gatilho a um bloco.");
+      continue;
+    }
+    if (!reach.has(n.id)) add(n.id, "Bloco solto: não está ligado ao fluxo.");
+    if (n.type === "message") {
+      if (!n.text?.trim() && !n.image?.trim()) add(n.id, "Mensagem sem texto.");
+      if ((n.buttons || []).some((b) => b.type === "url" && !HTTP_RE.test((b.url || "").trim()))) {
+        add(n.id, "Botão de link sem endereço (http:// ou https://).");
+      }
+    }
+    if (n.type === "delay") {
+      const mult = n.unit === "d" ? 24 : n.unit === "min" ? 1 / 60 : 1;
+      if ((n.amount || 0) * mult > 23) {
+        add(n.id, "Mais de 23h: a Meta só deixa mandar direct até 24h depois da última mensagem da pessoa.");
+      }
+      if (rule.trigger === "comment" && nodes.start?.next === n.id) {
+        add(n.id, "Depois de um comentário, a 1ª mensagem precisa vir antes da espera.");
+      }
+    }
+    if ((n.type === "tag" || n.type === "condition") && !n.tag?.trim()) add(n.id, "Escolha a tag.");
+    if (n.type === "webhook" && !HTTP_RE.test((n.url || "").trim())) add(n.id, "Informe a URL do webhook.");
+  }
+  return out;
+}
