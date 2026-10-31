@@ -68,6 +68,16 @@ const payloadOf = (meta: RuleMeta, flow: Flow) =>
     flow,
   });
 
+/** Quando uma mensagem passa de saída única (next) para saídas de botão, move o next antigo para o 1º botão livre. */
+function fixOuts(before: FlowNode, after: FlowNode) {
+  const was = outs(before).map(([k]) => k);
+  const now = outs(after).map(([k]) => k);
+  if (after.type !== "message" || was.join() !== "next" || now.join() === "next") return;
+  const first = after.buttons?.[+now[0][1]];
+  if (first && !first.next && before.next) first.next = before.next;
+  after.next = null;
+}
+
 /** Aplica um flow novo sobre os nós atuais, preservando medidas/seleção dos que continuam. */
 function rebuild(ns: IgRFNode[], flow: Flow, selectId?: string): IgRFNode[] {
   const old = new Map(ns.map((r) => [r.id, r]));
@@ -140,6 +150,7 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
         const nodesCopy = { ...f.nodes };
         const c = structuredClone(nodesCopy[id]);
         fn(c);
+        fixOuts(nodesCopy[id], c);
         nodesCopy[id] = c;
         return { nodes: nodesCopy };
       }),
@@ -245,7 +256,8 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
 
   // ----- salvar -----
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (vars: { meta: RuleMeta; flow: Flow }) => {
+      const { meta, flow } = vars;
       const { rule: v, errors } = validateRule({ ...meta, flow });
       if (errors.length) throw new Error(errors.join("\n"));
       const { error } = await supabase
@@ -266,10 +278,10 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
       if (error) throw error;
       return v;
     },
-    onSuccess: (v) => {
+    onSuccess: (v, vars) => {
       const m: RuleMeta = {
         name: v.name,
-        active: meta.active,
+        active: vars.meta.active,
         trigger: v.trigger,
         keywords: v.keywords,
         match_type: v.match_type,
@@ -277,8 +289,8 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
         media_label: v.media_label,
         public_replies: v.public_replies,
       };
-      setMeta(m);
-      setSavedSnap(payloadOf(m, flow));
+      setMeta((cur) => (JSON.stringify(cur) === JSON.stringify(vars.meta) ? m : cur));
+      setSavedSnap(payloadOf(m, vars.flow));
       qc.invalidateQueries({ queryKey: ["ig_automations"] });
       qc.invalidateQueries({ queryKey: ["ig_automation", rule.id] });
       toast.success("Fluxo salvo");
@@ -286,8 +298,9 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const saveRef = useRef(save.mutate);
-  saveRef.current = () => save.mutate();
+  const doSave = () => save.mutate({ meta, flow });
+  const saveRef = useRef(doSave);
+  saveRef.current = doSave;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -358,7 +371,7 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
             <Switch checked={meta.active} onCheckedChange={(v) => setMeta((m) => ({ ...m, active: v }))} />
             <span className="hidden sm:inline">Ativo</span>
           </label>
-          <Button type="button" size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
+          <Button type="button" size="sm" onClick={doSave} disabled={save.isPending}>
             {save.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
             Salvar
           </Button>

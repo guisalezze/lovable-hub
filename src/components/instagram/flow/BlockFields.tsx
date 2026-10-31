@@ -162,7 +162,7 @@ export function BlockFields({ n, patch, ruleName }: { n: FlowNode; patch: Patch;
             type="number"
             min={1}
             value={n.amount ?? 1}
-            onChange={(e) => patch((x) => void (x.amount = Math.max(0, Number(e.target.value) || 0)))}
+            onChange={(e) => patch((x) => void (x.amount = Math.max(1, Number(e.target.value) || 0)))}
           />
           <Select value={n.unit ?? "h"} onValueChange={(v) => patch((x) => void (x.unit = v as "min" | "h" | "d"))}>
             <SelectTrigger>
