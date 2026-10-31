@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
 import { useMetaSpend } from "@/hooks/useMetaSpend";
-import { DollarSign, TrendingUp, Target, Wallet, Plus, Download, ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw, Link2, AlertCircle, Trash2 } from "lucide-react";
+import { DollarSign, TrendingUp, Target, Wallet, Plus, Download, ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw, Link2, AlertCircle, Trash2, Package } from "lucide-react";
 import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import { format, subDays, parseISO, differenceInDays, addMonths } from "date-fns
 import { ptBR } from "date-fns/locale";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { ProductGoalsSection } from "@/components/financeiro/ProductGoalsSection";
+import { ProductCostsSection, useProductCosts, costPerSaleOf, fmtUSD } from "@/components/financeiro/ProductCostsSection";
 
 function usePeriodSales(since: string, until: string, projectId: string | undefined) {
   return useQuery({
@@ -74,7 +75,7 @@ function useNutraSalesRevenue(projectId: string | undefined, since: string, unti
   return useQuery({
     queryKey: ["nutra-sales-revenue", projectId, since, until],
     queryFn: async () => {
-      if (!projectId) return { totalRevenue: 0, daily: [] as { date: string; revenue: number }[] };
+      if (!projectId) return { totalRevenue: 0, totalCount: 0, daily: [] as { date: string; revenue: number; count: number }[] };
       const { data, error } = await supabase
         .from("nutra_sales")
         .select("created_at, amount, status")
@@ -84,13 +85,15 @@ function useNutraSalesRevenue(projectId: string | undefined, since: string, unti
         .lte("created_at", `${until}T23:59:59`);
       if (error) throw error;
       const totalRevenue = (data || []).reduce((a, s) => a + Number(s.amount || 0), 0);
-      const map: Record<string, number> = {};
+      const map: Record<string, { revenue: number; count: number }> = {};
       (data || []).forEach((s: any) => {
         const d = s.created_at.slice(0, 10);
-        map[d] = (map[d] || 0) + Number(s.amount || 0);
+        if (!map[d]) map[d] = { revenue: 0, count: 0 };
+        map[d].revenue += Number(s.amount || 0);
+        map[d].count += 1;
       });
-      const daily = Object.entries(map).map(([date, revenue]) => ({ date, revenue })).sort((a, b) => a.date.localeCompare(b.date));
-      return { totalRevenue, daily };
+      const daily = Object.entries(map).map(([date, v]) => ({ date, ...v })).sort((a, b) => a.date.localeCompare(b.date));
+      return { totalRevenue, totalCount: (data || []).length, daily };
     },
     enabled: !!projectId,
     staleTime: 60_000,
@@ -146,7 +149,7 @@ const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency"
 
 function exportCSV(chartData: any[], since: string, until: string) {
   const rows = [
-    ["Data", "Vendas", "Mentorias", "Receita Total", "Investimento (Manual)", "Investimento (Ads)", "Lucro"],
+    ["Data", "Vendas", "Mentorias", "Receita Total", "Investimento (Manual)", "Investimento (Ads)", "Custo de Produto", "Lucro"],
     ...chartData.map(d => [
       d.date,
       (d.vendas || 0).toFixed(2),
@@ -154,6 +157,7 @@ function exportCSV(chartData: any[], since: string, until: string) {
       ((d.vendas || 0) + (d.mentorias || 0)).toFixed(2),
       d.investment.toFixed(2),
       d.adSpend.toFixed(2),
+      d.productCost.toFixed(2),
       d.profit.toFixed(2),
     ]),
   ];
@@ -228,26 +232,33 @@ export default function FinanceiroPage() {
   const prevMentoriasRevenue = isEducacional ? (prevMentoriasData?.totalRevenue ?? 0) : 0;
   const prevRevenue = prevSalesRevenue + prevMentoriasRevenue;
 
+  // Product cost (só Nutra): custo por venda × vendas aprovadas
+  const { data: productCosts = [] } = useProductCosts(isNutra ? currentProject?.id : undefined);
+  const costPerSale = costPerSaleOf(productCosts);
+  const productCost = isNutra ? (nutraSalesData?.totalCount ?? 0) * costPerSale : 0;
+  const prevProductCost = isNutra ? (prevNutraSalesData?.totalCount ?? 0) * costPerSale : 0;
+
   const manualInvestment = invData?.total ?? 0;
   const totalInvestment = manualInvestment + adSpendTotal;
-  const profit = totalRevenue - totalInvestment;
+  const profit = totalRevenue - totalInvestment - productCost;
   const roas = totalInvestment > 0 ? (totalRevenue / totalInvestment).toFixed(1) : "—";
 
   const prevManualInvestment = prevInvData?.total ?? 0;
   const prevTotalInvestment = prevManualInvestment + prevAdSpendTotal;
-  const prevProfit = prevRevenue - prevTotalInvestment;
+  const prevProfit = prevRevenue - prevTotalInvestment - prevProductCost;
 
   // Chart data
   const chartData = useMemo(() => {
-    const map: Record<string, { date: string; vendas: number; mentorias: number; investment: number; adSpend: number; profit: number }> = {};
+    const map: Record<string, { date: string; vendas: number; mentorias: number; investment: number; adSpend: number; productCost: number; profit: number }> = {};
 
     const ensure = (d: string) => {
-      if (!map[d]) map[d] = { date: d, vendas: 0, mentorias: 0, investment: 0, adSpend: 0, profit: 0 };
+      if (!map[d]) map[d] = { date: d, vendas: 0, mentorias: 0, investment: 0, adSpend: 0, productCost: 0, profit: 0 };
     };
 
     (revenueData?.daily || []).forEach((d: any) => {
       ensure(d.date);
       map[d.date].vendas += d.revenue;
+      if (isNutra) map[d.date].productCost += (d.count || 0) * costPerSale;
     });
     // Mentorias por dia (só Educacional)
     (mentoriasData?.daily || []).forEach((d: any) => {
@@ -264,9 +275,9 @@ export default function FinanceiroPage() {
       map[d.date].adSpend += d.adSpend;
     });
     return Object.values(map)
-      .map(d => ({ ...d, profit: d.vendas + d.mentorias - d.investment - d.adSpend }))
+      .map(d => ({ ...d, profit: d.vendas + d.mentorias - d.investment - d.adSpend - d.productCost }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [revenueData, mentoriasData, invData, metaDailySpend]);
+  }, [revenueData, mentoriasData, invData, metaDailySpend, isNutra, costPerSale]);
 
   async function addInvestment() {
     const amount = parseFloat(investAmount);
@@ -364,7 +375,7 @@ export default function FinanceiroPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isNutra ? "lg:grid-cols-6" : "lg:grid-cols-5"} gap-4`}>
         <div className="glass-card p-4 space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground"><DollarSign className="h-4 w-4" /><span className="text-xs font-medium">Receita</span></div>
           <p className="text-xl font-bold text-foreground">{fmtBRL(totalRevenue)}</p>
@@ -416,6 +427,13 @@ export default function FinanceiroPage() {
           <p className="text-xl font-bold text-foreground">{fmtBRL(manualInvestment)}</p>
           <DeltaBadge current={manualInvestment} previous={prevManualInvestment} />
         </div>
+        {isNutra && (
+          <div className="glass-card p-4 space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground"><Package className="h-4 w-4" /><span className="text-xs font-medium">Custo de Produto</span></div>
+            <p className="text-xl font-bold text-foreground">{fmtBRL(productCost)}</p>
+            <p className="text-[10px] text-muted-foreground">{nutraSalesData?.totalCount ?? 0} vendas × {fmtUSD(costPerSale)}</p>
+          </div>
+        )}
         <div className="glass-card p-4 space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground"><TrendingUp className="h-4 w-4" /><span className="text-xs font-medium">Lucro</span></div>
           <p className={`text-xl font-bold ${profit >= 0 ? "text-emerald-500" : "text-destructive"}`}>{fmtBRL(profit)}</p>
@@ -442,6 +460,7 @@ export default function FinanceiroPage() {
               {isEducacional && <Bar dataKey="mentorias" name="Mentorias" fill="#a855f7" radius={[4, 4, 0, 0]} />}
               <Bar dataKey="investment" name="Gastos Manuais" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               <Bar dataKey="adSpend" name="Ads Spend" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              {isNutra && <Bar dataKey="productCost" name="Custo de Produto" fill="#ef4444" radius={[4, 4, 0, 0]} />}
               <Line dataKey="profit" name="Lucro" stroke="#10b981" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -450,6 +469,9 @@ export default function FinanceiroPage() {
 
       {/* Product Goals - only for educacional */}
       {isEducacional && <ProductGoalsSection since={since} until={until} />}
+
+      {/* Product unit costs - only for nutra */}
+      {isNutra && currentProject && <ProductCostsSection projectId={currentProject.id} costs={productCosts} />}
 
       {/* Manual Investment History */}
       {allInvestments.length > 0 && (
