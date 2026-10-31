@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Painel do Instagram: só o que precisa do token da Meta.
-// Ações (POST JSON { action }): status | posts | webhook_test
+// Ações (POST JSON { action }): status | posts | webhook_test | set_token
 // Exige JWT de usuário do Supabase (Authorization: Bearer ...).
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -140,6 +140,84 @@ Deno.serve(async (req) => {
       } finally {
         clearTimeout(timer);
       }
+    }
+
+    if (action === "set_token") {
+      // Token de usuário do Instagram (IGAA...) gerado no painel do app da Meta.
+      const token = String(body.token ?? "").trim();
+      if (!token) return json({ error: "Cole o token do Instagram." }, 400);
+      if (token.length < 20 || token.length > 1000 || /\s/.test(token)) {
+        return json({ error: "Token inválido: confira se copiou o token inteiro, sem espaços." }, 400);
+      }
+
+      // 1) valida o token e descobre a conta profissional (user_id)
+      let igUserId = "";
+      let username: string | null = null;
+      try {
+        const r = await fetch(`${GRAPH}/me?fields=user_id,username`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const j = await r.json();
+        if (!r.ok || j.error) {
+          return json({ error: `Token recusado pelo Instagram: ${j.error?.message || `HTTP ${r.status}`}` }, 400);
+        }
+        igUserId = String(j.user_id || j.id || "");
+        username = j.username ?? null;
+      } catch (e) {
+        return json({ error: `Não foi possível validar o token: ${(e as Error).message}` }, 502);
+      }
+      if (!igUserId) return json({ error: "O Instagram não retornou o ID da conta para este token." }, 400);
+
+      // 2) tenta renovar para um token novo de 60 dias
+      let finalToken = token;
+      // Estimativa: se a renovação falhar (token com menos de 24 h não pode ser renovado),
+      // assume 60 dias. O job diário instagram-token-refresh corrige o valor real depois.
+      let expiresInSec = 60 * 24 * 60 * 60;
+      try {
+        const r = await fetch(
+          `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(token)}`,
+        );
+        const j = await r.json();
+        if (r.ok && j.access_token) {
+          finalToken = String(j.access_token);
+          if (typeof j.expires_in === "number" && j.expires_in > 0) expiresInSec = j.expires_in;
+        }
+      } catch {
+        // mantém o token colado
+      }
+      const expiresAt = new Date(Date.now() + expiresInSec * 1000).toISOString();
+
+      // 3) salva a conta (única) e remove qualquer outra
+      const { error: upErr } = await supabase.from("ig_config").upsert(
+        {
+          instagram_user_id: igUserId,
+          username,
+          access_token: finalToken,
+          token_expires_at: expiresAt,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "instagram_user_id" },
+      );
+      if (upErr) return json({ error: `Erro ao salvar a conta: ${upErr.message}` }, 500);
+      await supabase.from("ig_config").delete().neq("instagram_user_id", igUserId);
+
+      // 4) assina o webhook da conta; falha aqui é reportada, não fatal
+      let subscribed = false;
+      let subscribeError: string | undefined;
+      try {
+        const r = await fetch(
+          `${GRAPH}/${igUserId}/subscribed_apps?subscribed_fields=messages,comments,messaging_postbacks`,
+          { method: "POST", headers: { Authorization: `Bearer ${finalToken}` } },
+        );
+        const j = await r.json().catch(() => ({}));
+        if (r.ok && !j.error && j.success !== false) subscribed = true;
+        else subscribeError = j.error?.message || `HTTP ${r.status}`;
+      } catch (e) {
+        subscribeError = (e as Error).message;
+      }
+
+      // nunca devolve o token
+      return json({ ok: true, username, subscribed, ...(subscribeError ? { subscribe_error: subscribeError } : {}) });
     }
 
     return json({ error: "Ação desconhecida" }, 400);

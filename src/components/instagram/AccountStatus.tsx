@@ -1,11 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Instagram, RefreshCw } from "lucide-react";
-
-const SUPABASE_URL = "https://lqrlvefeznfaauwgvubl.supabase.co";
-export const OAUTH_URL = `${SUPABASE_URL}/functions/v1/instagram-oauth`;
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Instagram, KeyRound } from "lucide-react";
 
 interface IgStatus {
   configured: boolean; // existe conta salva
@@ -28,6 +29,11 @@ const fmtDate = (iso?: string | null) =>
     : null;
 
 export default function AccountStatus() {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [token, setToken] = useState("");
+  const [saving, setSaving] = useState(false);
+
   // O token nunca vai para o navegador: tudo vem da edge function instagram-admin.
   const { data: status, isLoading, error: fnError } = useQuery({
     queryKey: ["ig_status"],
@@ -43,11 +49,46 @@ export default function AccountStatus() {
   const expires = fmtDate(status?.token_expires_at);
   const username = status?.username;
 
-  const reconnect = (
-    <Button size="sm" variant="outline" asChild>
-      <a href={OAUTH_URL} title="Reconectar">
-        <RefreshCw className="h-4 w-4 mr-1" /> Reconectar
-      </a>
+  const saveToken = async () => {
+    const t = token.trim();
+    if (!t) return;
+    setSaving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("instagram-admin", {
+        body: { action: "set_token", token: t },
+      });
+      if (error) {
+        // erros 4xx/5xx da função trazem a mensagem no corpo da resposta
+        let msg = error.message;
+        try {
+          const j = await (error as { context?: Response }).context?.json();
+          if (j?.error) msg = j.error;
+        } catch {
+          /* mantém a mensagem padrão */
+        }
+        throw new Error(msg);
+      }
+      if (data?.error) throw new Error(data.error);
+      if (data?.subscribed === false) {
+        toast.warning(
+          `Token salvo${data.username ? ` (@${data.username})` : ""}, mas a assinatura do webhook falhou${data.subscribe_error ? `: ${data.subscribe_error}` : ""}.`,
+        );
+      } else {
+        toast.success(`Instagram conectado${data?.username ? `: @${data.username}` : ""}.`);
+      }
+      setToken("");
+      setOpen(false);
+      qc.invalidateQueries({ queryKey: ["ig_status"] });
+    } catch (e) {
+      toast.error(`Não foi possível salvar o token: ${(e as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const tokenButton = (variant: "outline" | "default", label: string) => (
+    <Button size="sm" variant={variant} onClick={() => setOpen(true)}>
+      <KeyRound className="h-4 w-4 mr-1" /> {label}
     </Button>
   );
 
@@ -75,7 +116,7 @@ export default function AccountStatus() {
           <p className="text-sm text-muted-foreground">
             Não foi possível consultar o status da conta{fnError ? `: ${(fnError as Error).message}` : ""}.
           </p>
-          <div className="ml-auto">{reconnect}</div>
+          <div className="ml-auto">{tokenButton("outline", "Colar token")}</div>
         </div>
       ) : status.configured ? (
         <div className="flex items-center gap-3 flex-wrap">
@@ -106,7 +147,7 @@ export default function AccountStatus() {
                 Verificação falhou
               </Badge>
             )}
-            {reconnect}
+            {tokenButton("outline", "Trocar token")}
           </div>
         </div>
       ) : (
@@ -115,16 +156,34 @@ export default function AccountStatus() {
           <div>
             <p className="font-semibold">Nenhuma conta conectada</p>
             <p className="text-sm text-muted-foreground">
-              Conecte seu Instagram profissional para começar a automatizar
+              Cole o token do seu Instagram profissional para começar a automatizar
             </p>
           </div>
-          <Button asChild className="mt-1">
-            <a href={OAUTH_URL}>
-              <Instagram className="h-4 w-4 mr-2" /> Conectar Instagram
-            </a>
-          </Button>
+          <div className="mt-1">{tokenButton("default", "Colar token")}</div>
         </div>
       )}
+      <Dialog open={open} onOpenChange={(o) => { if (!saving) { setOpen(o); if (!o) setToken(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{status?.configured ? "Trocar token" : "Colar token"} do Instagram</DialogTitle>
+            <DialogDescription>
+              Gere o token no painel do app da Meta → Configuração da API com login unificado → Gerar token, e cole aqui.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            type="password"
+            autoComplete="off"
+            placeholder="Token do Instagram"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") saveToken(); }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button>
+            <Button onClick={saveToken} disabled={saving || !token.trim()}>{saving ? "Salvando..." : "Salvar"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

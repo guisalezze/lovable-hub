@@ -127,6 +127,8 @@ function checkWebhookUrl(raw: string): string | null {
 async function fireWebhook(n: FlowNode, rule: Rule, ctx: Ctx): Promise<void> {
   const url = String(n.url || "").trim();
   if (!/^https?:\/\//i.test(url)) throw new Error("URL do webhook inválida");
+  const bad = checkWebhookUrl(url);
+  if (bad) throw new Error(bad);
   const payload = {
     evento: "instagram.fluxo",
     regra: { id: rule.id, nome: rule.name },
