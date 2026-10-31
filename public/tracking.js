@@ -89,6 +89,8 @@
     try {
       var url = new URL(a.href, window.location.href);
       url.searchParams.set("rt_vid", rtVid);
+      // CartPanda's postback URL only forwards {sck}, so carry rt_vid there too
+      if (!url.searchParams.get("sck")) url.searchParams.set("sck", rtVid);
       Object.keys(utms).forEach(function (k) {
         if (utms[k]) url.searchParams.set(k, utms[k]);
       });

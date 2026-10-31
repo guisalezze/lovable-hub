@@ -37,7 +37,9 @@ async function resolveAttribution(adminClient: any, payload: any) {
   let adset = splitNameId(utm_medium);
   let ad = splitNameId(utm_content);
 
-  const rtVid = findAttr("rt_vid");
+  // tracking.js stamps rt_vid into the checkout URL as both rt_vid and sck;
+  // the postback URL only forwards sck
+  const rtVid = findAttr("rt_vid") || findAttr("sck");
   if ((!ad.id || !fbclid) && rtVid) {
     const { data: visit } = await adminClient
       .from("ad_visits").select("*").eq("rt_vid", rtVid)
@@ -55,6 +57,34 @@ async function resolveAttribution(adminClient: any, payload: any) {
   return { fbclid, fbp, fbc, campaign_id: campaign.id, adset_id: adset.id, ad_id: ad.id };
 }
 
+// CartPanda's postback URL fills {macros} into the query string (GET), while the
+// older webhook mode POSTs JSON. Merge query string + body so both work.
+export async function readPayload(req: Request): Promise<Record<string, any>> {
+  const url = new URL(req.url);
+  const query: Record<string, any> = {};
+  url.searchParams.forEach((v, k) => {
+    // An unfilled macro arrives literally as "{name}"; treat it as absent
+    if (v !== "" && !/^\{[a-z_]+\}$/.test(v)) query[k] = v;
+  });
+  delete query.token;
+
+  let body: Record<string, any> = {};
+  if (req.method === "POST") {
+    const type = req.headers.get("content-type") || "";
+    const text = await req.text();
+    if (text) {
+      if (type.includes("application/x-www-form-urlencoded")) {
+        new URLSearchParams(text).forEach((v, k) => { body[k] = v; });
+      } else {
+        try { body = JSON.parse(text); } catch { /* not JSON, ignore body */ }
+      }
+    }
+  }
+  return { ...query, ...body };
+}
+
+const truthy = (v: unknown) => ["1", "true", "yes"].includes(String(v ?? "").toLowerCase());
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -68,7 +98,10 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const providedToken = req.headers.get("X-Cartpanda-Token") || req.headers.get("Authorization")?.replace("Bearer ", "");
+  // Postback URLs can't set headers, so the token may also come as ?token=
+  const providedToken = req.headers.get("X-Cartpanda-Token") ||
+    req.headers.get("Authorization")?.replace("Bearer ", "") ||
+    new URL(req.url).searchParams.get("token");
   if (providedToken !== webhookSecret) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -76,8 +109,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const payload = await req.json();
-    
+    const payload = await readPayload(req);
+
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
     const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -99,18 +132,26 @@ Deno.serve(async (req) => {
 
     // Cartpanda S2S payload mapping
     const attribution = await resolveAttribution(adminClient, payload);
+    const isTest = truthy(payload.is_test);
+    let orderId = payload.order_id?.toString() || payload.id?.toString();
+    // Upsells may reuse the parent order_id; keep them as separate sales
+    if (orderId && payload.upsell_no && payload.upsell_no !== "0") {
+      orderId = `${orderId}-up${payload.upsell_no}`;
+    }
+    const fullName = [payload.first_name, payload.last_name].filter(Boolean).join(" ") || null;
     const sale = {
       project_id: nutraProject.id,
       source: "cartpanda",
-      order_id: payload.order_id || payload.id?.toString(),
-      customer_name: payload.customer?.name || payload.billing_address?.name,
+      order_id: orderId,
+      customer_name: payload.customer?.name || payload.billing_address?.name || fullName,
       customer_email: payload.customer?.email || payload.email,
-      customer_phone: payload.customer?.phone || payload.phone,
+      customer_phone: payload.customer?.phone || payload.phone || payload.phone_number,
       product_name: payload.line_items?.[0]?.title || payload.product_name,
-      product_id: payload.line_items?.[0]?.product_id?.toString(),
+      product_id: payload.line_items?.[0]?.product_id?.toString() || payload.product_id?.toString(),
       amount: Number(payload.total_price || payload.amount || 0),
       currency: payload.currency || "BRL",
-      status: mapCartpandaStatus(payload.financial_status || payload.status),
+      // Test orders are kept for debugging but never counted as approved
+      status: isTest ? "test" : mapCartpandaStatus(payload.financial_status || payload.status),
       payment_method: payload.payment_method || payload.gateway,
       tracking_code: payload.fulfillments?.[0]?.tracking_number,
       utm_source: payload.utm_source || payload.note_attributes?.find((n: any) => n.name === "utm_source")?.value,
@@ -157,6 +198,7 @@ Deno.serve(async (req) => {
           value: sale.amount,
           currency: sale.currency,
           email: sale.customer_email,
+          phone: sale.customer_phone,
           fbp: sale.fbp,
           fbc: sale.fbc,
         }),
@@ -176,6 +218,7 @@ Deno.serve(async (req) => {
 function mapCartpandaStatus(status: string): string {
   const map: Record<string, string> = {
     paid: "approved",
+    approved: "approved",
     pending: "pending",
     refunded: "refunded",
     cancelled: "canceled",
