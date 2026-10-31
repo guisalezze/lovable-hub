@@ -98,6 +98,32 @@ async function setTag(c: Contact, tag: unknown, add: boolean): Promise<void> {
   c.tags = tags;
 }
 
+// Bloqueia SSRF: só http(s) e nada de hosts locais/privados/metadata.
+function checkWebhookUrl(raw: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return "URL inválida";
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return "URL deve começar com http:// ou https://";
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  const blocked = "Endereço não permitido (host local ou privado)";
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".internal") || h.endsWith(".local")) return blocked;
+  const m = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224) return blocked;
+  } else if (h.includes(":")) {
+    // IPv6 literal: loopback, não especificado, ULA fc00::/7, link-local fe80::/10, IPv4 mapeado
+    if (h === "::1" || h === "::" || /^f[cd]/.test(h) || /^fe[89ab]/.test(h) || h.startsWith("::ffff:")) return blocked;
+  } else if (/^\d+$/.test(h) || /^0x/i.test(h)) {
+    return blocked; // IP em formato decimal/hex
+  }
+  return null;
+}
+
 async function fireWebhook(n: FlowNode, rule: Rule, ctx: Ctx): Promise<void> {
   const url = String(n.url || "").trim();
   if (!/^https?:\/\//i.test(url)) throw new Error("URL do webhook inválida");
@@ -122,6 +148,7 @@ async function fireWebhook(n: FlowNode, rule: Rule, ctx: Ctx): Promise<void> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       signal: ctrl.signal,
+      redirect: "manual",
     });
     if (!res.ok) throw new Error(`webhook respondeu ${res.status}`);
   } finally {
@@ -330,7 +357,10 @@ async function autoReply(it: Item) {
   const rules = await activeRules();
   let rule: DbRule | undefined;
   for (const k of TRIGGERS[it.kind] ?? []) {
-    rule = rules.find((r) => matches(r, it, k));
+    // regra sem bloco depois do início e sem resposta pública não faz nada: não "consome" o gatilho
+    rule = rules.find(
+      (r) => (r.flow?.nodes?.start?.next || (r.public_replies ?? []).some((x) => String(x).trim())) && matches(r, it, k),
+    );
     if (rule) break;
   }
   if (!rule) return;
@@ -445,14 +475,19 @@ async function upsertContact(it: Item) {
     });
     if (!res.ok) throw new Error(`perfil ${res.status}`);
     const p = await res.json();
-    const upd: Record<string, unknown> = { profile_fetched_at: new Date().toISOString() };
+    const upd: Record<string, unknown> = {};
     if (p.username) upd.username = p.username;
     if (p.name) upd.name = p.name;
     if (p.profile_pic) upd.profile_pic = p.profile_pic;
-    await supabase.from("ig_contacts").update(upd).eq("instagram_user_id", it.from);
+    if (Object.keys(upd).length) await supabase.from("ig_contacts").update(upd).eq("instagram_user_id", it.from);
   } catch (e) {
     console.error("profile fetch failed:", errMsg(e)); // não fatal
   }
+  // marca a tentativa mesmo se falhou: não repete a busca a cada evento durante o TTL
+  await supabase
+    .from("ig_contacts")
+    .update({ profile_fetched_at: new Date().toISOString() })
+    .eq("instagram_user_id", it.from);
 }
 
 async function processItem(it: Item) {

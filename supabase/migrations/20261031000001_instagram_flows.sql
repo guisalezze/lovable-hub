@@ -88,6 +88,13 @@ declare
   start_next text;
   nodes jsonb;
   m2_buttons jsonb;
+  new_triggers text[];
+  tg text;
+  tg2 text;
+  kws text[];
+  new_match text;
+  new_active boolean;
+  i int;
 begin
   for r in select * from public.ig_automations where flow is null loop
     has_welcome := nullif(btrim(coalesce(r.welcome_dm, '')), '') is not null;
@@ -149,14 +156,52 @@ begin
       );
     end if;
 
+    -- gatilhos v1: comment | story_reply | dm  ->  v2: comment | story | dm
+    new_triggers := '{}';
+    foreach tg in array coalesce(r.triggers, '{}') loop
+      if tg = 'story_reply' then tg2 := 'story'; else tg2 := tg; end if;
+      if tg2 in ('comment', 'dm', 'story', 'mention') and not (tg2 = any(new_triggers)) then
+        new_triggers := new_triggers || tg2;
+      end if;
+    end loop;
+    if coalesce(array_length(new_triggers, 1), 0) = 0 then
+      new_triggers := array['comment'];
+    end if;
+
+    -- palavras-chave v1: 'any' = sempre; 'exact'/outros = lista (lista vazia nunca casava)
+    --   v2: lista vazia = qualquer texto, entao 'any' vira '{}' e v1-vazio-sem-any fica inativo
+    select coalesce(array_agg(btrim(k)) filter (where btrim(k) <> ''), '{}')
+      into kws
+      from unnest(coalesce(r.keywords, '{}')) as k;
+    if r.match_type = 'any' then
+      kws := '{}';
+      new_match := 'contains';
+    else
+      new_match := case when r.match_type = 'exact' then 'exact' else 'contains' end; -- v1 tratava qualquer outro valor como contains
+    end if;
+    new_active := coalesce(r.active, false)
+                  and (r.match_type = 'any' or coalesce(array_length(kws, 1), 0) > 0);
+
     update public.ig_automations
        set flow = jsonb_build_object('nodes', nodes),
-           trigger = case
-             when r.triggers is not null and r.triggers[1] in ('comment', 'dm', 'story', 'mention')
-               then r.triggers[1]
-             else 'comment'
-           end
+           trigger = new_triggers[1],
+           keywords = kws,
+           match_type = new_match,
+           active = new_active
      where id = r.id;
+
+    -- um gatilho extra vira uma copia da regra (mesmo fluxo, novo id)
+    for i in 2 .. coalesce(array_length(new_triggers, 1), 0) loop
+      insert into public.ig_automations (
+        name, active, triggers, keywords, match_type, post_id, public_replies,
+        welcome_dm, quick_reply_label, link_text, link_button_label, link_url,
+        reminder_text, reminder_delay_minutes, flow, trigger, position, media_label
+      )
+      select r.name || ' (' || new_triggers[i] || ')', new_active, r.triggers, kws, new_match,
+             r.post_id, r.public_replies, r.welcome_dm, r.quick_reply_label, r.link_text,
+             r.link_button_label, r.link_url, r.reminder_text, r.reminder_delay_minutes,
+             jsonb_build_object('nodes', nodes), new_triggers[i], r.position, r.media_label;
+    end loop;
   end loop;
 end
 $backfill$;

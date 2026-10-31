@@ -82,6 +82,32 @@ async function setTag(c: Contact, tag: unknown, add: boolean): Promise<void> {
   c.tags = tags;
 }
 
+// Bloqueia SSRF: só http(s) e nada de hosts locais/privados/metadata.
+function checkWebhookUrl(raw: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return "URL inválida";
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return "URL deve começar com http:// ou https://";
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  const blocked = "Endereço não permitido (host local ou privado)";
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".internal") || h.endsWith(".local")) return blocked;
+  const m = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224) return blocked;
+  } else if (h.includes(":")) {
+    // IPv6 literal: loopback, não especificado, ULA fc00::/7, link-local fe80::/10, IPv4 mapeado
+    if (h === "::1" || h === "::" || /^f[cd]/.test(h) || /^fe[89ab]/.test(h) || h.startsWith("::ffff:")) return blocked;
+  } else if (/^\d+$/.test(h) || /^0x/i.test(h)) {
+    return blocked; // IP em formato decimal/hex
+  }
+  return null;
+}
+
 async function fireWebhook(n: FlowNode, rule: Rule, ctx: Ctx): Promise<void> {
   const url = String(n.url || "").trim();
   if (!/^https?:\/\//i.test(url)) throw new Error("URL do webhook inválida");
@@ -106,6 +132,7 @@ async function fireWebhook(n: FlowNode, rule: Rule, ctx: Ctx): Promise<void> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       signal: ctrl.signal,
+      redirect: "manual",
     });
     if (!res.ok) throw new Error(`webhook respondeu ${res.status}`);
   } finally {
@@ -267,6 +294,14 @@ async function drainLegacyQueue(): Promise<void> {
 
 // Retoma esperas do fluxo (ig_flow_runs) cujo horário já chegou.
 async function resumeFlowRuns(): Promise<number> {
+  const started = Date.now();
+  // Recupera execuções presas em "running" (worker morreu no meio): não retoma, só marca como falha.
+  await supabase
+    .from("ig_flow_runs")
+    .update({ status: "failed", error: "interrompido (timeout do worker)" })
+    .eq("status", "running")
+    .lt("resume_at", new Date(Date.now() - 10 * 60e3).toISOString());
+
   const { data: jobs } = await supabase
     .from("ig_flow_runs")
     .select("*")
@@ -277,6 +312,7 @@ async function resumeFlowRuns(): Promise<number> {
 
   let handled = 0;
   for (const job of jobs ?? []) {
+    if (Date.now() - started > 40_000) break; // não começa job novo perto do limite da edge; o resto fica para o próximo minuto
     // Claim atômico: se não atualizou nenhuma linha, outro processo pegou
     const { data: claimed } = await supabase
       .from("ig_flow_runs")

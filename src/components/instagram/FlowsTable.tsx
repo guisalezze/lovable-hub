@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Plus, Pencil, Pause, Play, Trash2, Zap } from "lucide-react";
-import { TRIGGER_LABEL, countBlocks, newFlow, type Flow, type IgRule } from "@/lib/instagramFlow";
+import { TRIGGER_LABEL, countBlocks, newFlow, validateRule, type Flow, type IgRule } from "@/lib/instagramFlow";
 import type { Json } from "@/integrations/supabase/types";
 
 export function useIgRules() {
@@ -65,6 +65,22 @@ export default function FlowsTable() {
 
   const toggle = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      if (active) {
+        const r = rules.find((x) => x.id === id);
+        if (r) {
+          const { errors } = validateRule({
+            name: r.name,
+            trigger: r.trigger,
+            keywords: r.keywords,
+            match_type: r.match_type,
+            post_id: r.post_id,
+            media_label: r.media_label,
+            public_replies: r.public_replies,
+            flow: r.flow,
+          });
+          if (errors.length) throw new Error(`Não dá para ativar: ${errors.join(" ")}`);
+        }
+      }
       const { error } = await supabase
         .from("ig_automations")
         .update({ active, updated_at: new Date().toISOString() })
