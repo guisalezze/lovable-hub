@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
 
     // Assina os campos de webhook para esta conta
     await fetch(
-      `https://graph.instagram.com/v25.0/${profile.user_id}/subscribed_apps?subscribed_fields=comments,messages&access_token=${longData.access_token}`,
+      `https://graph.instagram.com/v25.0/${profile.user_id}/subscribed_apps?subscribed_fields=comments,messages,messaging_postbacks&access_token=${longData.access_token}`,
       { method: "POST" }
     );
 
