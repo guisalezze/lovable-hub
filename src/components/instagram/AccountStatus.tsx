@@ -8,9 +8,11 @@ const SUPABASE_URL = "https://lqrlvefeznfaauwgvubl.supabase.co";
 export const OAUTH_URL = `${SUPABASE_URL}/functions/v1/instagram-oauth`;
 
 interface IgStatus {
-  connected: boolean;
+  configured: boolean; // existe conta salva
+  connected: boolean; // a Graph API respondeu com o token
   username?: string | null;
   followers?: number | null;
+  profile_picture_url?: string | null;
   token_expires_at?: string | null;
   error?: string | null;
 }
@@ -26,17 +28,9 @@ const fmtDate = (iso?: string | null) =>
     : null;
 
 export default function AccountStatus() {
-  const { data: config, isLoading } = useQuery({
-    queryKey: ["ig_config"],
-    queryFn: async () => {
-      const { data } = await supabase.from("ig_config").select("*").limit(1).maybeSingle();
-      return data;
-    },
-  });
-
-  const { data: status } = useQuery({
+  // O token nunca vai para o navegador: tudo vem da edge function instagram-admin.
+  const { data: status, isLoading, error: fnError } = useQuery({
     queryKey: ["ig_status"],
-    enabled: !!config,
     staleTime: 60_000,
     retry: false,
     queryFn: async (): Promise<IgStatus> => {
@@ -46,10 +40,24 @@ export default function AccountStatus() {
     },
   });
 
-  const username = status?.username ?? config?.username;
-  const expires = fmtDate(status?.token_expires_at ?? config?.token_expires_at);
-  // Se a função de status falhar, mostra o que está salvo no banco (não acusa desconexão).
-  const ok = status ? status.connected : true;
+  const expires = fmtDate(status?.token_expires_at);
+  const username = status?.username;
+
+  const reconnect = (
+    <Button size="sm" variant="outline" asChild>
+      <a href={OAUTH_URL} title="Reconectar">
+        <RefreshCw className="h-4 w-4 mr-1" /> Reconectar
+      </a>
+    </Button>
+  );
+
+  const avatar = status?.profile_picture_url ? (
+    <img src={status.profile_picture_url} alt={username ?? ""} className="h-10 w-10 rounded-full object-cover" />
+  ) : (
+    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center">
+      <Instagram className="h-5 w-5 text-white" />
+    </div>
+  );
 
   return (
     <div className="rounded-xl border border-border p-4">
@@ -61,46 +69,44 @@ export default function AccountStatus() {
             <div className="h-3 w-24 bg-muted animate-pulse rounded" />
           </div>
         </div>
-      ) : config ? (
+      ) : fnError || !status ? (
         <div className="flex items-center gap-3 flex-wrap">
-          {config.profile_picture_url ? (
-            <img src={config.profile_picture_url} alt={username ?? ""} className="h-10 w-10 rounded-full object-cover" />
-          ) : (
-            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center">
-              <Instagram className="h-5 w-5 text-white" />
-            </div>
-          )}
+          <Instagram className="h-8 w-8 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">
+            Não foi possível consultar o status da conta{fnError ? `: ${(fnError as Error).message}` : ""}.
+          </p>
+          <div className="ml-auto">{reconnect}</div>
+        </div>
+      ) : status.configured ? (
+        <div className="flex items-center gap-3 flex-wrap">
+          {avatar}
           <div className="min-w-0">
             <p className="font-semibold text-sm flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${ok ? "bg-emerald-500" : "bg-destructive"}`} />
-              @{username}
-              {typeof status?.followers === "number" && (
+              <span className={`h-2 w-2 rounded-full ${status.connected ? "bg-emerald-500" : "bg-amber-500"}`} />
+              {username ? `@${username}` : "Conta do Instagram"}
+              {typeof status.followers === "number" && (
                 <span className="text-xs font-normal text-muted-foreground">
                   {status.followers.toLocaleString("pt-BR")} seguidores
                 </span>
               )}
             </p>
             <p className="text-xs text-muted-foreground">
-              {ok
+              {status.connected
                 ? `Acesso renovado automaticamente${expires ? ` (vale até ${expires})` : ""}`
-                : `Problema no acesso${status?.error ? `: ${status.error}` : ""}. Reconecte a conta.`}
+                : `Conta configurada, mas a verificação falhou${status.error ? `: ${status.error}` : ""}`}
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            {ok ? (
+            {status.connected ? (
               <Badge variant="outline" className="text-emerald-600 border-emerald-500/40 bg-emerald-500/10">
                 Conectado
               </Badge>
             ) : (
-              <Badge variant="outline" className="text-destructive border-destructive/40 bg-destructive/10">
-                Desconectado
+              <Badge variant="outline" className="text-amber-600 border-amber-500/40 bg-amber-500/10">
+                Verificação falhou
               </Badge>
             )}
-            <Button size="sm" variant="outline" asChild>
-              <a href={OAUTH_URL} title="Reconectar">
-                <RefreshCw className="h-4 w-4 mr-1" /> Reconectar
-              </a>
-            </Button>
+            {reconnect}
           </div>
         </div>
       ) : (

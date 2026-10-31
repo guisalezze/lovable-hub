@@ -21,6 +21,32 @@ function json(body: unknown, status = 200) {
   });
 }
 
+// Bloqueia SSRF: só http(s) e nada de hosts locais/privados/metadata.
+function checkWebhookUrl(raw: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return "URL inválida";
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return "URL deve começar com http:// ou https://";
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  const blocked = "Endereço não permitido (host local ou privado)";
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".internal") || h.endsWith(".local")) return blocked;
+  const m = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224) return blocked;
+  } else if (h.includes(":")) {
+    // IPv6 literal: loopback, não especificado, ULA fc00::/7, link-local fe80::/10, IPv4 mapeado
+    if (h === "::1" || h === "::" || /^f[cd]/.test(h) || /^fe[89ab]/.test(h) || h.startsWith("::ffff:")) return blocked;
+  } else if (/^\d+$/.test(h) || /^0x/i.test(h)) {
+    return blocked; // IP em formato decimal/hex
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -44,7 +70,7 @@ Deno.serve(async (req) => {
   try {
     if (action === "status") {
       const { data: cfg } = await supabase.from("ig_config").select("*").limit(1).maybeSingle();
-      if (!cfg?.access_token) return json({ connected: false });
+      if (!cfg?.access_token) return json({ configured: false, connected: false });
       let username: string | null = cfg.username ?? null;
       let followers: number | null = null;
       let error: string | null = null;
@@ -64,6 +90,7 @@ Deno.serve(async (req) => {
       return json({
         connected: !error,
         configured: true,
+        profile_picture_url: cfg.profile_picture_url ?? null,
         username,
         followers,
         token_expires_at: cfg.token_expires_at ?? null,
@@ -85,7 +112,8 @@ Deno.serve(async (req) => {
 
     if (action === "webhook_test") {
       const url = String(body.url || "").trim();
-      if (!/^https?:\/\//i.test(url)) return json({ error: "URL inválida" }, 400);
+      const bad = checkWebhookUrl(url);
+      if (bad) return json({ error: bad }, 400);
       const payload = {
         evento: "instagram.fluxo",
         teste: true,
@@ -102,6 +130,7 @@ Deno.serve(async (req) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
+          redirect: "manual", // não segue redirecionamento para hosts internos
           signal: ctrl.signal,
         });
         return json({ ok: r.ok, status: r.status });

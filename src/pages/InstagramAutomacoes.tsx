@@ -15,7 +15,6 @@ export default function InstagramAutomacoes() {
   useEffect(() => {
     if (searchParams.get("connected") === "1") {
       toast.success("Instagram conectado com sucesso!");
-      qc.invalidateQueries({ queryKey: ["ig_config"] });
       qc.invalidateQueries({ queryKey: ["ig_status"] });
     }
     if (searchParams.get("error")) {
