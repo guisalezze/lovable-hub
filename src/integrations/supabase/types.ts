@@ -1016,17 +1016,21 @@ export type Database = {
           active: boolean | null
           created_at: string | null
           id: string
+          flow: Json | null
           keywords: string[]
           link_button_label: string | null
           link_text: string | null
           link_url: string | null
           match_type: string | null
+          media_label: string | null
           name: string
+          position: number
           post_id: string | null
           public_replies: string[] | null
           quick_reply_label: string | null
           reminder_delay_minutes: number | null
           reminder_text: string | null
+          trigger: string
           triggers: string[] | null
           updated_at: string | null
           welcome_dm: string | null
@@ -1035,17 +1039,21 @@ export type Database = {
           active?: boolean | null
           created_at?: string | null
           id?: string
+          flow?: Json | null
           keywords?: string[]
           link_button_label?: string | null
           link_text?: string | null
           link_url?: string | null
           match_type?: string | null
+          media_label?: string | null
           name: string
+          position?: number
           post_id?: string | null
           public_replies?: string[] | null
           quick_reply_label?: string | null
           reminder_delay_minutes?: number | null
           reminder_text?: string | null
+          trigger?: string
           triggers?: string[] | null
           updated_at?: string | null
           welcome_dm?: string | null
@@ -1054,17 +1062,21 @@ export type Database = {
           active?: boolean | null
           created_at?: string | null
           id?: string
+          flow?: Json | null
           keywords?: string[]
           link_button_label?: string | null
           link_text?: string | null
           link_url?: string | null
           match_type?: string | null
+          media_label?: string | null
           name?: string
+          position?: number
           post_id?: string | null
           public_replies?: string[] | null
           quick_reply_label?: string | null
           reminder_delay_minutes?: number | null
           reminder_text?: string | null
+          trigger?: string
           triggers?: string[] | null
           updated_at?: string | null
           welcome_dm?: string | null
@@ -1113,8 +1125,13 @@ export type Database = {
           first_contact_at: string | null
           id: string
           instagram_user_id: string
+          last_in_at: string | null
           last_automation_id: string | null
           last_reply_at: string | null
+          name: string | null
+          profile_fetched_at: string | null
+          profile_pic: string | null
+          tags: string[]
           updated_at: string | null
           username: string | null
         }
@@ -1123,8 +1140,13 @@ export type Database = {
           first_contact_at?: string | null
           id?: string
           instagram_user_id: string
+          last_in_at?: string | null
           last_automation_id?: string | null
           last_reply_at?: string | null
+          name?: string | null
+          profile_fetched_at?: string | null
+          profile_pic?: string | null
+          tags?: string[]
           updated_at?: string | null
           username?: string | null
         }
@@ -1133,8 +1155,13 @@ export type Database = {
           first_contact_at?: string | null
           id?: string
           instagram_user_id?: string
+          last_in_at?: string | null
           last_automation_id?: string | null
           last_reply_at?: string | null
+          name?: string | null
+          profile_fetched_at?: string | null
+          profile_pic?: string | null
+          tags?: string[]
           updated_at?: string | null
           username?: string | null
         }
@@ -1171,6 +1198,47 @@ export type Database = {
           processed?: boolean | null
         }
         Relationships: []
+      }
+      ig_flow_runs: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          ig_user_id: string
+          node_id: string
+          resume_at: string
+          rule_id: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          ig_user_id: string
+          node_id: string
+          resume_at: string
+          rule_id?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          ig_user_id?: string
+          node_id?: string
+          resume_at?: string
+          rule_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_flow_runs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "ig_automations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ig_queue: {
         Row: {
@@ -1231,6 +1299,53 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "ig_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ig_replies: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          ig_user_id: string | null
+          kind: string
+          ref: string
+          rule_id: string | null
+          status: string
+          text_in: string | null
+          username: string | null
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          ig_user_id?: string | null
+          kind: string
+          ref: string
+          rule_id?: string | null
+          status?: string
+          text_in?: string | null
+          username?: string | null
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          ig_user_id?: string | null
+          kind?: string
+          ref?: string
+          rule_id?: string | null
+          status?: string
+          text_in?: string | null
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_replies_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "ig_automations"
             referencedColumns: ["id"]
           },
         ]
