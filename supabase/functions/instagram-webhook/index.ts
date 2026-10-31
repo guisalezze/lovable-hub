@@ -463,6 +463,8 @@ async function processItem(it: Item) {
   else await autoReply(it);
 }
 
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
+
 Deno.serve(async (req) => {
   // Handshake da Meta (GET)
   if (req.method === "GET") {
@@ -494,7 +496,7 @@ Deno.serve(async (req) => {
 
   const { data: ev } = await supabase.from("ig_events").insert({ payload: body, processed: false }).select("id").single();
 
-  try {
+  const work = (async () => {
     const { data: config } = await supabase.from("ig_config").select("*").limit(1).maybeSingle();
     if (config?.access_token) {
       igAccount.id = config.instagram_user_id;
@@ -508,10 +510,11 @@ Deno.serve(async (req) => {
       }
     }
     if (ev?.id) await supabase.from("ig_events").update({ processed: true }).eq("id", ev.id);
-  } catch (e) {
-    console.error("webhook processing failed:", errMsg(e));
-  }
+  })().catch((e) => console.error("webhook processing failed:", errMsg(e)));
 
-  // Sempre 200: a Meta reenvia em caso de erro e o ref único evita duplicar
+  // Responde 200 já; o processamento segue em segundo plano (EdgeRuntime.waitUntil ou promise solta)
+  if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(work);
+
+  // A Meta reenvia em caso de erro e o ref único evita duplicar
   return new Response("OK", { status: 200 });
 });
