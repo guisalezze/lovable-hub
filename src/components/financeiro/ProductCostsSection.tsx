@@ -11,12 +11,14 @@ export interface ProductCost {
   item_code: string;
   unit_cost: number;
   qty_per_sale: number;
+  per_order: boolean;
 }
 
 export const fmtUSD = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v);
 
-export const costPerSaleOf = (costs: ProductCost[]) =>
-  costs.reduce((a, c) => a + Number(c.unit_cost) * Number(c.qty_per_sale), 0);
+// Same formula cartpanda-s2s uses to stamp product_cost on each sale
+export const costForUnits = (costs: ProductCost[], units: number) =>
+  costs.reduce((a, c) => a + Number(c.unit_cost) * Number(c.qty_per_sale) * (c.per_order ? 1 : units), 0);
 
 export function useProductCosts(projectId: string | undefined) {
   return useQuery({
@@ -25,7 +27,7 @@ export function useProductCosts(projectId: string | undefined) {
     queryFn: async () => {
       // product_costs isn't in the generated types yet
       const { data, error } = await (supabase as any)
-        .from("product_costs").select("id, item_code, unit_cost, qty_per_sale")
+        .from("product_costs").select("id, item_code, unit_cost, qty_per_sale, per_order")
         .eq("project_id", projectId!)
         .order("created_at");
       if (error) throw error;
@@ -48,6 +50,12 @@ export function ProductCostsSection({ projectId, costs }: { projectId: string; c
     const { error } = await (supabase as any).from("product_costs").update({ [field]: value }).eq("id", c.id);
     if (error) return toast.error("Erro ao salvar custo");
     toast.success("Custo atualizado");
+    refresh();
+  }
+
+  async function togglePerOrder(c: ProductCost) {
+    const { error } = await (supabase as any).from("product_costs").update({ per_order: !c.per_order }).eq("id", c.id);
+    if (error) return toast.error("Erro ao salvar custo");
     refresh();
   }
 
@@ -75,13 +83,19 @@ export function ProductCostsSection({ projectId, costs }: { projectId: string; c
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
           <Package className="h-4 w-4 text-muted-foreground" />Custos por Venda
         </h3>
-        <span className="text-sm font-semibold text-foreground">{fmtUSD(costPerSaleOf(costs))} / venda</span>
+        <span className="text-xs text-muted-foreground">
+          1 un. = <span className="font-semibold text-foreground">{fmtUSD(costForUnits(costs, 1))}</span>
+          {" · "}3 un. = <span className="font-semibold text-foreground">{fmtUSD(costForUnits(costs, 3))}</span>
+        </span>
       </div>
-      <div className="grid grid-cols-[1fr_6rem_5rem_6rem_2rem] gap-2 text-[10px] text-muted-foreground pb-1 border-b border-border/30">
-        <span>Item</span><span>Custo unit. (US$)</span><span>Qtd/venda</span><span className="text-right">Total</span><span />
+      <p className="text-[10px] text-muted-foreground mb-2">
+        O custo é multiplicado pelas unidades do pedido. Itens "por pedido" (ex: frete) entram uma vez só.
+      </p>
+      <div className="grid grid-cols-[1fr_6rem_5rem_5.5rem_6rem_2rem] gap-2 text-[10px] text-muted-foreground pb-1 border-b border-border/30">
+        <span>Item</span><span>Custo unit. (US$)</span><span>Qtd</span><span>Cobrança</span><span className="text-right">Por unidade</span><span />
       </div>
       {costs.map((c) => (
-        <div key={c.id} className="grid grid-cols-[1fr_6rem_5rem_6rem_2rem] gap-2 items-center py-1.5 border-b border-border/30 last:border-0 group">
+        <div key={c.id} className="grid grid-cols-[1fr_6rem_5rem_5.5rem_6rem_2rem] gap-2 items-center py-1.5 border-b border-border/30 last:border-0 group">
           <span className="text-sm text-foreground truncate">{c.item_code}</span>
           <Input
             key={`u-${c.unit_cost}`} defaultValue={c.unit_cost} type="number" step="0.01" min={0} className="h-8 text-sm"
@@ -91,6 +105,12 @@ export function ProductCostsSection({ projectId, costs }: { projectId: string; c
             key={`q-${c.qty_per_sale}`} defaultValue={c.qty_per_sale} type="number" step="1" min={0} className="h-8 text-sm"
             onBlur={(e) => updateField(c, "qty_per_sale", e.target.value)}
           />
+          <Button
+            variant={c.per_order ? "secondary" : "outline"} size="sm" className="h-8 text-xs px-2"
+            onClick={() => togglePerOrder(c)}
+          >
+            {c.per_order ? "por pedido" : "× unidades"}
+          </Button>
           <span className="text-sm text-right text-foreground">{fmtUSD(c.unit_cost * c.qty_per_sale)}</span>
           <Button
             variant="ghost" size="icon"

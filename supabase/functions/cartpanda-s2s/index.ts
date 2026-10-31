@@ -85,6 +85,32 @@ export async function readPayload(req: Request): Promise<Record<string, any>> {
 
 const truthy = (v: unknown) => ["1", "true", "yes"].includes(String(v ?? "").toLowerCase());
 
+// Units shipped in the order: line_items quantities (JSON webhook), an explicit
+// quantity param, or the kit size in the product name ("3 Bottles", "Kit 6").
+// The postback URL has no quantity macro, so the name is the usual source.
+export function unitsOf(payload: Record<string, any>): number {
+  const fromItems = (payload.line_items || [])
+    .reduce((a: number, li: any) => a + (Number(li?.quantity) || 0), 0);
+  if (fromItems > 0) return fromItems;
+  const explicit = parseInt(payload.quantity ?? payload.qty, 10);
+  if (explicit > 0) return explicit;
+  const name = String(payload.product_name || payload.line_items?.[0]?.title || "");
+  const m = name.match(/(\d+)\s*(?:x\b|bottles?|frascos?|potes?|jars?|units?|unidades?|pcs?|packs?)/i) ||
+    name.match(/(?:kit|pack|combo)\s*(?:de\s*)?(\d+)/i) ||
+    name.match(/\bx\s*(\d+)\b/i);
+  const n = m ? parseInt(m[1], 10) : 0;
+  return n > 0 && n <= 100 ? n : 1;
+}
+
+async function productCostOf(adminClient: any, projectId: string, units: number): Promise<number | null> {
+  const { data: costs, error } = await adminClient
+    .from("product_costs").select("unit_cost, qty_per_sale, per_order").eq("project_id", projectId);
+  if (error || !costs?.length) return null;
+  const total = costs.reduce((a: number, c: any) =>
+    a + Number(c.unit_cost) * Number(c.qty_per_sale) * (c.per_order ? 1 : units), 0);
+  return Math.round(total * 100) / 100;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -139,6 +165,8 @@ Deno.serve(async (req) => {
       orderId = `${orderId}-up${payload.upsell_no}`;
     }
     const fullName = [payload.first_name, payload.last_name].filter(Boolean).join(" ") || null;
+    const units = unitsOf(payload);
+    const productCost = await productCostOf(adminClient, nutraProject.id, units);
     const sale = {
       project_id: nutraProject.id,
       source: "cartpanda",
@@ -149,6 +177,8 @@ Deno.serve(async (req) => {
       product_name: payload.line_items?.[0]?.title || payload.product_name,
       product_id: payload.line_items?.[0]?.product_id?.toString() || payload.product_id?.toString(),
       amount: Number(payload.total_price || payload.amount || 0),
+      units,
+      product_cost: productCost,
       currency: payload.currency || "BRL",
       // Test orders are kept for debugging but never counted as approved
       status: isTest ? "test" : mapCartpandaStatus(payload.financial_status || payload.status),

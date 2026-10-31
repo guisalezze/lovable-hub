@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProject } from "@/contexts/ProjectContext";
@@ -17,7 +17,7 @@ import { format, subDays, parseISO, differenceInDays, addMonths } from "date-fns
 import { ptBR } from "date-fns/locale";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { ProductGoalsSection } from "@/components/financeiro/ProductGoalsSection";
-import { ProductCostsSection, useProductCosts, costPerSaleOf, fmtUSD } from "@/components/financeiro/ProductCostsSection";
+import { ProductCostsSection, useProductCosts, costForUnits, fmtUSD } from "@/components/financeiro/ProductCostsSection";
 
 function usePeriodSales(since: string, until: string, projectId: string | undefined) {
   return useQuery({
@@ -71,29 +71,36 @@ function usePeriodMentorias(since: string, until: string, enabled: boolean) {
   });
 }
 
+type NutraDay = { date: string; revenue: number; units: number; storedCost: number; unpricedUnits: number[] };
+
 function useNutraSalesRevenue(projectId: string | undefined, since: string, until: string) {
   return useQuery({
     queryKey: ["nutra-sales-revenue", projectId, since, until],
     queryFn: async () => {
-      if (!projectId) return { totalRevenue: 0, totalCount: 0, daily: [] as { date: string; revenue: number; count: number }[] };
-      const { data, error } = await supabase
+      if (!projectId) return { totalRevenue: 0, totalUnits: 0, daily: [] as NutraDay[] };
+      const { data, error } = await (supabase as any)
         .from("nutra_sales")
-        .select("created_at, amount, status")
+        .select("created_at, amount, status, units, product_cost")
         .eq("project_id", projectId)
         .in("status", ["approved", "paid", "complete"])
         .gte("created_at", `${since}T00:00:00`)
         .lte("created_at", `${until}T23:59:59`);
       if (error) throw error;
-      const totalRevenue = (data || []).reduce((a, s) => a + Number(s.amount || 0), 0);
-      const map: Record<string, { revenue: number; count: number }> = {};
-      (data || []).forEach((s: any) => {
+      const rows: any[] = data || [];
+      const totalRevenue = rows.reduce((a, s) => a + Number(s.amount || 0), 0);
+      const map: Record<string, NutraDay> = {};
+      rows.forEach((s) => {
         const d = s.created_at.slice(0, 10);
-        if (!map[d]) map[d] = { revenue: 0, count: 0 };
+        if (!map[d]) map[d] = { date: d, revenue: 0, units: 0, storedCost: 0, unpricedUnits: [] };
+        const units = Number(s.units || 1);
         map[d].revenue += Number(s.amount || 0);
-        map[d].count += 1;
+        map[d].units += units;
+        // Cost is stamped on the sale by cartpanda-s2s; older rows fall back to current costs
+        if (s.product_cost != null) map[d].storedCost += Number(s.product_cost);
+        else map[d].unpricedUnits.push(units);
       });
-      const daily = Object.entries(map).map(([date, v]) => ({ date, ...v })).sort((a, b) => a.date.localeCompare(b.date));
-      return { totalRevenue, totalCount: (data || []).length, daily };
+      const daily = Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
+      return { totalRevenue, totalUnits: daily.reduce((a, d) => a + d.units, 0), daily };
     },
     enabled: !!projectId,
     staleTime: 60_000,
@@ -232,11 +239,14 @@ export default function FinanceiroPage() {
   const prevMentoriasRevenue = isEducacional ? (prevMentoriasData?.totalRevenue ?? 0) : 0;
   const prevRevenue = prevSalesRevenue + prevMentoriasRevenue;
 
-  // Product cost (só Nutra): custo por venda × vendas aprovadas
+  // Product cost (só Nutra): custo gravado em cada venda (unidades × custo unitário)
   const { data: productCosts = [] } = useProductCosts(isNutra ? currentProject?.id : undefined);
-  const costPerSale = costPerSaleOf(productCosts);
-  const productCost = isNutra ? (nutraSalesData?.totalCount ?? 0) * costPerSale : 0;
-  const prevProductCost = isNutra ? (prevNutraSalesData?.totalCount ?? 0) * costPerSale : 0;
+  const dayCost = useCallback(
+    (d: NutraDay) => d.storedCost + d.unpricedUnits.reduce((a, u) => a + costForUnits(productCosts, u), 0),
+    [productCosts],
+  );
+  const productCost = isNutra ? (nutraSalesData?.daily || []).reduce((a, d) => a + dayCost(d), 0) : 0;
+  const prevProductCost = isNutra ? (prevNutraSalesData?.daily || []).reduce((a, d) => a + dayCost(d), 0) : 0;
 
   const manualInvestment = invData?.total ?? 0;
   const totalInvestment = manualInvestment + adSpendTotal;
@@ -258,7 +268,7 @@ export default function FinanceiroPage() {
     (revenueData?.daily || []).forEach((d: any) => {
       ensure(d.date);
       map[d.date].vendas += d.revenue;
-      if (isNutra) map[d.date].productCost += (d.count || 0) * costPerSale;
+      if (isNutra) map[d.date].productCost += dayCost(d);
     });
     // Mentorias por dia (só Educacional)
     (mentoriasData?.daily || []).forEach((d: any) => {
@@ -277,7 +287,7 @@ export default function FinanceiroPage() {
     return Object.values(map)
       .map(d => ({ ...d, profit: d.vendas + d.mentorias - d.investment - d.adSpend - d.productCost }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [revenueData, mentoriasData, invData, metaDailySpend, isNutra, costPerSale]);
+  }, [revenueData, mentoriasData, invData, metaDailySpend, isNutra, dayCost]);
 
   async function addInvestment() {
     const amount = parseFloat(investAmount);
@@ -431,7 +441,7 @@ export default function FinanceiroPage() {
           <div className="glass-card p-4 space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground"><Package className="h-4 w-4" /><span className="text-xs font-medium">Custo de Produto</span></div>
             <p className="text-xl font-bold text-foreground">{fmtBRL(productCost)}</p>
-            <p className="text-[10px] text-muted-foreground">{nutraSalesData?.totalCount ?? 0} vendas × {fmtUSD(costPerSale)}</p>
+            <p className="text-[10px] text-muted-foreground">{nutraSalesData?.totalUnits ?? 0} unidades · {fmtUSD(costForUnits(productCosts, 1))}/un.</p>
           </div>
         )}
         <div className="glass-card p-4 space-y-1">
