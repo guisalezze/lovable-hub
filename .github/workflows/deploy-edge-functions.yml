@@ -1,6 +1,8 @@
 name: Deploy Supabase Edge Functions
 
 on:
+  # Permite rodar manualmente pela aba Actions do GitHub
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -15,10 +17,13 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Versão fixa: a "latest" mudou de comportamento (v3 passou a pedir
+          # confirmação) e quebrou o deploy sem aviso.
+          version: 3.1.0
 
       - name: Deploy all Edge Functions
+        # --yes: no CI não há terminal para confirmar, sem ele a CLI v3 aborta.
         run: |
-          supabase functions deploy --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
+          supabase functions deploy --remote=${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt --yes
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
