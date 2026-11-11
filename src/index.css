@@ -560,6 +560,13 @@
   color: var(--nav-active-fg);
 }
 
+/* Vault: pílula ativa em degradê dourado, texto escuro */
+:root[data-design="vault"],
+:root:not([data-design]) {
+  --nav-active-bg: linear-gradient(90deg, hsl(40 72% 38%), hsl(46 75% 55%));
+  --nav-active-fg: hsl(0 0% 6%);
+}
+
 /* Durante a troca de design, nada transiciona — a troca é instantânea */
 .design-switching *,
 .design-switching *::before,
