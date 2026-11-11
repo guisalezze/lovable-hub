@@ -237,16 +237,28 @@ async function trackedUrl(rule: Rule, nodeId: string, idx: number, url: string, 
   return `${SUPABASE_URL}/functions/v1/ig-r?s=${slug}&u=${encodeURIComponent(igsid)}`;
 }
 
+// Botões que realmente vão na mensagem: com rótulo (e URL, se for de link), no máximo 3 (limite da Meta)
+// deno-lint-ignore no-explicit-any
+function sentButtons(n: FlowNode): any[] {
+  // deno-lint-ignore no-explicit-any
+  return ((n.buttons || []) as any[]).filter((b) => b.label?.trim() && (b.type === "url" ? b.url : true)).slice(0, 3);
+}
+
 // Devolve true se caiu no texto simples (a Meta recusou o template): aí os botões de fluxo foram descartados.
-async function sendMessage(rule: Rule, n: FlowNode, ctx: Ctx): Promise<boolean> {
+// opts.payload: payload interno do (único) botão de postback; o JSON do fluxo nunca define payloads.
+// opts.noTextFallback: relança o erro 100 em vez de cair no texto (mensagem cujo botão é indispensável, como o pedido de Seguir).
+async function sendMessage(
+  rule: Rule,
+  n: FlowNode,
+  ctx: Ctx,
+  opts: { payload?: string; noTextFallback?: boolean } = {},
+): Promise<boolean> {
   // 1ª mensagem vinda de comentário vai para o comment_id (mensagem privada); depois, para o id da pessoa
   const to = ctx.viaComment ? { comment_id: ctx.viaComment } : { id: ctx.c.instagram_user_id };
   const text = fillVars(n.text, ctx.c).slice(0, 640);
   // deno-lint-ignore no-explicit-any
   const allButtons: any[] = n.buttons || [];
-  const buttons = allButtons
-    .filter((b) => b.label?.trim() && (b.type === "url" ? b.url : true))
-    .slice(0, 3);
+  const buttons = sentButtons(n);
   if (n.image && !ctx.viaComment) {
     await igPost("me/messages", {
       recipient: to,
@@ -280,7 +292,7 @@ async function sendMessage(rule: Rule, n: FlowNode, ctx: Ctx): Promise<boolean> 
             : {
               type: "postback",
               title: String(b.label).slice(0, 20),
-              payload: b.payload ?? `f:${rule.id}:${n.id}:${allButtons.indexOf(b)}`,
+              payload: opts.payload ?? `f:${rule.id}:${n.id}:${allButtons.indexOf(b)}`,
             }
         ),
       },
@@ -291,7 +303,7 @@ async function sendMessage(rule: Rule, n: FlowNode, ctx: Ctx): Promise<boolean> 
     return false;
   } catch (e) {
     // só o código 100 (template recusado) cai no texto; código 1 ou 5xx pode ter entregado: não reenvia
-    if (!(e instanceof IgError) || e.code !== 100) throw e;
+    if (opts.noTextFallback || !(e instanceof IgError) || e.code !== 100) throw e;
     const links = buttons
       .filter((b) => b.type === "url")
       .map((b) => `\n\n${String(b.label).trim()}: ${urls.get(b)}`)
@@ -306,13 +318,11 @@ async function sendFollowPrompt(rule: Rule, n: FlowNode, ctx: Ctx): Promise<void
   const prompt: FlowNode = {
     id: n.id,
     text: String(n.text || "").trim() || FOLLOW_TEXT_DEFAULT,
-    buttons: [{
-      type: "postback",
-      label: String(n.button || "").trim() || FOLLOW_BUTTON_DEFAULT,
-      payload: `f:${rule.id}:${n.id}:follow`,
-    }],
+    buttons: [{ type: "postback", label: String(n.button || "").trim() || FOLLOW_BUTTON_DEFAULT }],
   };
-  await sendMessage(rule, prompt, ctx);
+  // Sem o botão a pessoa não tem como avançar: se a Meta recusar o template (código 100) o erro sobe e o fluxo para
+  // com o erro registrado (nada de texto sem botão que deixaria a pessoa sem saída).
+  await sendMessage(rule, prompt, ctx, { payload: `f:${rule.id}:${n.id}:follow`, noTextFallback: true });
   ctx.viaComment = null;
 }
 
@@ -360,7 +370,8 @@ async function armReadFallback(rule: Rule, n: FlowNode, ctx: Ctx): Promise<void>
   const rf = n.read_fallback;
   if (!rf) return;
   const b = (n.buttons || [])[Number(rf.button)];
-  if (!b || b.type === "url" || !b.label?.trim() || !b.next) return;
+  // só vale se o botão foi mesmo enviado (entre os 3 primeiros válidos) e é de fluxo
+  if (!b || b.type === "url" || !b.label?.trim() || !b.next || !sentButtons(n).includes(b)) return;
   const minutes = Math.min(60, Math.max(1, Math.round(Number(rf.minutes)) || READ_FALLBACK_DEFAULT_MIN));
   const uid = ctx.c.instagram_user_id;
   await supabase
@@ -482,13 +493,14 @@ async function run(rule: Rule, startId: string | null | undefined, ctx: Ctx): Pr
   return errs;
 }
 
-// ---- Regras e resposta automática (usado pelo webhook e, depois, pela reconciliação do worker) ----
+// ---- Regras e resposta automática (usado pelo webhook e pela reconciliação do worker) ----
 type DbRule = Rule & {
   trigger: string;
   keywords: string[] | null;
   match_type: string | null;
   post_id: string | null;
   public_replies: string[] | null;
+  pending_next_reel?: boolean | null;
 };
 
 const TRIGGERS: Record<string, string[]> = {
@@ -510,6 +522,7 @@ function fold(s: unknown): string {
 
 function matches(rule: DbRule, it: Item, k: string): boolean {
   if (rule.trigger !== k) return false;
+  if (rule.pending_next_reel) return false; // esperando o próximo reel: a regra ainda não responde a nada
   if (k === "comment" && rule.post_id && rule.post_id !== it.media) return false;
   const kws = (rule.keywords ?? []).map(fold).filter(Boolean);
   if (k === "mention" || !kws.length || rule.match_type === "any") return true; // sem palavras = qualquer texto
@@ -738,8 +751,7 @@ async function drainLegacyQueue(): Promise<void> {
 }
 
 // Retoma esperas do fluxo (ig_flow_runs) cujo horário já chegou.
-async function resumeFlowRuns(): Promise<number> {
-  const started = Date.now();
+async function resumeFlowRuns(started: number): Promise<number> {
   // Recupera execuções presas em "running" (worker morreu no meio): não retoma, só marca como falha.
   await supabase
     .from("ig_flow_runs")
@@ -757,7 +769,7 @@ async function resumeFlowRuns(): Promise<number> {
 
   let handled = 0;
   for (const job of jobs ?? []) {
-    if (Date.now() - started > 40_000) break; // não começa job novo perto do limite da edge; o resto fica para o próximo minuto
+    if (Date.now() - started > TIME_BUDGET_MS) break; // não começa job novo perto do limite da edge; o resto fica para o próximo minuto
     // Claim atômico: se não atualizou nenhuma linha, outro processo pegou
     const { data: claimed } = await supabase
       .from("ig_flow_runs")
@@ -798,7 +810,206 @@ async function resumeFlowRuns(): Promise<number> {
   return handled;
 }
 
+// ---- Manutenção periódica (no máx. a cada 5 min): limpeza, snapshot de seguidores, próximo reel, reconciliação ----
+const TIME_BUDGET_MS = 40_000; // não começa trabalho novo depois disso (limite da edge); vale para retomadas + manutenção
+const MAINTENANCE_EVERY_MS = 5 * 60e3;
+const RATE_LIMIT_CODES = [4, 17, 32, 368, 613]; // limites da Meta: encerram a varredura
+const RECONCILE_MAX_COMMENTS = 100; // comentários entregues ao autoReply por varredura
+const RECONCILE_WINDOW_MS = 72 * 3600e3;
+const RECENT_POSTS = 5;
+const AWAITING_READ_TTL_MS = 7 * 86400e3;
+
+// deno-lint-ignore no-explicit-any
+type Json = any;
+
+// GET na Graph API com o token da conta; erro vira IgError (com o código da Meta)
+async function igGet(path: string, params: Record<string, string> = {}): Promise<Json> {
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(`${IG_API}/${path}${qs ? "?" + qs : ""}`, {
+    headers: { Authorization: `Bearer ${igAccount.token}` },
+  });
+  const txt = await res.text();
+  let parsed: Json = null;
+  try {
+    parsed = JSON.parse(txt);
+  } catch {
+    // resposta não-JSON
+  }
+  if (!res.ok) {
+    const code = parsed?.error?.code;
+    throw new IgError(res.status, typeof code === "number" ? code : null, `IG ${res.status}: ${txt.slice(0, 300)}`);
+  }
+  return parsed;
+}
+
+function isRateLimit(e: unknown): boolean {
+  return e instanceof IgError && e.code !== null && RATE_LIMIT_CODES.includes(e.code);
+}
+
+// A Meta devolve "2026-11-11T12:00:00+0000"; normaliza o fuso para o Date.parse
+function parseTs(v: unknown): number {
+  return Date.parse(String(v ?? "").replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
+}
+
+// Dia (YYYY-MM-DD) em America/Sao_Paulo
+function saoPauloDay(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d);
+}
+
+// Um registro por dia em ig_follower_snapshots
+async function followerSnapshot(): Promise<void> {
+  const day = saoPauloDay(new Date());
+  const { data: have } = await supabase.from("ig_follower_snapshots").select("day").eq("day", day).maybeSingle();
+  if (have) return;
+  const me = await igGet("me", { fields: "followers_count" });
+  if (typeof me?.followers_count !== "number") return;
+  const { error } = await supabase
+    .from("ig_follower_snapshots")
+    .upsert({ day, followers: me.followers_count }, { onConflict: "day" });
+  if (error) throw new Error(error.message);
+}
+
+// Esperas de leitura que nunca receberam o evento de leitura há mais de 7 dias: encerra
+async function cleanupAwaitingRead(): Promise<void> {
+  const { error } = await supabase
+    .from("ig_flow_runs")
+    .update({ status: "done", error: "expirou" })
+    .eq("status", "awaiting_read")
+    .lt("created_at", new Date(Date.now() - AWAITING_READ_TTL_MS).toISOString());
+  if (error) throw new Error(error.message);
+}
+
+// Regras de comentário "No próximo reel": liga ao 1º reel publicado depois de next_reel_since.
+// Dentre os reels novos entre os 10 mais recentes, pega o mais antigo (o "próximo" de verdade).
+async function bindNextReel(): Promise<void> {
+  const { data } = await supabase
+    .from("ig_automations")
+    .select("id, next_reel_since")
+    .eq("active", true)
+    .eq("trigger", "comment")
+    .eq("pending_next_reel", true);
+  const pending = (data ?? []) as { id: string; next_reel_since: string | null }[];
+  if (!pending.length) return;
+  const media: Json = await igGet("me/media", {
+    fields: "id,caption,media_product_type,timestamp",
+    limit: "10",
+  });
+  const reels = ((media?.data ?? []) as Json[])
+    .filter((m) => m?.media_product_type === "REELS" && m?.id)
+    .map((m) => ({ m, t: parseTs(m.timestamp) }))
+    .filter((x) => !Number.isNaN(x.t))
+    .sort((a, b) => a.t - b.t);
+  for (const r of pending) {
+    if (!r.next_reel_since) {
+      // sem marco de partida: começa a contar agora (nunca liga a um reel antigo)
+      await supabase.from("ig_automations").update({ next_reel_since: new Date().toISOString() }).eq("id", r.id);
+      continue;
+    }
+    const since = Date.parse(r.next_reel_since);
+    const hit = reels.find((x) => x.t > since);
+    if (!hit) continue;
+    const caption = String(hit.m.caption ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+    const { error } = await supabase
+      .from("ig_automations")
+      .update({ post_id: String(hit.m.id), media_label: caption || "Reel", pending_next_reel: false })
+      .eq("id", r.id)
+      .eq("pending_next_reel", true);
+    if (error) console.error("next reel:", error.message);
+  }
+}
+
+// Comentários que a Meta não mandou por webhook: busca nos posts das regras e passa pelo mesmo autoReply
+async function reconcileComments(started: number): Promise<void> {
+  const rules = (await activeRules()).filter(
+    (r) =>
+      r.trigger === "comment" && !r.pending_next_reel &&
+      (r.flow?.nodes?.start?.next || (r.public_replies ?? []).some((x) => String(x).trim())),
+  );
+  if (!rules.length) return;
+
+  // posts: o de cada regra com post_id; regras sem post_id valem para os 5 mais recentes
+  const mediaIds = new Set<string>();
+  for (const r of rules) if (r.post_id) mediaIds.add(r.post_id);
+  if (rules.some((r) => !r.post_id)) {
+    const recent: Json = await igGet("me/media", { fields: "id", limit: String(RECENT_POSTS) });
+    for (const m of (recent?.data ?? []) as Json[]) if (m?.id) mediaIds.add(String(m.id));
+  }
+
+  const minTs = Date.now() - RECONCILE_WINDOW_MS;
+  let processed = 0;
+  for (const mediaId of mediaIds) {
+    if (processed >= RECONCILE_MAX_COMMENTS || Date.now() - started > TIME_BUDGET_MS) return;
+    const res: Json = await igGet(`${mediaId}/comments`, {
+      fields: "id,text,timestamp,from{id,username},replies{from{id}}",
+      limit: "50",
+    });
+    const fresh = ((res?.data ?? []) as Json[])
+      .filter((cm) => {
+        const t = parseTs(cm?.timestamp);
+        if (!cm?.id || !cm?.from?.id || Number.isNaN(t) || t < minTs) return false;
+        if (String(cm.from.id) === igAccount.id) return false; // comentário da própria conta
+        const answered = ((cm.replies?.data ?? []) as Json[]).some((rp) => String(rp?.from?.id) === igAccount.id);
+        return !answered;
+      })
+      .sort((a, b) => parseTs(a.timestamp) - parseTs(b.timestamp));
+    if (!fresh.length) continue;
+
+    // já tratados (qualquer status em ig_replies)
+    const { data: seen } = await supabase.from("ig_replies").select("ref").in("ref", fresh.map((cm) => String(cm.id)));
+    const done = new Set((seen ?? []).map((x: { ref: string }) => x.ref));
+
+    for (const cm of fresh) {
+      if (processed >= RECONCILE_MAX_COMMENTS || Date.now() - started > TIME_BUDGET_MS) return;
+      if (done.has(String(cm.id))) continue;
+      const it: Item = {
+        kind: "comment",
+        ref: String(cm.id),
+        from: String(cm.from.id),
+        username: cm.from.username ? String(cm.from.username) : null,
+        text: cm.text ? String(cm.text) : null,
+        media: mediaId,
+        payload: null,
+      };
+      // só conta (e só responde) o que alguma regra pegaria; o resto fica de fora do teto
+      if (!rules.some((r) => matches(r, it, "comment"))) continue;
+      processed++;
+      await autoReply(it);
+    }
+  }
+}
+
+// No máx. 1x a cada 5 min (ig_config.last_reconcile_at, reservado de forma atômica).
+// Cada etapa é isolada: erro numa não impede as outras; limite da Meta encerra as etapas que chamam a API.
+async function maintenance(configId: string, started: number): Promise<void> {
+  const now = Date.now();
+  const { data: claimed } = await supabase
+    .from("ig_config")
+    .update({ last_reconcile_at: new Date(now).toISOString() })
+    .eq("id", configId)
+    .or(`last_reconcile_at.is.null,last_reconcile_at.lt.${new Date(now - MAINTENANCE_EVERY_MS).toISOString()}`)
+    .select("id");
+  if (!claimed?.length) return;
+
+  const steps: [string, () => Promise<void>][] = [
+    ["limpeza", cleanupAwaitingRead],
+    ["seguidores", followerSnapshot],
+    ["próximo reel", bindNextReel],
+    ["reconciliação", () => reconcileComments(started)],
+  ];
+  let limited = false;
+  for (const [name, fn] of steps) {
+    if (name !== "limpeza" && (limited || Date.now() - started > TIME_BUDGET_MS)) continue; // sem tempo ou no limite da Meta
+    try {
+      await fn();
+    } catch (e) {
+      if (isRateLimit(e)) limited = true;
+      console.error(`${name}:`, errMsg(e));
+    }
+  }
+}
+
 Deno.serve(async () => {
+  const started = Date.now();
   const { data: config } = await supabase.from("ig_config").select("*").limit(1).single();
   if (!config?.access_token) return new Response("No config", { status: 200 });
 
@@ -813,9 +1024,15 @@ Deno.serve(async () => {
 
   let resumed = 0;
   try {
-    resumed = await resumeFlowRuns();
+    resumed = await resumeFlowRuns(started);
   } catch (e) {
     console.error("flow runs failed:", errMsg(e));
+  }
+
+  try {
+    await maintenance(String(config.id), started);
+  } catch (e) {
+    console.error("maintenance failed:", errMsg(e));
   }
 
   return new Response(`Done (${resumed} esperas retomadas)`, { status: 200 });

@@ -83,3 +83,9 @@ verify_jwt = false
 
 [functions.instagram-admin]
 verify_jwt = false
+
+[functions.ig-r]
+verify_jwt = false
+
+[functions.ig-report]
+verify_jwt = false

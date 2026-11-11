@@ -21,7 +21,7 @@ async function hmacHex(secret: string, message: string): Promise<string> {
     .join("");
 }
 
-// ---- motor do fluxo: cópia idêntica em instagram-worker/index.ts ----
+// ---- motor do fluxo: cópia idêntica em instagram-webhook/index.ts ----
 const IG_API = "https://graph.instagram.com/v25.0";
 const MAX_STEPS = 40;
 const UNIT_MS: Record<string, number> = { min: 60e3, h: 3600e3, d: 86400e3 };
@@ -253,16 +253,28 @@ async function trackedUrl(rule: Rule, nodeId: string, idx: number, url: string, 
   return `${SUPABASE_URL}/functions/v1/ig-r?s=${slug}&u=${encodeURIComponent(igsid)}`;
 }
 
+// Botões que realmente vão na mensagem: com rótulo (e URL, se for de link), no máximo 3 (limite da Meta)
+// deno-lint-ignore no-explicit-any
+function sentButtons(n: FlowNode): any[] {
+  // deno-lint-ignore no-explicit-any
+  return ((n.buttons || []) as any[]).filter((b) => b.label?.trim() && (b.type === "url" ? b.url : true)).slice(0, 3);
+}
+
 // Devolve true se caiu no texto simples (a Meta recusou o template): aí os botões de fluxo foram descartados.
-async function sendMessage(rule: Rule, n: FlowNode, ctx: Ctx): Promise<boolean> {
+// opts.payload: payload interno do (único) botão de postback; o JSON do fluxo nunca define payloads.
+// opts.noTextFallback: relança o erro 100 em vez de cair no texto (mensagem cujo botão é indispensável, como o pedido de Seguir).
+async function sendMessage(
+  rule: Rule,
+  n: FlowNode,
+  ctx: Ctx,
+  opts: { payload?: string; noTextFallback?: boolean } = {},
+): Promise<boolean> {
   // 1ª mensagem vinda de comentário vai para o comment_id (mensagem privada); depois, para o id da pessoa
   const to = ctx.viaComment ? { comment_id: ctx.viaComment } : { id: ctx.c.instagram_user_id };
   const text = fillVars(n.text, ctx.c).slice(0, 640);
   // deno-lint-ignore no-explicit-any
   const allButtons: any[] = n.buttons || [];
-  const buttons = allButtons
-    .filter((b) => b.label?.trim() && (b.type === "url" ? b.url : true))
-    .slice(0, 3);
+  const buttons = sentButtons(n);
   if (n.image && !ctx.viaComment) {
     await igPost("me/messages", {
       recipient: to,
@@ -296,7 +308,7 @@ async function sendMessage(rule: Rule, n: FlowNode, ctx: Ctx): Promise<boolean> 
             : {
               type: "postback",
               title: String(b.label).slice(0, 20),
-              payload: b.payload ?? `f:${rule.id}:${n.id}:${allButtons.indexOf(b)}`,
+              payload: opts.payload ?? `f:${rule.id}:${n.id}:${allButtons.indexOf(b)}`,
             }
         ),
       },
@@ -307,7 +319,7 @@ async function sendMessage(rule: Rule, n: FlowNode, ctx: Ctx): Promise<boolean> 
     return false;
   } catch (e) {
     // só o código 100 (template recusado) cai no texto; código 1 ou 5xx pode ter entregado: não reenvia
-    if (!(e instanceof IgError) || e.code !== 100) throw e;
+    if (opts.noTextFallback || !(e instanceof IgError) || e.code !== 100) throw e;
     const links = buttons
       .filter((b) => b.type === "url")
       .map((b) => `\n\n${String(b.label).trim()}: ${urls.get(b)}`)
@@ -322,13 +334,11 @@ async function sendFollowPrompt(rule: Rule, n: FlowNode, ctx: Ctx): Promise<void
   const prompt: FlowNode = {
     id: n.id,
     text: String(n.text || "").trim() || FOLLOW_TEXT_DEFAULT,
-    buttons: [{
-      type: "postback",
-      label: String(n.button || "").trim() || FOLLOW_BUTTON_DEFAULT,
-      payload: `f:${rule.id}:${n.id}:follow`,
-    }],
+    buttons: [{ type: "postback", label: String(n.button || "").trim() || FOLLOW_BUTTON_DEFAULT }],
   };
-  await sendMessage(rule, prompt, ctx);
+  // Sem o botão a pessoa não tem como avançar: se a Meta recusar o template (código 100) o erro sobe e o fluxo para
+  // com o erro registrado (nada de texto sem botão que deixaria a pessoa sem saída).
+  await sendMessage(rule, prompt, ctx, { payload: `f:${rule.id}:${n.id}:follow`, noTextFallback: true });
   ctx.viaComment = null;
 }
 
@@ -376,7 +386,8 @@ async function armReadFallback(rule: Rule, n: FlowNode, ctx: Ctx): Promise<void>
   const rf = n.read_fallback;
   if (!rf) return;
   const b = (n.buttons || [])[Number(rf.button)];
-  if (!b || b.type === "url" || !b.label?.trim() || !b.next) return;
+  // só vale se o botão foi mesmo enviado (entre os 3 primeiros válidos) e é de fluxo
+  if (!b || b.type === "url" || !b.label?.trim() || !b.next || !sentButtons(n).includes(b)) return;
   const minutes = Math.min(60, Math.max(1, Math.round(Number(rf.minutes)) || READ_FALLBACK_DEFAULT_MIN));
   const uid = ctx.c.instagram_user_id;
   await supabase
@@ -498,13 +509,14 @@ async function run(rule: Rule, startId: string | null | undefined, ctx: Ctx): Pr
   return errs;
 }
 
-// ---- Regras e resposta automática (usado pelo webhook e, depois, pela reconciliação do worker) ----
+// ---- Regras e resposta automática (usado pelo webhook e pela reconciliação do worker) ----
 type DbRule = Rule & {
   trigger: string;
   keywords: string[] | null;
   match_type: string | null;
   post_id: string | null;
   public_replies: string[] | null;
+  pending_next_reel?: boolean | null;
 };
 
 const TRIGGERS: Record<string, string[]> = {
@@ -526,6 +538,7 @@ function fold(s: unknown): string {
 
 function matches(rule: DbRule, it: Item, k: string): boolean {
   if (rule.trigger !== k) return false;
+  if (rule.pending_next_reel) return false; // esperando o próximo reel: a regra ainda não responde a nada
   if (k === "comment" && rule.post_id && rule.post_id !== it.media) return false;
   const kws = (rule.keywords ?? []).map(fold).filter(Boolean);
   if (k === "mention" || !kws.length || rule.match_type === "any") return true; // sem palavras = qualquer texto
