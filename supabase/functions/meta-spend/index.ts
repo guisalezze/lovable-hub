@@ -6,6 +6,26 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Cotação USD→BRL em memória: a instância da função é reaproveitada entre
+// chamadas, então não precisa buscar a cotação de novo a cada request.
+const FX_TTL_MS = 6 * 60 * 60 * 1000;
+let fxCache: { rate: number; at: number } | null = null;
+
+async function getUsdToBrl(): Promise<number> {
+  if (fxCache && Date.now() - fxCache.at < FX_TTL_MS) return fxCache.rate;
+  try {
+    const fxRes = await fetch("https://open.er-api.com/v6/latest/USD", { signal: AbortSignal.timeout(3000) });
+    const fxData = await fxRes.json();
+    if (fxData.rates?.BRL) {
+      fxCache = { rate: fxData.rates.BRL, at: Date.now() };
+      return fxCache.rate;
+    }
+  } catch (e) {
+    console.error("Exchange rate fetch failed, using fallback:", e);
+  }
+  return fxCache?.rate ?? 5.0; // última cotação conhecida, ou 5.0
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -27,8 +47,12 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
+    // Cotação começa a ser buscada já, em paralelo com o resto
+    const fxPromise = getUsdToBrl();
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -57,14 +81,24 @@ Deno.serve(async (req) => {
 
     // Priority 1: meta_ad_accounts table (project-specific)
     if (projectId) {
-      const { data: account } = await serviceClient
-        .from("meta_ad_accounts")
-        .select("account_id, access_token")
-        .eq("project_id", projectId)
-        .eq("is_active", true)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // As duas consultas rodam juntas; a prioridade continua a mesma
+      const [{ data: account }, { data: settings }] = await Promise.all([
+        serviceClient
+          .from("meta_ad_accounts")
+          .select("account_id, access_token")
+          .eq("project_id", projectId)
+          .eq("is_active", true)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        serviceClient
+          .from("app_settings")
+          .select("key, value")
+          .in("key", [
+            `meta_ads_access_token_${projectId}`,
+            `meta_ads_account_id_${projectId}`,
+          ]),
+      ]);
 
       if (account?.account_id && account?.access_token) {
         accountId = account.account_id;
@@ -73,14 +107,6 @@ Deno.serve(async (req) => {
 
       // Priority 2: project-specific app_settings keys
       if (!accessToken || !accountId) {
-        const { data: settings } = await serviceClient
-          .from("app_settings")
-          .select("key, value")
-          .in("key", [
-            `meta_ads_access_token_${projectId}`,
-            `meta_ads_account_id_${projectId}`,
-          ]);
-
         for (const s of settings || []) {
           const val = typeof s.value === "string" ? s.value : JSON.stringify(s.value);
           const clean = val.replace(/^"|"$/g, "");
@@ -142,17 +168,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch USD→BRL exchange rate
-    let usdToBrl = 5.0; // fallback
-    try {
-      const fxRes = await fetch("https://open.er-api.com/v6/latest/USD");
-      const fxData = await fxRes.json();
-      if (fxData.rates?.BRL) {
-        usdToBrl = fxData.rates.BRL;
-      }
-    } catch (e) {
-      console.error("Exchange rate fetch failed, using fallback:", e);
-    }
+    // Cotação USD→BRL (já estava sendo buscada em paralelo)
+    const usdToBrl = await fxPromise;
 
     console.log(`USD→BRL rate: ${usdToBrl}`);
 
@@ -167,10 +184,13 @@ Deno.serve(async (req) => {
 
     console.log(`act_${accountId}: total_spend_usd=${totalSpendUsd}, total_spend_brl=${totalSpendBrl.toFixed(2)}, days=${daily.length}`);
 
-    // Update last sync timestamp
-    await serviceClient
+    // Update last sync timestamp — sem segurar a resposta
+    const lastSync = serviceClient
       .from("app_settings")
-      .upsert({ key: "meta_ads_last_sync", value: JSON.stringify(new Date().toISOString()) });
+      .upsert({ key: "meta_ads_last_sync", value: JSON.stringify(new Date().toISOString()) })
+      .then(({ error }) => { if (error) console.error("last_sync upsert failed:", error); });
+    // deno-lint-ignore no-explicit-any
+    (globalThis as any).EdgeRuntime?.waitUntil?.(lastSync);
 
     return new Response(
       JSON.stringify({

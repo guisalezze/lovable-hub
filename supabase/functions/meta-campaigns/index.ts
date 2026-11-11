@@ -6,6 +6,26 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Cotação USD→BRL em memória: a instância da função é reaproveitada entre
+// chamadas, então não precisa buscar a cotação de novo a cada request.
+const FX_TTL_MS = 6 * 60 * 60 * 1000;
+let fxCache: { rate: number; at: number } | null = null;
+
+async function getUsdToBrl(): Promise<number> {
+  if (fxCache && Date.now() - fxCache.at < FX_TTL_MS) return fxCache.rate;
+  try {
+    const fxRes = await fetch("https://open.er-api.com/v6/latest/USD", { signal: AbortSignal.timeout(3000) });
+    const fxData = await fxRes.json();
+    if (fxData.rates?.BRL) {
+      fxCache = { rate: fxData.rates.BRL, at: Date.now() };
+      return fxCache.rate;
+    }
+  } catch (e) {
+    console.error("Exchange rate fetch failed, using fallback:", e);
+  }
+  return fxCache?.rate ?? 5.0; // última cotação conhecida, ou 5.0
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -25,6 +45,9 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: authHeader } } }
     );
+
+    // Cotação começa a ser buscada já, em paralelo com o resto
+    const fxPromise = getUsdToBrl();
 
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
@@ -96,15 +119,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch USD→BRL exchange rate
-    let usdToBrl = 5.0;
-    try {
-      const fxRes = await fetch("https://open.er-api.com/v6/latest/USD");
-      const fxData = await fxRes.json();
-      if (fxData.rates?.BRL) usdToBrl = fxData.rates.BRL;
-    } catch (e) {
-      console.error("Exchange rate fetch failed, using fallback:", e);
-    }
+    // Cotação USD→BRL (já estava sendo buscada em paralelo)
+    const usdToBrl = await fxPromise;
 
     const campaigns = (metaData.data || []).map((c: any) => ({
       campaign_id: c.campaign_id,

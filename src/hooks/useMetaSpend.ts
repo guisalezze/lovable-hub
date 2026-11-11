@@ -21,9 +21,11 @@ export function useMetaSpend({ since, until }: { since: string; until: string })
   return useQuery<MetaSpendResponse>({
     queryKey: ["meta-spend", currentProject?.id, since, until],
     queryFn: async () => {
-      // Refresh session to avoid expired JWT
-      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
-      if (sessionError || !session) throw new Error("Not authenticated");
+      // getSession já devolve um token válido (o cliente renova sozinho antes de
+      // expirar). Antes era refreshSession(), que forçava uma ida extra ao servidor
+      // em toda chamada, antes mesmo de começar a buscar o gasto.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
 
       const projectParam = currentProject?.id
         ? `&project_id=${currentProject.id}`
