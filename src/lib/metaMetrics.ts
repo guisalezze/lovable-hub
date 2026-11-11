@@ -78,7 +78,8 @@ export function formatMetricValue(value: number | null, format: MetricFormat): s
   if (value == null || Number.isNaN(value)) return "–";
   switch (format) {
     case "currency":
-      return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+      // Usado só no Meta Ads do Nutra, que é todo em dólar
+      return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" }).format(value);
     case "percent":
       return `${value.toFixed(2)}%`;
     case "multiplier":

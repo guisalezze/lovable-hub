@@ -8,11 +8,13 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle } from "lucide-react";
+import { formatMoney, metaSpendIn, useProjectCurrency } from "@/lib/currency";
 
 interface Campaign {
   campaign_id: string;
   campaign_name: string;
   spend: string;
+  spend_usd?: string;
   clicks: string;
   impressions: string;
 }
@@ -24,9 +26,10 @@ interface CampaignTableProps {
 }
 
 export function CampaignTable({ campaigns, isLoading, error }: CampaignTableProps) {
-  const sorted = [...(campaigns || [])].sort(
-    (a, b) => parseFloat(b.spend) - parseFloat(a.spend)
-  );
+  const currency = useProjectCurrency();
+  // "spend" vem convertido para real; spend_usd é o valor original da conta
+  const spendOf = (c: Campaign) => metaSpendIn(currency, { spend_brl: c.spend, spend_usd: c.spend_usd });
+  const sorted = [...(campaigns || [])].sort((a, b) => spendOf(b) - spendOf(a));
 
   return (
     <div className="material-card p-5">
@@ -62,10 +65,10 @@ export function CampaignTable({ campaigns, isLoading, error }: CampaignTableProp
             </TableHeader>
             <TableBody>
               {sorted.map((c) => {
-                const spend = parseFloat(c.spend);
+                const spend = spendOf(c);
                 const clicks = parseInt(c.clicks);
                 const impressions = parseInt(c.impressions);
-                const cpc = clicks > 0 ? (spend / clicks).toFixed(2) : "–";
+                const cpc = clicks > 0 ? formatMoney(spend / clicks, currency) : "–";
                 const ctr = impressions > 0 ? ((clicks / impressions) * 100).toFixed(2) + "%" : "–";
 
                 return (
@@ -74,7 +77,7 @@ export function CampaignTable({ campaigns, isLoading, error }: CampaignTableProp
                       {c.campaign_name}
                     </TableCell>
                     <TableCell className="text-xs text-right tabular-nums">
-                      R$ {spend.toFixed(2)}
+                      {formatMoney(spend, currency)}
                     </TableCell>
                     <TableCell className="text-xs text-right tabular-nums">
                       {clicks.toLocaleString()}
@@ -83,7 +86,7 @@ export function CampaignTable({ campaigns, isLoading, error }: CampaignTableProp
                       {impressions.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-xs text-right tabular-nums">
-                      {cpc !== "–" ? `R$ ${cpc}` : cpc}
+                      {cpc}
                     </TableCell>
                     <TableCell className="text-xs text-right tabular-nums">{ctr}</TableCell>
                   </TableRow>

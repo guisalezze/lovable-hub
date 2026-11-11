@@ -5,6 +5,7 @@ interface Campaign {
   campaign_id: string;
   campaign_name: string;
   spend: string;
+  spend_usd?: string;
   clicks: string;
   impressions: string;
 }

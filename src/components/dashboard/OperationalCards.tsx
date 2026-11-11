@@ -12,8 +12,7 @@ interface OperationalCardsProps {
   isLoading: boolean;
 }
 
-const fmtBRL = (v: number) =>
-  `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import { formatMoney, useProjectCurrency } from "@/lib/currency";
 
 export function OperationalCards({
   investment,
@@ -24,6 +23,8 @@ export function OperationalCards({
   chargebackCount,
   isLoading,
 }: OperationalCardsProps) {
+  const currency = useProjectCurrency();
+  const fmtBRL = (v: number) => formatMoney(v, currency);
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

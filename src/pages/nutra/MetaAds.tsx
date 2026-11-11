@@ -12,7 +12,10 @@ import { CampaignMetricsTable } from "@/components/nutra/CampaignMetricsTable";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 
-const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+import { formatMoney } from "@/lib/currency";
+
+// Página do Nutra: gasto (conta do Meta) e receita (nutra_sales) são em dólar
+const fmtBRL = (v: number) => formatMoney(v, "USD");
 
 export default function MetaAdsPage() {
   const [since, setSince] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));

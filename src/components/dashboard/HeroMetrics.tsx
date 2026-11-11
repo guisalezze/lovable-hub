@@ -1,6 +1,7 @@
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatMoney, useProjectCurrency } from "@/lib/currency";
 
 interface HeroMetricsProps {
   revenue: number;
@@ -10,9 +11,6 @@ interface HeroMetricsProps {
   investment: number;
   isLoading: boolean;
 }
-
-const fmtBRL = (v: number) =>
-  `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 function calcChange(current: number, previous: number | undefined) {
   if (previous === undefined || previous === 0) return null;
@@ -45,6 +43,8 @@ function getRoasColor(roas: number) {
 }
 
 export function HeroMetrics({ revenue, profit, roas, previousRevenue, investment, isLoading }: HeroMetricsProps) {
+  const currency = useProjectCurrency();
+  const fmtBRL = (v: number) => formatMoney(v, currency);
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

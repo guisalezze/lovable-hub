@@ -29,12 +29,13 @@ import { useProject } from "@/contexts/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-
-const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+import { currencyForProject, formatMoney } from "@/lib/currency";
 
 const Dashboard = () => {
   const { currentProject } = useProject();
   const isNutra = currentProject?.slug === "nutra";
+  const currency = currencyForProject(currentProject?.slug);
+  const fmtBRL = (v: number) => formatMoney(v, currency);
 
   const [since, setSince] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
   const [until, setUntil] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -78,7 +79,8 @@ const Dashboard = () => {
   };
 
   const revenue = kpis?.revenue || 0;
-  const investment = spendData?.total_spend || 0;
+  // Nutra é todo em dólar: gasto do Meta sem conversão, igual à receita
+  const investment = (currency === "USD" ? spendData?.total_spend_usd : spendData?.total_spend) || 0;
   const profit = revenue - investment;
   const roas = investment > 0 ? (revenue / investment).toFixed(1) : "–";
 

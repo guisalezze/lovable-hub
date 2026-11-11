@@ -1,5 +1,6 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatMoney, useProjectCurrency } from "@/lib/currency";
 
 interface RevenueChartProps {
   data?: { date: string; receita: number }[];
@@ -12,6 +13,7 @@ const GRID = "hsl(var(--border))";
 const AXIS = "hsl(var(--muted-foreground))";
 
 export function RevenueChart({ data, isLoading }: RevenueChartProps) {
+  const currency = useProjectCurrency();
   return (
     <div className="material-card p-5">
       <h3 className="text-sm font-semibold text-foreground mb-4">Receita por Dia</h3>
@@ -45,7 +47,7 @@ export function RevenueChart({ data, isLoading }: RevenueChartProps) {
                   color: "hsl(var(--popover-foreground))",
                 }}
                 labelStyle={{ color: "hsl(var(--popover-foreground))" }}
-                formatter={(value: number) => [`R$ ${value.toFixed(2)}`, "Receita"]}
+                formatter={(value: number) => [formatMoney(value, currency), "Receita"]}
               />
               <Area type="monotone" dataKey="receita" stroke={MAIN} fillOpacity={1} fill="url(#colorReceita)" strokeWidth={2} />
             </AreaChart>

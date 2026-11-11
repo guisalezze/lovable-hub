@@ -4,15 +4,10 @@ import {
   useProjectRevenueTotal,
 } from "@/hooks/useProjectRevenue";
 import { useProject } from "@/contexts/ProjectContext";
+import { currencyForProject, formatMoneyShort } from "@/lib/currency";
 
 // Marcos de faturamento: 1M, 2M, 3M ... 20M
 const MILESTONES = Array.from({ length: 20 }, (_, i) => (i + 1) * 1_000_000);
-
-const fmtShort = (v: number) => {
-  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(v % 1_000_000 === 0 ? 0 : 1)}M`;
-  if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(1)}K`;
-  return `R$ ${v.toFixed(0)}`;
-};
 
 function getLevel(total: number) {
   const idx = MILESTONES.findIndex((m) => total < m);
@@ -74,6 +69,8 @@ export function RevenueProgressBar() {
   if (!currentProject) return null;
 
   const isNutra = currentProject?.slug === "nutra";
+  const currency = currencyForProject(currentProject?.slug);
+  const fmtShort = (v: number) => formatMoneyShort(v, currency);
   const total = revenue?.total ?? 0;
   const salesTotal = revenue?.sales ?? 0;
   const mentoriasTotal = revenue?.mentorias ?? 0;

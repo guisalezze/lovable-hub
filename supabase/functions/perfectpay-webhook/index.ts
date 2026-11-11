@@ -123,6 +123,154 @@ async function resolveAttribution(
   };
 }
 
+// ─── Nutra (produto físico vendido por afiliados na PerfectPay) ──────────────
+// Webhook configurado na PerfectPay com ?project=nutra. O Nutra é todo em dólar:
+// a venda chega em real e é gravada em nutra_sales já convertida para USD pela
+// cotação do momento; o valor original fica em raw_payload._fx.
+
+async function brlPerUsd(): Promise<number | null> {
+  try {
+    const res = await fetch("https://open.er-api.com/v6/latest/USD", { signal: AbortSignal.timeout(4000) });
+    const data = await res.json();
+    const rate = Number(data?.rates?.BRL);
+    return rate > 0 ? rate : null;
+  } catch (e) {
+    console.error("perfectpay nutra: cotação falhou", e);
+    return null;
+  }
+}
+
+function nutraStatusOf(ppStatus: string): string {
+  if (ppStatus === "approved" || ppStatus === "authorized" || ppStatus === "completed") return "approved";
+  if (["pending", "in_process", "in_review", "in_mediation", "precheckout"].includes(ppStatus)) return "pending";
+  if (ppStatus === "refunded" || ppStatus === "pre_refunded") return "refunded";
+  if (ppStatus === "charged_back" || ppStatus === "pre_chargeback") return "chargeback";
+  if (ppStatus === "cancelled" || ppStatus === "rejected" || ppStatus === "expired" || ppStatus === "checkout_error") return "canceled";
+  return ppStatus || "pending";
+}
+
+// Unidades: quantity da PerfectPay ou o tamanho do kit no nome ("3 Frascos", "Kit 6")
+function nutraUnitsOf(payload: any): number {
+  const q = parseInt(payload.quantity ?? payload.plan?.quantity, 10);
+  const name = String(payload.plan?.name || payload.product?.name || "");
+  const m = name.match(/(\d+)\s*(?:x\b|bottles?|frascos?|potes?|jars?|units?|unidades?|pcs?|packs?)/i) ||
+    name.match(/(?:kit|pack|combo)\s*(?:de\s*)?(\d+)/i);
+  const fromName = m ? parseInt(m[1], 10) : 0;
+  if (fromName > 0 && fromName <= 100) return fromName * (q > 0 ? q : 1);
+  return q > 0 ? q : 1;
+}
+
+async function handleNutraSale(supabase: any, supabaseUrl: string, payload: any): Promise<Response> {
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+  const { data: nutraProject } = await supabase.from("projects").select("id").eq("slug", "nutra").single();
+  if (!nutraProject) return json({ error: "Nutra project not found" }, 500);
+
+  const customer = payload.customer || {};
+  const product = payload.product || {};
+  const plan = payload.plan || {};
+  const metadata = payload.metadata || {};
+  const attribution = await resolveAttribution(supabase, metadata);
+
+  const rawStatus = typeof payload.sale_status_enum === "number"
+    ? payload.sale_status_enum
+    : parseInt(payload.sale_status_enum || "0", 10);
+  const status = nutraStatusOf(SALE_STATUS_MAP[rawStatus] || String(payload.sale_status_enum ?? ""));
+
+  const originalAmount = parseFloat(payload.sale_amount || "0");
+  if (isNaN(originalAmount) || originalAmount < 0 || originalAmount > 999999999) {
+    return json({ error: "Invalid payload" }, 400);
+  }
+  const originalCurrency = String(payload.currency_enum_key || payload.currency_paid || "BRL").toUpperCase();
+
+  let amount = originalAmount;
+  let fx: Record<string, unknown> | null = null;
+  if (originalCurrency !== "USD") {
+    const rate = originalCurrency === "BRL" ? await brlPerUsd() : null;
+    if (rate) {
+      amount = Math.round((originalAmount / rate) * 100) / 100;
+      fx = { from: originalCurrency, original_amount: originalAmount, brl_per_usd: rate, at: new Date().toISOString() };
+    } else {
+      // Sem cotação: guarda o valor original na moeda original (o painel mostra a moeda gravada)
+      fx = { from: originalCurrency, original_amount: originalAmount, error: "sem cotação" };
+    }
+  }
+  const currency = fx && !("brl_per_usd" in fx) ? originalCurrency : "USD";
+
+  const units = nutraUnitsOf(payload);
+  const { data: costs } = await supabase
+    .from("product_costs").select("unit_cost, qty_per_sale, per_order").eq("project_id", nutraProject.id);
+  const productCost = costs?.length
+    ? Math.round(costs.reduce((a: number, c: any) =>
+        a + Number(c.unit_cost) * Number(c.qty_per_sale) * (c.per_order ? 1 : units), 0) * 100) / 100
+    : null;
+
+  const orderId = String(payload.code || `PP-${Date.now()}`).slice(0, 100);
+  const sale = {
+    project_id: nutraProject.id,
+    source: "perfectpay",
+    order_id: orderId,
+    customer_name: customer.full_name || null,
+    customer_email: (customer.email || "").toLowerCase().trim() || null,
+    customer_phone: customer.phone_formated_ddi || customer.phone_formated || null,
+    product_name: [product.name, plan.name].filter(Boolean).join(" — ") || null,
+    product_id: product.code || null,
+    amount,
+    units,
+    product_cost: productCost,
+    currency,
+    status,
+    payment_method: PAYMENT_TYPE_MAP[Number(payload.payment_type_enum)] || null,
+    tracking_code: payload.tracking?.code || payload.tracking_code || null,
+    utm_source: attribution.utm_source,
+    utm_medium: attribution.utm_medium,
+    utm_campaign: attribution.utm_campaign,
+    fbclid: attribution.fbclid,
+    fbp: attribution.fbp,
+    fbc: attribution.fbc,
+    campaign_id: attribution.campaign_id,
+    adset_id: attribution.adset_id,
+    ad_id: attribution.ad_id,
+    raw_payload: fx ? { ...payload, _fx: fx } : payload,
+  };
+
+  // Mesma venda pode chegar várias vezes (mudança de status): atualiza pelo código
+  const { data: existing } = await supabase
+    .from("nutra_sales").select("id, status").eq("source", "perfectpay").eq("order_id", orderId).maybeSingle();
+  const { error } = existing
+    ? await supabase.from("nutra_sales").update(sale).eq("id", existing.id)
+    : await supabase.from("nutra_sales").insert(sale);
+  if (error) {
+    console.error("perfectpay nutra: gravação falhou", error);
+    return json({ error: "An error occurred processing your request" }, 500);
+  }
+
+  if (status === "approved" && existing?.status !== "approved") {
+    fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": Deno.env.get("META_CAPI_INTERNAL_SECRET") ?? "",
+      },
+      body: JSON.stringify({
+        project: "nutra",
+        event_name: "Purchase",
+        order_id: orderId,
+        value: amount,
+        currency,
+        email: sale.customer_email,
+        phone: sale.customer_phone,
+        fbp: sale.fbp,
+        fbc: sale.fbc,
+      }),
+    }).catch((err) => console.error("meta-capi call failed:", err));
+  }
+
+  await supabase.from("webhook_logs").update({ processed: true }).eq("payload->>code", orderId);
+  return json({ success: true, project: "nutra", status, amount, currency });
+}
+
 async function resolveProjectId(
   req: Request,
   productCode: string | undefined,
@@ -175,6 +323,12 @@ Deno.serve(async (req) => {
       source: "perfectpay",
       payload,
     });
+
+    // Vendas do Nutra (afiliados, produto físico) vão para nutra_sales em dólar,
+    // sem criar lead/tarefa/cobrança do Educacional
+    if (new URL(req.url).searchParams.get("project") === "nutra") {
+      return await handleNutraSale(supabase, supabaseUrl, payload);
+    }
 
     const customer = payload.customer || {};
     const product = payload.product || {};

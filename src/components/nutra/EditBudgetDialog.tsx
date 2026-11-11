@@ -68,7 +68,7 @@ export function EditBudgetDialog({ open, onOpenChange, level, id, name, currentD
             </div>
           </RadioGroup>
           <div className="space-y-1.5">
-            <Label htmlFor="budget-value">Valor (R$)</Label>
+            <Label htmlFor="budget-value">Valor (US$)</Label>
             <Input
               id="budget-value"
               type="number"

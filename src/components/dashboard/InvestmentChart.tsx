@@ -1,6 +1,7 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle } from "lucide-react";
+import { formatMoney, metaSpendIn, useProjectCurrency } from "@/lib/currency";
 
 // Cores do design ativo (mesmo padrão de RevenueChart/SalesChart)
 const MAIN = "hsl(var(--chart-main))";
@@ -20,9 +21,10 @@ interface InvestmentChartProps {
 }
 
 export function InvestmentChart({ daily, isLoading, error }: InvestmentChartProps) {
+  const currency = useProjectCurrency();
   const chartData = (daily || []).map((d) => ({
     date: d.date_start.slice(5), // MM-DD
-    spend: parseFloat(d.spend_brl || d.spend_usd || "0"),
+    spend: metaSpendIn(currency, d),
   }));
 
   return (
@@ -64,7 +66,7 @@ export function InvestmentChart({ daily, isLoading, error }: InvestmentChartProp
                   borderRadius: "8px",
                   fontSize: "12px",
                 }}
-                formatter={(value: number) => [`R$ ${value.toFixed(2)}`, "Investimento"]}
+                formatter={(value: number) => [formatMoney(value, currency), "Investimento"]}
               />
               <Area
                 type="monotone"

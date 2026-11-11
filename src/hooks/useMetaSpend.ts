@@ -9,7 +9,11 @@ interface DailySpend {
 }
 
 interface MetaSpendResponse {
+  /** Em real (convertido da conta em dólar) */
   total_spend: number;
+  /** Valor original da conta, em dólar */
+  total_spend_usd?: number;
+  exchange_rate?: number;
   daily: DailySpend[];
   account_id?: string;
   account_name?: string;

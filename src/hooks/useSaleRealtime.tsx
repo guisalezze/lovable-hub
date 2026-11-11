@@ -2,24 +2,18 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playSaleSound } from "@/lib/sounds";
-
-/** Formata valor em BRL */
-function fmtBRL(value: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  }).format(value);
-}
+import { formatMoney, type Currency } from "@/lib/currency";
 
 /** Toast visual de venda aprovada */
 function SaleToast({
   amount,
   productName,
+  currency,
   onDismiss,
 }: {
   amount: number;
   productName: string;
+  currency: Currency;
   onDismiss: () => void;
 }) {
   return (
@@ -39,7 +33,7 @@ function SaleToast({
           Venda aprovada! 🎉
         </p>
         <p className="text-[11px] text-emerald-400 font-medium mt-0.5 animate-in fade-in-0 zoom-in-95 duration-300">
-          {fmtBRL(amount)}
+          {formatMoney(amount, currency)}
         </p>
         {productName && (
           <p className="text-[10px] text-zinc-500 truncate mt-0.5">
@@ -75,7 +69,7 @@ function SaleToast({
 }
 
 /** Envia notificação push nativa (se o usuário tiver ativado) */
-async function sendPushNotification(amount: number, productName: string) {
+async function sendPushNotification(amount: number, productName: string, currency: Currency) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -97,11 +91,7 @@ async function sendPushNotification(amount: number, productName: string) {
       if (newSession) session = newSession;
     }
 
-    const formattedAmount = new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-      minimumFractionDigits: 2,
-    }).format(amount);
+    const formattedAmount = formatMoney(amount, currency);
 
     console.log("[useSaleRealtime] Enviando push notification de venda...");
     const response = await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
@@ -138,12 +128,12 @@ async function sendPushNotification(amount: number, productName: string) {
 }
 
 /** Mostra o toast de venda aprovada (exportado para uso em testes) */
-export async function showSaleToast(amount: number, productName: string) {
+export async function showSaleToast(amount: number, productName: string, currency: Currency = "BRL") {
   if (amount <= 0) return;
   playSaleSound();
 
   // Enviar push notification (não bloqueia o toast)
-  sendPushNotification(amount, productName).catch(() => {});
+  sendPushNotification(amount, productName, currency).catch(() => {});
 
   toast.custom(
     (t) => (
@@ -151,6 +141,7 @@ export async function showSaleToast(amount: number, productName: string) {
         <SaleToast
           amount={amount}
           productName={productName}
+          currency={currency}
           onDismiss={() => toast.dismiss(t)}
         />
       </div>
@@ -198,11 +189,12 @@ export function useSaleRealtime() {
           table: "nutra_sales",
           filter: "status=eq.approved",
         },
-        (payload: { new: { amount?: number | null; product_name?: string | null } }) => {
+        (payload: { new: { amount?: number | null; product_name?: string | null; currency?: string | null } }) => {
           const sale = payload.new;
           showSaleToast(
             Number(sale.amount || 0),
-            sale.product_name || "Produto"
+            sale.product_name || "Produto",
+            sale.currency === "BRL" ? "BRL" : "USD" // Nutra é em dólar
           );
         }
       )

@@ -18,6 +18,7 @@ import { ptBR } from "date-fns/locale";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { ProductGoalsSection } from "@/components/financeiro/ProductGoalsSection";
 import { ProductCostsSection, useProductCosts, costForUnits, fmtUSD } from "@/components/financeiro/ProductCostsSection";
+import { currencyForProject, currencySymbol, formatMoney, formatMoneyShort, metaSpendIn } from "@/lib/currency";
 
 function usePeriodSales(since: string, until: string, projectId: string | undefined) {
   return useQuery({
@@ -151,8 +152,6 @@ function DeltaBadge({ current, previous }: { current: number; previous: number }
   );
 }
 
-const fmtShort = (v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(1)}k` : `R$${v.toFixed(0)}`;
-const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 function exportCSV(chartData: any[], since: string, until: string) {
   const rows = [
@@ -184,6 +183,10 @@ export default function FinanceiroPage() {
   const isNutra = currentProject?.slug === "nutra";
   const isEducacional = currentProject?.slug === "educacional";
   const navigate = useNavigate();
+  // Nutra é todo em dólar (vendas e Meta); os demais projetos em real
+  const currency = currencyForProject(currentProject?.slug);
+  const fmtBRL = (v: number) => formatMoney(v, currency);
+  const fmtShort = (v: number) => formatMoneyShort(v, currency);
 
   const [since, setSince] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
   const [until, setUntil] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -218,13 +221,15 @@ export default function FinanceiroPage() {
   const { data: metaSpend, isLoading: metaSpendLoading } = useMetaSpend({ since, until });
   const { data: prevMetaSpend } = useMetaSpend({ since: prevSince, until: prevUntil });
 
-  const adSpendTotal = metaSpend?.total_spend ?? 0;
-  const prevAdSpendTotal = prevMetaSpend?.total_spend ?? 0;
+  // Projeto em dólar usa o gasto original da conta; em real, o convertido
+  const spendTotalOf = (m?: { total_spend?: number; total_spend_usd?: number }) =>
+    (currency === "USD" ? m?.total_spend_usd : m?.total_spend) ?? 0;
+  const adSpendTotal = spendTotalOf(metaSpend);
+  const prevAdSpendTotal = spendTotalOf(prevMetaSpend);
   const metaConnected = !metaSpendLoading && (adSpendTotal > 0 || metaSpend !== undefined);
-  // Daily ad spend from edge function (date_start → date, spend_brl → adSpend)
   const metaDailySpend: { date: string; adSpend: number }[] = (metaSpend?.daily || []).map((d: any) => ({
     date: d.date_start?.slice(0, 10) || "",
-    adSpend: Number(d.spend_brl || d.spend_usd || 0),
+    adSpend: metaSpendIn(currency, d),
   }));
 
   // Use appropriate revenue source
@@ -346,7 +351,7 @@ export default function FinanceiroPage() {
               </DialogHeader>
               <div className="space-y-4 mt-2">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Valor (R$)</Label>
+                  <Label className="text-xs">Valor ({currencySymbol(currency)})</Label>
                   <Input placeholder="0,00" type="number" value={investAmount} onChange={(e) => setInvestAmount(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
