@@ -6,17 +6,19 @@ import {
 import { useProject } from "@/contexts/ProjectContext";
 import { currencyForProject, formatMoneyShort } from "@/lib/currency";
 
-// Marcos de faturamento: 1M, 2M, 3M ... 20M
-const MILESTONES = Array.from({ length: 20 }, (_, i) => (i + 1) * 1_000_000);
+// Níveis de faturamento (na moeda do projeto: R$ no Educacional, US$ no Nutra):
+// 0–10k, 10k–50k, 50k–100k, 100k–500k, 500k–1M, 1M–10M
+const MILESTONES = [10_000, 50_000, 100_000, 500_000, 1_000_000, 10_000_000];
 
 function getLevel(total: number) {
   const idx = MILESTONES.findIndex((m) => total < m);
   if (idx === -1) {
-    // passou todos os 20M
+    // passou o último nível (10M)
+    const last = MILESTONES.length - 1;
     return {
-      level: 20,
-      prev: MILESTONES[18],
-      current: MILESTONES[19],
+      level: MILESTONES.length,
+      prev: MILESTONES[last - 1],
+      current: MILESTONES[last],
       pct: 100,
       completed: true,
     };
@@ -79,7 +81,7 @@ export function RevenueProgressBar() {
   const barColor = getBarColor(pct, completed);
 
   // Níveis já concluídos para o tooltip (até 5 anteriores)
-  const completedLevels = MILESTONES.slice(0, level - 1);
+  const completedLevels = MILESTONES.slice(0, completed ? MILESTONES.length : level - 1);
 
   return (
     <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0 mx-1 sm:mx-3">
