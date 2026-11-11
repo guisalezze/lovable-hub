@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -92,6 +92,26 @@ function useClickTotals(ruleId: string) {
       return m;
     },
   }).data ?? {};
+}
+
+function MinutesInput({ value, onCommit }: { value: number; onCommit: (m: number) => void }) {
+  const [txt, setTxt] = useState(String(value));
+  useEffect(() => setTxt(String(value)), [value]);
+  return (
+    <Input
+      type="number"
+      min={1}
+      max={60}
+      className="h-8 w-20"
+      value={txt}
+      onChange={(e) => setTxt(e.target.value)}
+      onBlur={() => {
+        const m = txt.trim() === "" ? 5 : Math.min(60, Math.max(1, Math.round(Number(txt)) || 1));
+        setTxt(String(m));
+        onCommit(m);
+      }}
+    />
+  );
 }
 
 export function BlockFields({
@@ -252,7 +272,7 @@ export function BlockFields({
             </Button>
           )}
         </div>
-        {buttons.some((b) => b.type !== "url" && b.label?.trim()) && (
+        {(!!n.read_fallback || buttons.some((b) => b.type !== "url" && b.label?.trim())) && (
           <div className="space-y-2 rounded-lg border p-2.5">
             <label className="flex cursor-pointer items-center gap-2 text-sm">
               <Switch
@@ -271,17 +291,9 @@ export function BlockFields({
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-xs">
                   <span>em</span>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={60}
-                    className="h-8 w-20"
+                  <MinutesInput
                     value={n.read_fallback.minutes}
-                    onChange={(e) =>
-                      patch((x) => {
-                        if (x.read_fallback) x.read_fallback.minutes = Math.min(60, Math.max(1, Math.round(Number(e.target.value)) || 1));
-                      })
-                    }
+                    onCommit={(m) => patch((x) => void (x.read_fallback && (x.read_fallback.minutes = m)))}
                   />
                   <span>min, seguir pelo botão</span>
                 </div>

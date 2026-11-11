@@ -293,6 +293,8 @@ export function nodeWarnings(flow: Flow, rule: WarnRule): Record<string, string[
         const b = n.buttons?.[n.read_fallback.button];
         if (!b || b.type === "url" || !b.label?.trim()) {
           add(n.id, "A opção de leitura aponta para um botão que não existe ou não continua o fluxo.");
+        } else if (!b.next) {
+          add(n.id, "Botão escolhido não leva a nenhum bloco");
         }
       }
     }

@@ -162,6 +162,7 @@ export function StartFields({ meta, onMeta }: { meta: RuleMeta; onMeta: (patch: 
                 Aguardando o próximo reel. Quando você publicar, o fluxo passa a valer para ele. Até lá não responde a nada.
               </p>
             ) : (
+              <>
               <div className="flex gap-2">
                 <Select
                   value={meta.post_id ?? "any"}
@@ -179,6 +180,12 @@ export function StartFields({ meta, onMeta }: { meta: RuleMeta; onMeta: (patch: 
                   Escolher um post
                 </Button>
               </div>
+              {!meta.post_id && (
+                <p className="text-[11px] text-muted-foreground">
+                  Nenhum post escolhido: o fluxo vai responder em qualquer post.
+                </p>
+              )}
+              </>
             )}
           </div>
           <div className="space-y-1.5">

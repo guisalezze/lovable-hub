@@ -110,6 +110,14 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
     pending_next_reel: !!rule.pending_next_reel,
     next_reel_since: rule.next_reel_since ?? null,
   }));
+  // valores de "próximo reel"/post como estavam no banco ao abrir (ou ao salvar por último)
+  const loadedReel = useRef({
+    trigger: rule.trigger || "comment",
+    pending: !!rule.pending_next_reel,
+    since: rule.next_reel_since ?? null,
+    post_id: rule.post_id ?? null,
+    media_label: rule.media_label ?? null,
+  });
   const [nodes, setNodes] = useState<IgRFNode[]>(() => {
     const flow = rule.flow?.nodes?.start ? rule.flow : newFlow();
     return flowToRf(flow).map((r) => ({ ...r, selected: r.id === "start" }));
@@ -265,6 +273,22 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
       const { meta, flow } = vars;
       const { rule: v, errors } = validateRule({ ...meta, flow });
       if (errors.length) throw new Error(errors.join("\n"));
+      // só grava post/próximo reel se o usuário mexeu nisso (evita desfazer o que o worker gravou)
+      const L = loadedReel.current;
+      const reelChanged =
+        v.trigger !== L.trigger ||
+        v.pending_next_reel !== L.pending ||
+        (v.next_reel_since ?? null) !== L.since ||
+        v.post_id !== L.post_id ||
+        v.media_label !== L.media_label;
+      const reelCols = reelChanged
+        ? {
+            post_id: v.post_id,
+            media_label: v.media_label,
+            pending_next_reel: v.pending_next_reel,
+            next_reel_since: v.next_reel_since,
+          }
+        : {};
       const { error } = await supabase
         .from("ig_automations")
         .update({
@@ -273,17 +297,23 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
           trigger: v.trigger,
           keywords: v.keywords,
           match_type: v.match_type,
-          post_id: v.post_id,
-          media_label: v.media_label,
           public_replies: v.public_replies,
-          pending_next_reel: v.pending_next_reel,
-          next_reel_since: v.next_reel_since,
+          ...reelCols,
           flow: v.flow as unknown as Json,
           updated_at: new Date().toISOString(),
         })
         .eq("id", rule.id);
       if (error) throw error;
-      return v;
+      if (reelChanged) {
+        loadedReel.current = {
+          trigger: v.trigger,
+          pending: v.pending_next_reel,
+          since: v.next_reel_since,
+          post_id: v.post_id,
+          media_label: v.media_label,
+        };
+      }
+      return reelChanged ? v : { ...v, post_id: meta.post_id, media_label: meta.media_label, pending_next_reel: meta.pending_next_reel, next_reel_since: meta.next_reel_since };
     },
     onSuccess: (v, vars) => {
       const m: RuleMeta = {
