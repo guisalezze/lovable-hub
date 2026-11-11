@@ -14,7 +14,9 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import jsPDF from "jspdf";
+import { toast } from "sonner";
+// jsPDF (e o html2canvas que vem junto) só é baixado ao clicar em "Exportar PDF",
+// para a página de Relatórios abrir mais leve.
 
 function useReportData(since: string, until: string, projectId: string | undefined, isEducacional: boolean) {
   return useQuery({
@@ -152,10 +154,11 @@ export default function RelatoriosPage() {
 
   const { data, isLoading } = useReportData(since, until, currentProject?.id, currentProject?.slug === "educacional");
 
-  function exportPDF() {
+  async function exportPDF() {
     if (!data) return;
     setExporting(true);
     try {
+      const { default: jsPDF } = await import("jspdf");
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const W = 210;
       const MARGIN = 14;
@@ -416,6 +419,9 @@ export default function RelatoriosPage() {
       }
 
       pdf.save(`relatorio_${since}_${until}.pdf`);
+    } catch (err) {
+      console.error("Erro ao exportar PDF:", err);
+      toast.error("Não foi possível gerar o PDF. Verifique a conexão e tente de novo.");
     } finally {
       setExporting(false);
     }
