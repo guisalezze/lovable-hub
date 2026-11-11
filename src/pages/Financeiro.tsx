@@ -17,7 +17,7 @@ import { format, subDays, parseISO, differenceInDays, addMonths } from "date-fns
 import { ptBR } from "date-fns/locale";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { ProductGoalsSection } from "@/components/financeiro/ProductGoalsSection";
-import { ProductCostsSection, useProductCosts, costForUnits, fmtUSD } from "@/components/financeiro/ProductCostsSection";
+import { ProductCostsSection, useProductCosts, costForSale } from "@/components/financeiro/ProductCostsSection";
 import { currencyForProject, currencySymbol, formatMoney, formatMoneyShort, metaSpendIn } from "@/lib/currency";
 
 function usePeriodSales(since: string, until: string, projectId: string | undefined) {
@@ -72,7 +72,7 @@ function usePeriodMentorias(since: string, until: string, enabled: boolean) {
   });
 }
 
-type NutraDay = { date: string; revenue: number; units: number; storedCost: number; unpricedUnits: number[] };
+type NutraDay = { date: string; revenue: number; units: number; storedCost: number; unpriced: { units: number; product: string | null }[] };
 
 function useNutraSalesRevenue(projectId: string | undefined, since: string, until: string) {
   return useQuery({
@@ -81,7 +81,7 @@ function useNutraSalesRevenue(projectId: string | undefined, since: string, unti
       if (!projectId) return { totalRevenue: 0, totalUnits: 0, daily: [] as NutraDay[] };
       const { data, error } = await (supabase as any)
         .from("nutra_sales")
-        .select("created_at, amount, status, units, product_cost")
+        .select("created_at, amount, status, units, product_cost, product_name")
         .eq("project_id", projectId)
         .in("status", ["approved", "paid", "complete"])
         .gte("created_at", `${since}T00:00:00`)
@@ -92,13 +92,13 @@ function useNutraSalesRevenue(projectId: string | undefined, since: string, unti
       const map: Record<string, NutraDay> = {};
       rows.forEach((s) => {
         const d = s.created_at.slice(0, 10);
-        if (!map[d]) map[d] = { date: d, revenue: 0, units: 0, storedCost: 0, unpricedUnits: [] };
+        if (!map[d]) map[d] = { date: d, revenue: 0, units: 0, storedCost: 0, unpriced: [] };
         const units = Number(s.units || 1);
         map[d].revenue += Number(s.amount || 0);
         map[d].units += units;
         // Cost is stamped on the sale by cartpanda-s2s; older rows fall back to current costs
         if (s.product_cost != null) map[d].storedCost += Number(s.product_cost);
-        else map[d].unpricedUnits.push(units);
+        else map[d].unpriced.push({ units, product: s.product_name ?? null });
       });
       const daily = Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
       return { totalRevenue, totalUnits: daily.reduce((a, d) => a + d.units, 0), daily };
@@ -247,7 +247,7 @@ export default function FinanceiroPage() {
   // Product cost (só Nutra): custo gravado em cada venda (unidades × custo unitário)
   const { data: productCosts = [] } = useProductCosts(isNutra ? currentProject?.id : undefined);
   const dayCost = useCallback(
-    (d: NutraDay) => d.storedCost + d.unpricedUnits.reduce((a, u) => a + costForUnits(productCosts, u), 0),
+    (d: NutraDay) => d.storedCost + d.unpriced.reduce((a, u) => a + costForSale(productCosts, u.units, u.product), 0),
     [productCosts],
   );
   const productCost = isNutra ? (nutraSalesData?.daily || []).reduce((a, d) => a + dayCost(d), 0) : 0;
@@ -446,7 +446,7 @@ export default function FinanceiroPage() {
           <div className="glass-card p-4 space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground"><Package className="h-4 w-4" /><span className="text-xs font-medium">Custo de Produto</span></div>
             <p className="text-xl font-bold text-foreground">{fmtBRL(productCost)}</p>
-            <p className="text-[10px] text-muted-foreground">{nutraSalesData?.totalUnits ?? 0} unidades · {fmtUSD(costForUnits(productCosts, 1))}/un.</p>
+            <p className="text-[10px] text-muted-foreground">{nutraSalesData?.totalUnits ?? 0} potes vendidos</p>
           </div>
         )}
         <div className="glass-card p-4 space-y-1">

@@ -102,11 +102,19 @@ export function unitsOf(payload: Record<string, any>): number {
   return n > 0 && n <= 100 ? n : 1;
 }
 
-async function productCostOf(adminClient: any, projectId: string, units: number): Promise<number | null> {
+// Cost rows apply by product (product_match words, "|"-separated) and kit size
+// (min_units/max_units). Same rule as src/components/financeiro/ProductCostsSection.tsx.
+async function productCostOf(adminClient: any, projectId: string, units: number, productName?: string | null): Promise<number | null> {
   const { data: costs, error } = await adminClient
-    .from("product_costs").select("unit_cost, qty_per_sale, per_order").eq("project_id", projectId);
+    .from("product_costs").select("unit_cost, qty_per_sale, per_order, product_match, min_units, max_units").eq("project_id", projectId);
   if (error || !costs?.length) return null;
-  const total = costs.reduce((a: number, c: any) =>
+  const name = String(productName || "").toLowerCase();
+  const total = costs.filter((c: any) => {
+    if (c.min_units != null && units < c.min_units) return false;
+    if (c.max_units != null && units > c.max_units) return false;
+    const terms = String(c.product_match || "").toLowerCase().split("|").map((w: string) => w.trim()).filter(Boolean);
+    return !terms.length || terms.some((w) => name.includes(w));
+  }).reduce((a: number, c: any) =>
     a + Number(c.unit_cost) * Number(c.qty_per_sale) * (c.per_order ? 1 : units), 0);
   return Math.round(total * 100) / 100;
 }
@@ -166,7 +174,8 @@ Deno.serve(async (req) => {
     }
     const fullName = [payload.first_name, payload.last_name].filter(Boolean).join(" ") || null;
     const units = unitsOf(payload);
-    const productCost = await productCostOf(adminClient, nutraProject.id, units);
+    const productCost = await productCostOf(adminClient, nutraProject.id, units,
+      payload.line_items?.[0]?.title || payload.product_name);
     const sale = {
       project_id: nutraProject.id,
       source: "cartpanda",

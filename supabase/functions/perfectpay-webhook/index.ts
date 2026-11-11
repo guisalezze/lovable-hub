@@ -199,10 +199,20 @@ async function handleNutraSale(supabase: any, supabaseUrl: string, payload: any)
   const currency = fx && !("brl_per_usd" in fx) ? originalCurrency : "USD";
 
   const units = nutraUnitsOf(payload);
+  const productName = [product.name, plan.name].filter(Boolean).join(" — ") || null;
+  // Cost rows apply by product (product_match words, "|"-separated) and kit size
+  // (min_units/max_units). Same rule as src/components/financeiro/ProductCostsSection.tsx.
   const { data: costs } = await supabase
-    .from("product_costs").select("unit_cost, qty_per_sale, per_order").eq("project_id", nutraProject.id);
+    .from("product_costs").select("unit_cost, qty_per_sale, per_order, product_match, min_units, max_units")
+    .eq("project_id", nutraProject.id);
+  const lowerName = String(productName || "").toLowerCase();
   const productCost = costs?.length
-    ? Math.round(costs.reduce((a: number, c: any) =>
+    ? Math.round(costs.filter((c: any) => {
+        if (c.min_units != null && units < c.min_units) return false;
+        if (c.max_units != null && units > c.max_units) return false;
+        const terms = String(c.product_match || "").toLowerCase().split("|").map((w: string) => w.trim()).filter(Boolean);
+        return !terms.length || terms.some((w: string) => lowerName.includes(w));
+      }).reduce((a: number, c: any) =>
         a + Number(c.unit_cost) * Number(c.qty_per_sale) * (c.per_order ? 1 : units), 0) * 100) / 100
     : null;
 
@@ -214,7 +224,7 @@ async function handleNutraSale(supabase: any, supabaseUrl: string, payload: any)
     customer_name: customer.full_name || null,
     customer_email: (customer.email || "").toLowerCase().trim() || null,
     customer_phone: customer.phone_formated_ddi || customer.phone_formated || null,
-    product_name: [product.name, plan.name].filter(Boolean).join(" — ") || null,
+    product_name: productName,
     product_id: product.code || null,
     amount,
     units,
