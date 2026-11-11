@@ -21,6 +21,21 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/logo.png" />
     <meta name="theme-color" content="#0A0A0A" />
 
+    <!-- Aplica o design salvo antes da primeira pintura (evita flash). Mantenha em sincronia com src/lib/designs.ts -->
+    <script>
+      (function () {
+        var designs = { vault: ["#0A0A0A", true], lima: ["#040505", true], claro: ["#F4F5F2", false] };
+        var id = "vault";
+        try { var s = localStorage.getItem("vault-design"); if (s && designs[s]) id = s; } catch (e) {}
+        var root = document.documentElement;
+        root.setAttribute("data-design", id);
+        if (designs[id][1]) root.classList.add("dark");
+        root.style.colorScheme = designs[id][1] ? "dark" : "light";
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.setAttribute("content", designs[id][0]);
+      })();
+    </script>
+
     <!-- PWA -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

@@ -124,7 +124,7 @@ function ProjectGroup({ project, items, isOpen, onToggle, onSelectProject, isAct
                   cn(
                     "flex items-center gap-3 px-3 py-1.5 rounded-md text-sm font-medium transition-colors press-scale whitespace-nowrap",
                     isItemActive(item.to)
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      ? "nav-active"
                       : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
                   )
                 }
@@ -233,7 +233,7 @@ function SidebarContent() {
                   cn(
                     "flex items-center gap-3 px-3 py-1.5 rounded-md text-sm font-medium transition-colors press-scale whitespace-nowrap",
                     isActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      ? "nav-active"
                       : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
                   )
                 }
@@ -258,7 +258,7 @@ function SidebarContent() {
               cn(
                 "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors press-scale whitespace-nowrap",
                 isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  ? "nav-active"
                   : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
               )
             }
@@ -312,10 +312,8 @@ export function AppSidebar({ open, onToggle }: AppSidebarProps) {
     if (isMobile && open && location.pathname !== prevPathnameRef.current) {
       // Pathname mudou = usuário navegou, então fechar o menu
       prevPathnameRef.current = location.pathname;
-      const timer = setTimeout(() => {
-        onToggle();
-      }, 300); // Delay maior para permitir animação de navegação
-      return () => clearTimeout(timer);
+      // Fecha na hora: a página nova já está pronta por trás do menu
+      onToggle();
     } else if (location.pathname !== prevPathnameRef.current) {
       // Atualizar ref mesmo se não fechar
       prevPathnameRef.current = location.pathname;
@@ -340,7 +338,7 @@ export function AppSidebar({ open, onToggle }: AppSidebarProps) {
   return (
     <aside
       className={cn(
-        "shrink-0 w-60 border-r border-sidebar-border bg-sidebar overflow-hidden flex flex-col h-screen fixed left-0 top-0 z-40 transition-transform duration-[var(--duration-modal)] ease-[var(--ease-in-out-apple)]",
+        "shrink-0 w-60 border-r border-sidebar-border bg-sidebar overflow-hidden flex flex-col h-screen fixed left-0 top-0 z-40 transition-transform duration-modal ease-in-out-apple",
         open ? "translate-x-0" : "-translate-x-full"
       )}
       aria-hidden={!open}

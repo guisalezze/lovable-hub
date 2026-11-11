@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Raleway:wght@700;800&family=Nunito:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Raleway:wght@700;800&family=Nunito:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -58,6 +58,13 @@
     --chart-4: 280 45% 55%;
     --chart-5: 4 72% 50%;
 
+    /* Nome da fonte por design (usado no tailwind.config.ts) — sempre definido */
+    --font-sans-name: 'Nunito';
+    --font-display-name: 'Raleway';
+    /* Fundo do item ativo da sidebar (cada design pode trocar) */
+    --nav-active-bg: hsl(var(--sidebar-accent));
+    --nav-active-fg: hsl(var(--sidebar-accent-foreground));
+
     --font-sans: 'Nunito', system-ui, -apple-system, sans-serif;
     --font-display: 'Raleway', system-ui, sans-serif;
     --font-serif: Georgia, serif;
@@ -81,7 +88,7 @@
     --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); /* iOS-like drawer curve (AUDIT.md §2) */
 
     /* Shared duration scale — maps to AUDIT.md's duration budget tiers.
-       Consume via Tailwind arbitrary value syntax, e.g. duration-[var(--duration-press)].
+       Consume via the named Tailwind utilities in tailwind.config.ts, e.g. duration-press / ease-out-apple.
        Defining these does not itself change any component; see plans/010 for
        the proof-of-concept consumers and plans/007/008/009 for related work. */
     --duration-press: 150ms;    /* Button press feedback — AUDIT budget 100-160ms. Matches button.tsx's/​.press-scale's pre-Plan-007 150-160ms baseline; Plan 007 makes Button/.press-scale press/release asymmetric (120ms/180ms) and supersedes this token for those two spots specifically. */
@@ -150,6 +157,167 @@
     --shadow-xl:  0px 18px 36px 0px hsl(0 0% 0% / 0.60), 0px 8px 12px -1px hsl(0 0% 0% / 0.50);
     --shadow-2xl: 0px 28px 56px 0px hsl(0 0% 0% / 0.80);
   }
+
+  /* ================================================================
+     DESIGN: Verde Lima — grafite esverdeado + destaques lima
+     ================================================================ */
+  :root[data-design="lima"] {
+    --background: 180 11% 2%;
+    --foreground: 150 6% 90%;
+
+    --card: 150 9% 7.5%;
+    --card-foreground: 150 6% 90%;
+
+    --popover: 150 9% 8.5%;
+    --popover-foreground: 150 6% 90%;
+
+    --primary: 88 72% 62%;
+    --primary-foreground: 150 30% 5%;
+
+    --secondary: 150 7% 12%;
+    --secondary-foreground: 150 6% 90%;
+
+    --muted: 150 7% 11%;
+    --muted-foreground: 150 2% 60%;
+
+    --accent: 150 8% 12%;
+    --accent-foreground: 80 80% 68%;
+
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 140 68% 45%;
+    --success-foreground: 150 30% 5%;
+
+    --warning: 39 76% 50%;
+    --warning-foreground: 150 30% 5%;
+
+    --border: 150 6% 14%;
+    --input: 150 6% 16%;
+    --ring: 88 72% 62%;
+
+    --radius: 1rem;
+
+    --sidebar-background: 160 9% 5%;
+    --sidebar: 160 9% 5%;
+    --sidebar-foreground: 150 6% 88%;
+    --sidebar-primary: 88 72% 62%;
+    --sidebar-primary-foreground: 150 30% 5%;
+    --sidebar-accent: 150 8% 11%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 150 6% 12%;
+    --sidebar-ring: 88 72% 62%;
+
+    --chart-1: 88 72% 62%;
+    --chart-2: 140 68% 45%;
+    --chart-3: 66 90% 60%;
+    --chart-4: 170 55% 45%;
+    --chart-5: 0 72% 58%;
+
+    --font-sans-name: 'Inter';
+    --font-display-name: 'Inter';
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-display: 'Inter', system-ui, sans-serif;
+    --tracking-normal: -0.01em;
+
+    --nav-active-bg: linear-gradient(90deg, hsl(140 55% 20%), hsl(92 62% 42%));
+    --nav-active-fg: hsl(0 0% 100%);
+  }
+
+  /* ================================================================
+     DESIGN: Claro — fundo claro, limpo, destaque esmeralda
+     ================================================================ */
+  :root[data-design="claro"] {
+    --background: 80 10% 96%;
+    --foreground: 150 15% 9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 150 15% 9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 150 15% 9%;
+
+    --primary: 142 72% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 80 8% 92%;
+    --secondary-foreground: 150 15% 12%;
+
+    --muted: 80 8% 92%;
+    --muted-foreground: 150 5% 40%;
+
+    --accent: 142 40% 93%;
+    --accent-foreground: 142 72% 27%;
+
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 72% 35%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 36 90% 45%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 80 8% 86%;
+    --input: 80 8% 84%;
+    --ring: 142 72% 35%;
+
+    --radius: 0.875rem;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 150 15% 14%;
+    --sidebar-primary: 142 72% 35%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 142 40% 93%;
+    --sidebar-accent-foreground: 142 72% 25%;
+    --sidebar-border: 80 8% 89%;
+    --sidebar-ring: 142 72% 35%;
+
+    --chart-1: 142 72% 35%;
+    --chart-2: 160 60% 40%;
+    --chart-3: 210 75% 50%;
+    --chart-4: 270 55% 55%;
+    --chart-5: 0 72% 50%;
+
+    --font-sans-name: 'Inter';
+    --font-display-name: 'Inter';
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-display: 'Inter', system-ui, sans-serif;
+    --tracking-normal: -0.01em;
+
+    --shadow-2xs: 0px 1px 2px 0px hsl(150 20% 10% / 0.04);
+    --shadow-xs:  0px 1px 3px 0px hsl(150 20% 10% / 0.06);
+    --shadow-sm:  0px 1px 3px 0px hsl(150 20% 10% / 0.08), 0px 1px 2px -1px hsl(150 20% 10% / 0.06);
+    --shadow:     0px 4px 8px 0px hsl(150 20% 10% / 0.08), 0px 1px 3px -1px hsl(150 20% 10% / 0.06);
+    --shadow-md:  0px 6px 14px 0px hsl(150 20% 10% / 0.09), 0px 2px 4px -1px hsl(150 20% 10% / 0.06);
+    --shadow-lg:  0px 10px 22px 0px hsl(150 20% 10% / 0.10), 0px 4px 6px -1px hsl(150 20% 10% / 0.06);
+    --shadow-xl:  0px 16px 30px 0px hsl(150 20% 10% / 0.12), 0px 8px 10px -1px hsl(150 20% 10% / 0.06);
+    --shadow-2xl: 0px 24px 48px 0px hsl(150 20% 10% / 0.18);
+
+    --nav-active-bg: hsl(var(--sidebar-accent));
+    --nav-active-fg: hsl(var(--sidebar-accent-foreground));
+  }
+}
+
+/* Títulos mais leves nos designs modernos (estilo do dashboard de referência) */
+:root[data-design="lima"] .heading-display,
+:root[data-design="claro"] .heading-display {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+/* Item ativo da navegação — o fundo vem do design atual */
+.nav-active {
+  background: var(--nav-active-bg);
+  color: var(--nav-active-fg);
+}
+
+/* Durante a troca de design, nada transiciona — a troca é instantânea */
+.design-switching *,
+.design-switching *::before,
+.design-switching *::after {
+  transition: none !important;
 }
 
 @layer base {
@@ -197,16 +365,16 @@
   }
 
   .glow-primary {
-    box-shadow: 0 0 24px -4px hsl(46 65% 52% / 0.35);
+    box-shadow: 0 0 24px -4px hsl(var(--primary) / 0.35);
   }
 
   .glow-accent {
-    box-shadow: 0 0 24px -4px hsl(46 68% 62% / 0.30);
+    box-shadow: 0 0 24px -4px hsl(var(--accent-foreground) / 0.30);
   }
 
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, hsl(46 65% 52%), hsl(46 68% 62%));
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent-foreground)));
   }
 
   .gradient-border {
@@ -218,7 +386,7 @@
     inset: 0;
     border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(135deg, hsl(46 65% 52% / 0.4), hsl(46 68% 62% / 0.25));
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.4), hsl(var(--accent-foreground) / 0.25));
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
@@ -292,21 +460,27 @@
   }
 
   /* Staggered entrance for sibling cards — apply to the grid/flex container */
+  /* Curto de propósito: a página tem que parecer pronta na hora (navegação de app) */
   .stagger-in > * {
-    animation: material-in 420ms var(--ease-out-apple) backwards;
+    animation: material-in 220ms var(--ease-out-apple) backwards;
   }
   .stagger-in > *:nth-child(1) { animation-delay: 0ms; }
-  .stagger-in > *:nth-child(2) { animation-delay: 60ms; }
-  .stagger-in > *:nth-child(3) { animation-delay: 120ms; }
-  .stagger-in > *:nth-child(4) { animation-delay: 180ms; }
-  .stagger-in > *:nth-child(5) { animation-delay: 240ms; }
-  .stagger-in > *:nth-child(6) { animation-delay: 300ms; }
-  .stagger-in > *:nth-child(7) { animation-delay: 360ms; }
-  .stagger-in > *:nth-child(8) { animation-delay: 420ms; }
+  .stagger-in > *:nth-child(2) { animation-delay: 20ms; }
+  .stagger-in > *:nth-child(3) { animation-delay: 40ms; }
+  .stagger-in > *:nth-child(4) { animation-delay: 60ms; }
+  .stagger-in > *:nth-child(5) { animation-delay: 80ms; }
+  .stagger-in > *:nth-child(6) { animation-delay: 100ms; }
+  .stagger-in > *:nth-child(7) { animation-delay: 120ms; }
+  .stagger-in > *:nth-child(8) { animation-delay: 140ms; }
 
   /* Same entrance, for a single standalone card outside a stagger grid */
   .animate-material-in {
-    animation: material-in 420ms var(--ease-out-apple) backwards;
+    animation: material-in 220ms var(--ease-out-apple) backwards;
+  }
+
+  /* Entrada de página: só um fade rápido, sem esperar nada */
+  .page-enter {
+    animation: page-in 160ms ease-out;
   }
 }
 
@@ -321,7 +495,13 @@
   }
 }
 
+@keyframes page-in {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .page-enter,
   .stagger-in > *,
   .animate-material-in {
     animation: none !important;
@@ -372,7 +552,7 @@
 }
 
 ::selection {
-  background: hsl(46 65% 52% / 0.20);
+  background: hsl(var(--primary) / 0.20);
   color: hsl(var(--foreground));
 }
 

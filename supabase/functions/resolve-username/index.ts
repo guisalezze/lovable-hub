@@ -1,11 +1,22 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "https://crm.guisalezze.com",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Produção + qualquer porta de localhost/127.0.0.1 (desenvolvimento local)
+const PROD_ORIGIN = "https://crm.guisalezze.com";
+const LOCAL_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
+function buildCorsHeaders(req: Request) {
+  const origin = req.headers.get("Origin") ?? "";
+  const allowed = origin === PROD_ORIGIN || LOCAL_ORIGIN.test(origin) ? origin : PROD_ORIGIN;
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+}
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

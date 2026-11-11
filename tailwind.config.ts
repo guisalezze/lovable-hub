@@ -15,6 +15,7 @@ export default {
   	extend: {
   		fontFamily: {
   			sans: [
+  				'var(--font-sans-name)',
   				'Nunito',
   				'system-ui',
   				'-apple-system',
@@ -23,6 +24,7 @@ export default {
   				'sans-serif'
   			],
   			display: [
+  				'var(--font-display-name)',
   				'Raleway',
   				'system-ui',
   				'sans-serif'
@@ -146,6 +148,20 @@ export default {
   			'fade-in': 'fade-in 0.4s ease-out',
   			'slide-in': 'slide-in 0.3s ease-out',
   			'pulse-glow': 'pulse-glow 3s ease-in-out infinite'
+  		},
+  		// Nomes próprios para os tokens de movimento do index.css.
+  		// (`duration-[var(...)]` / `ease-[var(...)]` ficam ambíguos com o tailwindcss-animate
+  		// e o Tailwind não gera CSS nenhum para eles.)
+  		transitionDuration: {
+  			press: 'var(--duration-press)',
+  			popover: 'var(--duration-popover)',
+  			dropdown: 'var(--duration-dropdown)',
+  			modal: 'var(--duration-modal)'
+  		},
+  		transitionTimingFunction: {
+  			'out-apple': 'var(--ease-out-apple)',
+  			'in-out-apple': 'var(--ease-in-out-apple)',
+  			drawer: 'var(--ease-drawer)'
   		},
   		boxShadow: {
   			'2xs': 'var(--shadow-2xs)',

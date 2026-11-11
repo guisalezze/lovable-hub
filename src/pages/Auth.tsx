@@ -97,6 +97,10 @@ export default function AuthPage() {
         const { error } = await supabase.auth.setSession(data.session);
         if (error) toast.error("Usuário ou senha incorretos.");
       }
+    } catch (err) {
+      // Falha de rede/CORS: antes o erro sumia em silêncio e o botão só voltava ao normal
+      console.error("Erro no login:", err);
+      toast.error("Não foi possível conectar ao servidor. Tente entrar com seu email.");
     } finally {
       setLoading(false);
     }

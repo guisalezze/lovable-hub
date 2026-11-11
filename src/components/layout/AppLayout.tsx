@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { BottomNavBar } from "./BottomNavBar";
 import { PWAInstallPrompt } from "./PWAInstallPrompt";
-import { Menu, Moon, Sun } from "lucide-react";
+import { Menu } from "lucide-react";
 import { NotificationPopover } from "./NotificationPopover";
+import { DesignSwitcher } from "./DesignSwitcher";
 import { RevenueProgressBar, RevenueBarStrip } from "./RevenueProgressBar";
-import { Button } from "@/components/ui/button";
 import { useSaleRealtime } from "@/hooks/useSaleRealtime";
 import { useTaskRealtime } from "@/hooks/useTaskRealtime";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -20,15 +20,14 @@ export function AppLayout() {
 
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false); // Sempre fechado no mobile
-  const [dark, setDark] = useState(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("theme");
-      if (stored) return stored === "dark";
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    }
-    return false;
-  });
   const navigate = useNavigate();
+  const location = useLocation();
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Ao trocar de página, volta o conteúdo para o topo (como num app)
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [location.pathname]);
 
   // Ajustar estado da sidebar quando mudar de mobile para desktop
   useEffect(() => {
@@ -38,11 +37,6 @@ export function AppLayout() {
       setSidebarOpen(false); // Garantir fechado no mobile
     }
   }, [isMobile]);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-    localStorage.setItem("theme", dark ? "dark" : "light");
-  }, [dark]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Don't trigger shortcuts when typing in inputs
@@ -66,7 +60,7 @@ export function AppLayout() {
       {/* Sidebar: no mobile é Sheet (overlay), no desktop é aside fixo */}
       <AppSidebar open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       <main className={cn(
-        "flex flex-col min-h-screen overflow-hidden transition-[margin-left] duration-[var(--duration-modal)] ease-[var(--ease-in-out-apple)]",
+        "flex flex-col min-h-screen overflow-hidden transition-[margin-left] duration-modal ease-in-out-apple",
         isMobile ? "w-full" : "flex-1",
         !isMobile && sidebarOpen && "ml-60" // Compensar espaço do sidebar fixo no desktop
       )}>
@@ -86,23 +80,18 @@ export function AppLayout() {
           <RevenueBarStrip />
 
           <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="p-2 h-9 w-9 touch-manipulation"
-              onClick={() => setDark((d) => !d)}
-              aria-label="Toggle theme"
-            >
-              {dark ? <Sun className="h-4 w-4 text-muted-foreground" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
-            </Button>
+            <DesignSwitcher />
             <NotificationPopover />
           </div>
         </header>
-        <div className={cn(
+        <div ref={scrollRef} className={cn(
           "flex-1 overflow-auto p-3 sm:p-4 md:p-6",
           isMobile && "pb-20" // Espaço para o bottom nav
         )}>
-          <Outlet />
+          {/* key = rota: cada página entra com um fade curto */}
+          <div key={location.pathname} className="page-enter h-full">
+            <Outlet />
+          </div>
         </div>
       </main>
       

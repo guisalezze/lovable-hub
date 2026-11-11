@@ -48,7 +48,18 @@ import ExclusaoDados from "./pages/ExclusaoDados";
 import DesignPreview from "./pages/DesignPreview";
 // Inbox and Calls removed: Inbox is now a popover in the header; Calls was merged into Agenda
 
-const queryClient = new QueryClient();
+// Navegação de app: ao voltar para uma página, os dados aparecem na hora (do cache)
+// e são atualizados em segundo plano. Sem spinner a cada clique.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000, // 1 min: dentro disso, trocar de página não refaz a busca
+      gcTime: 30 * 60_000, // mantém o cache das páginas visitadas por 30 min
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -189,7 +200,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner position="top-center" richColors closeButton />
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true }}>
         <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/design-preview" element={<DesignPreview />} />
