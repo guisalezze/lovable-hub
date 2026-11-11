@@ -25,7 +25,8 @@ function getLevel(total: number) {
   }
   const prev = idx === 0 ? 0 : MILESTONES[idx - 1];
   const current = MILESTONES[idx];
-  const pct = Math.min(100, ((total - prev) / (current - prev)) * 100);
+  // % da meta do nível (R$ 146K de R$ 500K = 29%), não do trecho entre as metas
+  const pct = Math.min(100, (total / current) * 100);
   return { level: idx + 1, prev, current, pct, completed: false };
 }
 
@@ -123,7 +124,7 @@ export function RevenueProgressBar() {
                 />
               </div>
               <p className="text-muted-foreground text-[10px] mt-1">
-                {fmtShort(total)} · {pct.toFixed(1)}% do nível
+                {fmtShort(total)} · {pct.toFixed(1)}% da meta de {fmtShort(current)}
               </p>
             </div>
 
