@@ -1025,11 +1025,14 @@ export type Database = {
           media_label: string | null
           name: string
           position: number
+          next_reel_since: string | null
+          pending_next_reel: boolean
           post_id: string | null
           public_replies: string[] | null
           quick_reply_label: string | null
           reminder_delay_minutes: number | null
           reminder_text: string | null
+          share_slug: string | null
           trigger: string
           triggers: string[] | null
           updated_at: string | null
@@ -1048,11 +1051,14 @@ export type Database = {
           media_label?: string | null
           name: string
           position?: number
+          next_reel_since?: string | null
+          pending_next_reel?: boolean
           post_id?: string | null
           public_replies?: string[] | null
           quick_reply_label?: string | null
           reminder_delay_minutes?: number | null
           reminder_text?: string | null
+          share_slug?: string | null
           trigger?: string
           triggers?: string[] | null
           updated_at?: string | null
@@ -1071,11 +1077,14 @@ export type Database = {
           media_label?: string | null
           name?: string
           position?: number
+          next_reel_since?: string | null
+          pending_next_reel?: boolean
           post_id?: string | null
           public_replies?: string[] | null
           quick_reply_label?: string | null
           reminder_delay_minutes?: number | null
           reminder_text?: string | null
+          share_slug?: string | null
           trigger?: string
           triggers?: string[] | null
           updated_at?: string | null
@@ -1089,6 +1098,7 @@ export type Database = {
           created_at: string | null
           id: string
           instagram_user_id: string
+          last_reconcile_at: string | null
           name: string | null
           profile_picture_url: string | null
           token_expires_at: string | null
@@ -1100,6 +1110,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           instagram_user_id: string
+          last_reconcile_at?: string | null
           name?: string | null
           profile_picture_url?: string | null
           token_expires_at?: string | null
@@ -1111,6 +1122,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           instagram_user_id?: string
+          last_reconcile_at?: string | null
           name?: string | null
           profile_picture_url?: string | null
           token_expires_at?: string | null
@@ -1199,40 +1211,134 @@ export type Database = {
         }
         Relationships: []
       }
+      ig_follower_snapshots: {
+        Row: {
+          created_at: string
+          day: string
+          followers: number
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          followers: number
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          followers?: number
+        }
+        Relationships: []
+      }
       ig_flow_runs: {
         Row: {
+          attempt: number
           created_at: string
           error: string | null
           id: string
           ig_user_id: string
+          kind: string
           node_id: string
           resume_at: string
           rule_id: string | null
+          source_node: string | null
           status: string
         }
         Insert: {
+          attempt?: number
           created_at?: string
           error?: string | null
           id?: string
           ig_user_id: string
+          kind?: string
           node_id: string
           resume_at: string
           rule_id?: string | null
+          source_node?: string | null
           status?: string
         }
         Update: {
+          attempt?: number
           created_at?: string
           error?: string | null
           id?: string
           ig_user_id?: string
+          kind?: string
           node_id?: string
           resume_at?: string
           rule_id?: string | null
+          source_node?: string | null
           status?: string
         }
         Relationships: [
           {
             foreignKeyName: "ig_flow_runs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "ig_automations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ig_link_clicks: {
+        Row: {
+          created_at: string
+          id: string
+          ig_user_id: string | null
+          link_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ig_user_id?: string | null
+          link_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ig_user_id?: string | null
+          link_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_link_clicks_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "ig_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ig_links: {
+        Row: {
+          button_index: number
+          created_at: string
+          id: string
+          node_id: string
+          rule_id: string
+          slug: string
+          url: string
+        }
+        Insert: {
+          button_index: number
+          created_at?: string
+          id?: string
+          node_id: string
+          rule_id: string
+          slug: string
+          url: string
+        }
+        Update: {
+          button_index?: number
+          created_at?: string
+          id?: string
+          node_id?: string
+          rule_id?: string
+          slug?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_links_rule_id_fkey"
             columns: ["rule_id"]
             isOneToOne: false
             referencedRelation: "ig_automations"
@@ -3836,6 +3942,23 @@ export type Database = {
       }
     }
     Views: {
+      ig_link_click_totals: {
+        Row: {
+          button_index: number | null
+          clicks: number | null
+          node_id: string | null
+          rule_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_links_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "ig_automations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ad_performance: {
         Row: {
           ad_account_id: string | null
