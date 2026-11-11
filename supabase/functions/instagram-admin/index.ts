@@ -207,7 +207,7 @@ Deno.serve(async (req) => {
       let subscribeError: string | undefined;
       try {
         const r = await fetch(
-          `${GRAPH}/${igUserId}/subscribed_apps?subscribed_fields=messages,comments,messaging_postbacks`,
+          `${GRAPH}/${igUserId}/subscribed_apps?subscribed_fields=messages,comments,messaging_postbacks,messaging_seen`,
           { method: "POST", headers: { Authorization: `Bearer ${finalToken}` } },
         );
         const j = await r.json().catch(() => ({}));

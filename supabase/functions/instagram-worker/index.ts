@@ -9,6 +9,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 const IG_API = "https://graph.instagram.com/v25.0";
 const MAX_STEPS = 40;
 const UNIT_MS: Record<string, number> = { min: 60e3, h: 3600e3, d: 86400e3 };
+const MAX_PRIVATE_REPLIES_PER_HOUR = 750;
+const FOLLOW_RECHECK_MS = [20_000, 40_000]; // atraso da 1ª e da 2ª reconferência do follow
+const FOLLOW_TEXT_DEFAULT = "Me segue aqui e toque no botão abaixo pra eu te mandar 💛";
+const FOLLOW_BUTTON_DEFAULT = "Já estou seguindo ✅";
+const FOLLOW_ACK = "Conferindo… 👀";
+const READ_FALLBACK_DEFAULT_MIN = 5;
+const BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 // deno-lint-ignore no-explicit-any
 type FlowNode = Record<string, any>;
@@ -25,10 +32,39 @@ type Contact = {
   name?: string | null;
   tags?: string[] | null;
 };
-type Ctx = { c: Contact; viaComment?: string | null; text?: string | null; kind: string };
+// tap: a pessoa acabou de interagir (postback, DM, story); false em comentário e em retomada pelo worker (espera, leitura).
+// followCheck: o 1º bloco (Seguir) está sendo reconferido; attempt 0 = toque no botão do pedido, 1 e 2 = reconferências.
+type Ctx = {
+  c: Contact;
+  viaComment?: string | null;
+  text?: string | null;
+  kind: string;
+  tap?: boolean;
+  followCheck?: { attempt: number };
+};
+type Item = {
+  kind: string;
+  ref: string | null;
+  from: string | null;
+  username: string | null;
+  text: string | null;
+  media: string | null;
+  payload: string | null;
+};
 
 // Conta do Instagram (preenchida por quem chama antes de usar o motor)
 const igAccount = { id: "", token: "" };
+
+// Erro da Meta com o código dela (100 = parâmetro inválido, 1 = erro interno, 368/4/17 = limite)
+class IgError extends Error {
+  status: number;
+  code: number | null;
+  constructor(status: number, code: number | null, msg: string) {
+    super(msg);
+    this.status = status;
+    this.code = code;
+  }
+}
 
 async function igPost(path: string, body: Record<string, unknown>): Promise<unknown> {
   const res = await fetch(`${IG_API}/${path}`, {
@@ -37,12 +73,17 @@ async function igPost(path: string, body: Record<string, unknown>): Promise<unkn
     body: JSON.stringify(body),
   });
   const txt = await res.text();
-  if (!res.ok) throw new Error(`IG ${res.status}: ${txt.slice(0, 300)}`);
+  let parsed: unknown = txt;
   try {
-    return JSON.parse(txt);
+    parsed = JSON.parse(txt);
   } catch {
-    return txt;
+    // resposta não-JSON
   }
+  if (!res.ok) {
+    const code = (parsed as { error?: { code?: unknown } } | null)?.error?.code;
+    throw new IgError(res.status, typeof code === "number" ? code : null, `IG ${res.status}: ${txt.slice(0, 300)}`);
+  }
+  return parsed;
 }
 
 function errMsg(e: unknown): string {
@@ -142,7 +183,62 @@ async function fireWebhook(n: FlowNode, rule: Rule, ctx: Ctx): Promise<void> {
   }
 }
 
-async function sendMessage(rule: Rule, n: FlowNode, ctx: Ctx): Promise<void> {
+
+// Consulta se a pessoa segue a conta: true | false | null (a Meta não informou ou a chamada falhou)
+async function getUserFollowStatus(igsid: string): Promise<boolean | null> {
+  try {
+    const res = await fetch(`${IG_API}/${encodeURIComponent(igsid)}?fields=is_user_follow_business`, {
+      headers: { Authorization: `Bearer ${igAccount.token}` },
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    return typeof j?.is_user_follow_business === "boolean" ? j.is_user_follow_business : null;
+  } catch {
+    return null;
+  }
+}
+
+function newSlug(): string {
+  let s = "";
+  while (s.length < 8) {
+    for (const b of crypto.getRandomValues(new Uint8Array(16))) {
+      if (b < 248 && s.length < 8) s += BASE62[b % 62]; // 248 = 4*62: sem viés
+    }
+  }
+  return s;
+}
+
+// Link rastreado do botão: acha ou cria em ig_links e devolve a URL do redirecionador (edge ig-r)
+async function trackedUrl(rule: Rule, nodeId: string, idx: number, url: string, igsid: string): Promise<string> {
+  const find = async (): Promise<string | undefined> => {
+    const { data } = await supabase
+      .from("ig_links")
+      .select("slug")
+      .eq("rule_id", rule.id)
+      .eq("node_id", nodeId)
+      .eq("button_index", idx)
+      .eq("url", url)
+      .maybeSingle();
+    return (data?.slug as string | undefined) ?? undefined;
+  };
+  let slug = await find();
+  for (let t = 0; !slug && t < 3; t++) {
+    const cand = newSlug();
+    const { error } = await supabase
+      .from("ig_links")
+      .insert({ slug: cand, rule_id: rule.id, node_id: nodeId, button_index: idx, url });
+    // conflito (outro processo criou o mesmo botão, ou slug repetido): relê e, se preciso, tenta outro slug
+    slug = error ? await find() : cand;
+  }
+  if (!slug) {
+    console.error("ig_links: não criou o link rastreado, enviando a URL direta");
+    return url;
+  }
+  return `${SUPABASE_URL}/functions/v1/ig-r?s=${slug}&u=${encodeURIComponent(igsid)}`;
+}
+
+// Devolve true se caiu no texto simples (a Meta recusou o template): aí os botões de fluxo foram descartados.
+async function sendMessage(rule: Rule, n: FlowNode, ctx: Ctx): Promise<boolean> {
   // 1ª mensagem vinda de comentário vai para o comment_id (mensagem privada); depois, para o id da pessoa
   const to = ctx.viaComment ? { comment_id: ctx.viaComment } : { id: ctx.c.instagram_user_id };
   const text = fillVars(n.text, ctx.c).slice(0, 640);
@@ -157,32 +253,151 @@ async function sendMessage(rule: Rule, n: FlowNode, ctx: Ctx): Promise<void> {
       message: { attachment: { type: "image", payload: { url: n.image } } },
     });
   }
-  if (!text) return;
-  const message = buttons.length
-    ? {
-      attachment: {
-        type: "template",
-        payload: {
-          template_type: "button",
-          text,
-          buttons: buttons.map((b) =>
-            b.type === "url"
-              ? { type: "web_url", url: b.url, title: String(b.label).slice(0, 20) }
-              : {
-                type: "postback",
-                title: String(b.label).slice(0, 20),
-                payload: `f:${rule.id}:${n.id}:${allButtons.indexOf(b)}`,
-              }
-          ),
-        },
+  if (!text) return false;
+  if (!buttons.length) {
+    await igPost("me/messages", { recipient: to, message: { text } });
+    return false;
+  }
+  // URL final de cada botão de link: rastreada (padrão) ou direta
+  const urls = new Map<unknown, string>();
+  for (const b of buttons) {
+    if (b.type !== "url") continue;
+    const raw = String(b.url);
+    urls.set(
+      b,
+      b.track === false ? raw : await trackedUrl(rule, String(n.id), allButtons.indexOf(b), raw, ctx.c.instagram_user_id),
+    );
+  }
+  const message = {
+    attachment: {
+      type: "template",
+      payload: {
+        template_type: "button",
+        text,
+        buttons: buttons.map((b) =>
+          b.type === "url"
+            ? { type: "web_url", url: urls.get(b), title: String(b.label).slice(0, 20) }
+            : {
+              type: "postback",
+              title: String(b.label).slice(0, 20),
+              payload: b.payload ?? `f:${rule.id}:${n.id}:${allButtons.indexOf(b)}`,
+            }
+        ),
       },
-    }
-    : { text };
-  await igPost("me/messages", { recipient: to, message });
+    },
+  };
+  try {
+    await igPost("me/messages", { recipient: to, message });
+    return false;
+  } catch (e) {
+    // só o código 100 (template recusado) cai no texto; código 1 ou 5xx pode ter entregado: não reenvia
+    if (!(e instanceof IgError) || e.code !== 100) throw e;
+    const links = buttons
+      .filter((b) => b.type === "url")
+      .map((b) => `\n\n${String(b.label).trim()}: ${urls.get(b)}`)
+      .join("");
+    await igPost("me/messages", { recipient: to, message: { text: text + links } });
+    return true;
+  }
+}
+
+// ---- Seguir ----
+async function sendFollowPrompt(rule: Rule, n: FlowNode, ctx: Ctx): Promise<void> {
+  const prompt: FlowNode = {
+    id: n.id,
+    text: String(n.text || "").trim() || FOLLOW_TEXT_DEFAULT,
+    buttons: [{
+      type: "postback",
+      label: String(n.button || "").trim() || FOLLOW_BUTTON_DEFAULT,
+      payload: `f:${rule.id}:${n.id}:follow`,
+    }],
+  };
+  await sendMessage(rule, prompt, ctx);
+  ctx.viaComment = null;
+}
+
+// No máximo uma reconferência "waiting" por regra+pessoa+bloco: confere antes de gravar.
+async function scheduleFollowRecheck(rule: Rule, n: FlowNode, ctx: Ctx, attempt: number): Promise<boolean> {
+  const uid = ctx.c.instagram_user_id;
+  const { data: pending } = await supabase
+    .from("ig_flow_runs")
+    .select("id")
+    .eq("rule_id", rule.id)
+    .eq("ig_user_id", uid)
+    .eq("node_id", n.id)
+    .eq("kind", "follow_recheck")
+    .eq("status", "waiting")
+    .limit(1);
+  if (pending?.length) return false;
+  const { error } = await supabase.from("ig_flow_runs").insert({
+    rule_id: rule.id,
+    ig_user_id: uid,
+    node_id: n.id,
+    kind: "follow_recheck",
+    attempt,
+    source_node: n.id,
+    resume_at: new Date(Date.now() + FOLLOW_RECHECK_MS[attempt - 1]).toISOString(),
+  });
+  if (error) throw new Error(error.message);
+  return true;
+}
+
+async function cancelFollowRechecks(rule: Rule, uid: string, nodeId: string, why: string): Promise<void> {
+  await supabase
+    .from("ig_flow_runs")
+    .update({ status: "done", error: why })
+    .eq("rule_id", rule.id)
+    .eq("ig_user_id", uid)
+    .eq("node_id", nodeId)
+    .eq("kind", "follow_recheck")
+    .eq("status", "waiting");
+}
+
+// ---- Envio após leitura ----
+// Guarda o fallback de leitura da mensagem: status 'awaiting_read' até o webhook de leitura da pessoa.
+// attempt = minutos de espera depois de ler (o webhook lê de volta); node_id = destino do botão escolhido.
+async function armReadFallback(rule: Rule, n: FlowNode, ctx: Ctx): Promise<void> {
+  const rf = n.read_fallback;
+  if (!rf) return;
+  const b = (n.buttons || [])[Number(rf.button)];
+  if (!b || b.type === "url" || !b.label?.trim() || !b.next) return;
+  const minutes = Math.min(60, Math.max(1, Math.round(Number(rf.minutes)) || READ_FALLBACK_DEFAULT_MIN));
+  const uid = ctx.c.instagram_user_id;
+  await supabase
+    .from("ig_flow_runs")
+    .update({ status: "done", error: "substituída" })
+    .eq("rule_id", rule.id)
+    .eq("ig_user_id", uid)
+    .eq("source_node", n.id)
+    .eq("kind", "read_fallback")
+    .in("status", ["awaiting_read", "waiting"]);
+  const { error } = await supabase.from("ig_flow_runs").insert({
+    rule_id: rule.id,
+    ig_user_id: uid,
+    node_id: b.next,
+    kind: "read_fallback",
+    status: "awaiting_read",
+    attempt: minutes,
+    source_node: n.id,
+    resume_at: new Date(Date.now() + 365 * 86400e3).toISOString(),
+  });
+  if (error) throw new Error(error.message);
+}
+
+// Clique em botão da mensagem (ou no botão do pedido de Seguir): cancela o fallback de leitura dela
+async function cancelReadFallback(rule: Rule, uid: string, sourceNode: string): Promise<void> {
+  await supabase
+    .from("ig_flow_runs")
+    .update({ status: "done", error: "clicou" })
+    .eq("rule_id", rule.id)
+    .eq("ig_user_id", uid)
+    .eq("source_node", sourceNode)
+    .eq("kind", "read_fallback")
+    .in("status", ["awaiting_read", "waiting"]);
 }
 
 // Executa a partir do bloco "id" até acabar, parar num botão ou numa espera.
-// Cada bloco segue mesmo se outro falhar (menos Mensagem: se ela falha, o fluxo para).
+// Cada bloco segue mesmo se outro falhar (menos Mensagem, Espera e Seguir: se falham, o fluxo para).
 async function run(rule: Rule, startId: string | null | undefined, ctx: Ctx): Promise<string[]> {
   const nodes = rule.flow?.nodes || {};
   const errs: string[] = [];
@@ -192,11 +407,51 @@ async function run(rule: Rule, startId: string | null | undefined, ctx: Ctx): Pr
     if (!n) break;
     try {
       if (n.type === "message") {
-        await sendMessage(rule, n, ctx);
+        const fellBack = await sendMessage(rule, n, ctx);
         ctx.viaComment = null;
         // deno-lint-ignore no-explicit-any
-        if ((n.buttons || []).some((b: any) => b.type !== "url" && b.label?.trim())) return errs; // espera o clique
-        id = n.next;
+        if (!fellBack && (n.buttons || []).some((b: any) => b.type !== "url" && b.label?.trim())) {
+          // espera o clique (ou a leitura, se houver fallback de leitura)
+          try {
+            await armReadFallback(rule, n, ctx);
+          } catch (e) {
+            errs.push(`leitura: ${errMsg(e)}`);
+          }
+          return errs;
+        }
+        id = n.next; // sem botões de fluxo, ou caiu no texto simples: segue por next
+      } else if (n.type === "follow") {
+        const fc = i === 0 ? ctx.followCheck : undefined; // reconferência só vale para o bloco inicial
+        ctx.followCheck = undefined;
+        const uid = ctx.c.instagram_user_id;
+        if (!fc && ctx.viaComment) {
+          await sendFollowPrompt(rule, n, ctx); // comentário: a Meta ainda não informa o follow
+          return errs;
+        }
+        const st = await getUserFollowStatus(uid);
+        // depois do toque, null = segue (quem já segue nunca fica preso); sem toque, só true passa
+        if (st === true || (st === null && !!fc && !!ctx.tap)) {
+          await cancelFollowRechecks(rule, uid, n.id, "seguiu");
+          id = n.yes;
+        } else if (!fc) {
+          await sendFollowPrompt(rule, n, ctx);
+          return errs;
+        } else if (fc.attempt < FOLLOW_RECHECK_MS.length) {
+          const scheduled = await scheduleFollowRecheck(rule, n, ctx, fc.attempt + 1);
+          if (scheduled && fc.attempt === 0) {
+            try {
+              await igPost("me/messages", { recipient: { id: uid }, message: { text: FOLLOW_ACK } });
+            } catch (e) {
+              console.error("follow ack:", errMsg(e)); // não fatal
+            }
+          }
+          return errs;
+        } else if (n.no) {
+          id = n.no;
+        } else {
+          await sendFollowPrompt(rule, n, ctx);
+          return errs;
+        }
       } else if (n.type === "delay") {
         if (n.next) {
           const ms = Math.max(1, Number(n.amount) || 1) * (UNIT_MS[n.unit] || UNIT_MS.min);
@@ -220,11 +475,199 @@ async function run(rule: Rule, startId: string | null | undefined, ctx: Ctx): Pr
       } else break;
     } catch (e) {
       errs.push(`${n.type}: ${errMsg(e)}`);
-      if (n.type === "message" || n.type === "delay") return errs;
+      if (n.type === "message" || n.type === "delay" || n.type === "follow") return errs;
       id = n.next;
     }
   }
   return errs;
+}
+
+// ---- Regras e resposta automática (usado pelo webhook e, depois, pela reconciliação do worker) ----
+type DbRule = Rule & {
+  trigger: string;
+  keywords: string[] | null;
+  match_type: string | null;
+  post_id: string | null;
+  public_replies: string[] | null;
+};
+
+const TRIGGERS: Record<string, string[]> = {
+  comment: ["comment"],
+  dm: ["dm"],
+  story: ["story", "dm"],
+  mention: ["mention"],
+};
+const COOLDOWN_MS: Record<string, number> = {
+  comment: 3600e3,
+  dm: 12 * 3600e3,
+  story: 12 * 3600e3,
+  mention: 12 * 3600e3,
+};
+
+function fold(s: unknown): string {
+  return String(s ?? "").toLowerCase().trim();
+}
+
+function matches(rule: DbRule, it: Item, k: string): boolean {
+  if (rule.trigger !== k) return false;
+  if (k === "comment" && rule.post_id && rule.post_id !== it.media) return false;
+  const kws = (rule.keywords ?? []).map(fold).filter(Boolean);
+  if (k === "mention" || !kws.length || rule.match_type === "any") return true; // sem palavras = qualquer texto
+  const text = fold(it.text);
+  return rule.match_type === "exact" ? kws.some((x) => text === x) : kws.some((x) => text.includes(x));
+}
+
+async function activeRules(): Promise<DbRule[]> {
+  const { data, error } = await supabase
+    .from("ig_automations")
+    .select("*")
+    .eq("active", true)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as DbRule[];
+}
+
+function pickLine(lines: string[] | null): string {
+  const opts = (lines ?? []).map((l) => String(l).trim()).filter(Boolean);
+  return opts.length ? opts[Math.floor(Math.random() * opts.length)] : "";
+}
+
+async function markReply(id: string, errs: string[]) {
+  await supabase
+    .from("ig_replies")
+    .update({ status: errs.length ? "failed" : "sent", error: errs.join(" | ") || null })
+    .eq("id", id);
+}
+
+async function autoReply(it: Item) {
+  if (!it.ref || !it.from) return; // sem ref não há anti-duplicado: não responde
+  const rules = await activeRules();
+  let rule: DbRule | undefined;
+  for (const k of TRIGGERS[it.kind] ?? []) {
+    // regra sem bloco depois do início e sem resposta pública não faz nada: não "consome" o gatilho
+    rule = rules.find(
+      (r) => (r.flow?.nodes?.start?.next || (r.public_replies ?? []).some((x) => String(x).trim())) && matches(r, it, k),
+    );
+    if (rule) break;
+  }
+  if (!rule) return;
+
+  // cooldown: já mandou esta regra para esta pessoa há pouco?
+  const since = new Date(Date.now() - COOLDOWN_MS[it.kind]).toISOString();
+  const { data: recent } = await supabase
+    .from("ig_replies")
+    .select("id")
+    .eq("ig_user_id", it.from)
+    .eq("rule_id", rule.id)
+    .eq("status", "sent")
+    .gte("created_at", since)
+    .limit(1);
+  const row = {
+    ref: it.ref,
+    rule_id: rule.id,
+    kind: it.kind,
+    ig_user_id: it.from,
+    username: it.username,
+    text_in: it.text?.slice(0, 500) ?? null,
+  };
+  if (recent?.length) {
+    await supabase.from("ig_replies").insert({ ...row, status: "skipped", error: "já respondida há pouco" });
+    return;
+  }
+
+  // limite da Meta: 750 mensagens privadas (de comentário) por hora. No limite não reserva o evento:
+  // a reconciliação de comentários pega este depois.
+  if (it.kind === "comment" && rule.flow?.nodes?.start?.next) {
+    const hourAgo = new Date(Date.now() - 3600e3).toISOString();
+    const { count } = await supabase
+      .from("ig_replies")
+      .select("id", { count: "exact", head: true })
+      .eq("kind", "comment")
+      .in("status", ["sent", "failed"])
+      .gte("created_at", hourAgo);
+    if ((count ?? 0) >= MAX_PRIVATE_REPLIES_PER_HOUR) {
+      await supabase.from("ig_events").insert({
+        event_type: "rate_limited",
+        payload: { ref: it.ref, ig_user_id: it.from, rule_id: rule.id, sent_last_hour: count },
+        processed: true,
+      });
+      return;
+    }
+  }
+
+  // "reserva" o evento: se o ref já existe, a Meta reenviou -> sai
+  const { data: claimed, error: dup } = await supabase.from("ig_replies").insert(row).select("id").single();
+  if (dup || !claimed) {
+    if (dup && dup.code !== "23505") console.error("claim ig_replies:", dup.message);
+    return;
+  }
+
+  const errs: string[] = [];
+  const c = await contactOf(it.from);
+  if (it.kind === "comment") {
+    const pub = fillVars(pickLine(rule.public_replies), c);
+    if (pub) {
+      try {
+        await igPost(`${it.ref}/replies`, { message: pub });
+      } catch (e) {
+        errs.push("resposta pública: " + errMsg(e));
+      }
+    }
+  }
+  if (rule.flow?.nodes?.start?.next) {
+    errs.push(
+      ...(await run(rule, rule.flow.nodes.start.next, {
+        c,
+        viaComment: it.kind === "comment" ? it.ref : null,
+        text: it.text,
+        kind: it.kind,
+        tap: it.kind !== "comment",
+      }))
+    );
+  }
+  await markReply(claimed.id, errs);
+}
+
+// Clique em botão (postback): payload f:<regraId>:<blocoId>:<índiceDoBotão> ou f:<regraId>:<blocoId>:follow
+async function onPostback(it: Item) {
+  if (!it.from || !it.ref) return;
+  const [tag, ruleId, nodeId, idx] = String(it.payload || "").split(":");
+  if (tag !== "f" || !ruleId || !nodeId) return;
+  const { data } = await supabase.from("ig_automations").select("*").eq("id", ruleId).maybeSingle();
+  const rule = data as Rule | null;
+  if (!rule?.active) return;
+  const node = rule.flow?.nodes?.[nodeId];
+  const isFollow = idx === "follow" && node?.type === "follow";
+  const btn = isFollow ? null : node?.buttons?.[Number(idx)];
+  if (!isFollow && !btn) return;
+
+  // qualquer clique na mensagem (ou no botão do pedido) cancela o "se ler e não tocar"
+  await cancelReadFallback(rule, it.from, nodeId);
+  if (!isFollow && !btn.next) return;
+
+  // anti-duplicado do clique: ref = "pb:<mid>"
+  const { data: claimed, error: dup } = await supabase
+    .from("ig_replies")
+    .insert({
+      ref: `pb:${it.ref}`,
+      rule_id: rule.id,
+      kind: "postback",
+      ig_user_id: it.from,
+      username: it.username,
+      text_in: String((isFollow ? node?.button : btn.label) ?? "").slice(0, 500),
+    })
+    .select("id")
+    .single();
+  if (dup || !claimed) {
+    if (dup && dup.code !== "23505") console.error("claim postback:", dup.message);
+    return;
+  }
+  const c = await contactOf(it.from);
+  const errs = isFollow
+    ? await run(rule, nodeId, { c, text: node?.button, kind: "postback", tap: true, followCheck: { attempt: 0 } })
+    : await run(rule, btn.next, { c, text: btn.label, kind: "postback", tap: true });
+  await markReply(claimed.id, errs);
 }
 // ---- fim do motor do fluxo ----
 
@@ -338,7 +781,12 @@ async function resumeFlowRuns(): Promise<number> {
         continue;
       }
       const c = await contactOf(job.ig_user_id);
-      const errs = await run(rule as Rule, job.node_id, { c, kind: "espera" });
+      // kind: resume (espera) | read_fallback (leu e não tocou): sem toque, então o Seguir é fail-closed.
+      // follow_recheck: reconferência do Seguir (veio de um toque), attempt = 1 ou 2.
+      const ctx: Ctx = job.kind === "follow_recheck"
+        ? { c, kind: "espera", tap: true, followCheck: { attempt: Number(job.attempt) || 1 } }
+        : { c, kind: "espera", tap: false };
+      const errs = await run(rule as Rule, job.node_id, ctx);
       await supabase
         .from("ig_flow_runs")
         .update({ status: errs.length ? "failed" : "done", error: errs.join(" | ") || null })
