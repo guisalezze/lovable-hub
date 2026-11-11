@@ -2,6 +2,11 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle } from "lucide-react";
 
+// Cores do design ativo (mesmo padrão de RevenueChart/SalesChart)
+const MAIN = "hsl(var(--chart-main))";
+const GRID = "hsl(var(--border))";
+const AXIS = "hsl(var(--muted-foreground))";
+
 interface DailySpend {
   date_start: string;
   spend_brl: string;
@@ -44,17 +49,18 @@ export function InvestmentChart({ daily, isLoading, error }: InvestmentChartProp
             <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="colorSpend" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(172, 66%, 50%)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="hsl(172, 66%, 50%)" stopOpacity={0} />
+                  <stop offset="5%" stopColor={MAIN} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={MAIN} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 16%, 18%)" />
-              <XAxis dataKey="date" stroke="hsl(215, 15%, 55%)" fontSize={11} />
-              <YAxis stroke="hsl(215, 15%, 55%)" fontSize={11} />
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
+              <XAxis dataKey="date" stroke={AXIS} fontSize={11} />
+              <YAxis stroke={AXIS} fontSize={11} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "hsl(220, 18%, 10%)",
-                  border: "1px solid hsl(220, 16%, 18%)",
+                  backgroundColor: "hsl(var(--popover))",
+                  color: "hsl(var(--popover-foreground))",
+                  border: "1px solid hsl(var(--border))",
                   borderRadius: "8px",
                   fontSize: "12px",
                 }}
@@ -63,7 +69,7 @@ export function InvestmentChart({ daily, isLoading, error }: InvestmentChartProp
               <Area
                 type="monotone"
                 dataKey="spend"
-                stroke="hsl(172, 66%, 50%)"
+                stroke={MAIN}
                 fillOpacity={1}
                 fill="url(#colorSpend)"
                 strokeWidth={2}

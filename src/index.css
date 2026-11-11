@@ -121,7 +121,8 @@
     --accent: 0 0% 9%;
     --accent-foreground: 46 68% 62%;
 
-    --destructive: 4 65% 42%;
+    /* 56%: legível como texto (datas atrasadas, valores) no fundo preto */
+    --destructive: 4 72% 56%;
     --destructive-foreground: 0 0% 100%;
 
     --success: 160 58% 36%;
@@ -322,10 +323,11 @@
     --destructive: 0 72% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 62% 38%;
+    /* Tons mais escuros que o normal: são usados também como texto em fundo claro */
+    --success: 152 62% 30%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 36 90% 45%;
+    --warning: 32 95% 36%;
     --warning-foreground: 0 0% 100%;
 
     --border: 180 14% 86%;
@@ -384,7 +386,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 150 15% 9%;
 
-    --primary: 142 72% 35%;
+    --primary: 142 72% 30%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 80 8% 92%;
@@ -399,10 +401,11 @@
     --destructive: 0 72% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 72% 35%;
+    /* Tons mais escuros que o normal: são usados também como texto em fundo claro */
+    --success: 142 72% 28%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 36 90% 45%;
+    --warning: 32 95% 36%;
     --warning-foreground: 0 0% 100%;
 
     --border: 80 8% 86%;
@@ -799,6 +802,41 @@
   background: hsl(var(--primary) / 0.20);
   color: hsl(var(--foreground));
 }
+
+/* ================================================================
+   CONTRASTE POR DESIGN
+   O app foi feito no tema escuro, então muitas telas usam cores do
+   Tailwind pensadas para fundo escuro (ex.: text-yellow-500). Em vez de
+   mexer em cada tela, estas regras trocam o tom só onde ele fica ilegível.
+   Medido com auditoria de contraste em todas as páginas (mínimo 3:1).
+   ================================================================ */
+
+/* Designs claros: amarelo/verde/laranja claros viram tons escuros */
+:root[data-design="claro"] :is(.text-yellow-400, .text-yellow-500, .text-yellow-600),
+:root[data-design="menta"] :is(.text-yellow-400, .text-yellow-500, .text-yellow-600) { color: #a16207; }
+:root[data-design="claro"] :is(.text-amber-400, .text-amber-500, .text-amber-600),
+:root[data-design="menta"] :is(.text-amber-400, .text-amber-500, .text-amber-600) { color: #b45309; }
+:root[data-design="claro"] :is(.text-emerald-400, .text-emerald-500, .text-emerald-600),
+:root[data-design="menta"] :is(.text-emerald-400, .text-emerald-500, .text-emerald-600) { color: #047857; }
+:root[data-design="claro"] :is(.text-green-400, .text-green-500, .text-green-600),
+:root[data-design="menta"] :is(.text-green-400, .text-green-500, .text-green-600) { color: #15803d; }
+:root[data-design="claro"] :is(.text-lime-400, .text-lime-500, .text-lime-600),
+:root[data-design="menta"] :is(.text-lime-400, .text-lime-500, .text-lime-600) { color: #4d7c0f; }
+:root[data-design="claro"] :is(.text-orange-400, .text-orange-500),
+:root[data-design="menta"] :is(.text-orange-400, .text-orange-500) { color: #c2410c; }
+
+/* Designs escuros: tons -700 (feitos para fundo claro) viram tons -300.
+   O editor de fluxo do Instagram é sempre claro, então fica de fora. */
+.dark .text-emerald-700:not(.react-flow *) { color: #6ee7b7; }
+.dark .text-amber-700:not(.react-flow *)   { color: #fcd34d; }
+.dark .text-yellow-700:not(.react-flow *)  { color: #fde047; }
+.dark .text-red-700:not(.react-flow *)     { color: #fca5a5; }
+.dark .text-rose-700:not(.react-flow *)    { color: #fda4af; }
+.dark .text-orange-700:not(.react-flow *)  { color: #fdba74; }
+.dark .text-blue-700:not(.react-flow *)    { color: #93c5fd; }
+.dark .text-cyan-700:not(.react-flow *)    { color: #67e8f9; }
+.dark .text-violet-700:not(.react-flow *)  { color: #c4b5fd; }
+.dark .text-pink-700:not(.react-flow *)    { color: #f9a8d4; }
 
 /* Safe area para iPhone com notch */
 .safe-area-inset-bottom {

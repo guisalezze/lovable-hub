@@ -24,7 +24,7 @@ interface Session {
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   connected: { label: "Conectado", color: "text-emerald-600 bg-emerald-500/20", icon: <Wifi className="h-3 w-3" /> },
   connecting: { label: "Conectando", color: "text-yellow-600 bg-yellow-500/20", icon: <Loader2 className="h-3 w-3 animate-spin" /> },
-  qr_pending: { label: "Aguardando QR", color: "text-blue-600 bg-blue-500/20", icon: <QrCode className="h-3 w-3" /> },
+  qr_pending: { label: "Aguardando QR", color: "text-blue-600 dark:text-blue-400 bg-blue-500/20", icon: <QrCode className="h-3 w-3" /> },
   disconnected: { label: "Desconectado", color: "text-muted-foreground bg-muted", icon: <WifiOff className="h-3 w-3" /> },
 };
 
