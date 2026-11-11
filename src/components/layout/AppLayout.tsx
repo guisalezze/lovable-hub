@@ -1,4 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { preloadPages } from "@/lib/lazyPage";
+
+function PageSpinner() {
+  return (
+    <div className="min-h-[50vh] flex items-center justify-center">
+      <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { BottomNavBar } from "./BottomNavBar";
@@ -23,6 +32,11 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Com o CRM aberto, baixa as outras páginas em segundo plano
+  useEffect(() => {
+    preloadPages();
+  }, []);
 
   // Ao trocar de página, volta o conteúdo para o topo (como num app)
   useEffect(() => {
@@ -88,10 +102,14 @@ export function AppLayout() {
           "flex-1 overflow-auto p-3 sm:p-4 md:p-6",
           isMobile && "pb-20" // Espaço para o bottom nav
         )}>
-          {/* key = rota: cada página entra com um fade curto */}
-          <div key={location.pathname} className="page-enter h-full">
-            <Outlet />
-          </div>
+          {/* Suspense fora do div com key: ao trocar de página, a anterior fica
+              na tela até a nova estar pronta (sem piscar spinner). */}
+          <Suspense fallback={<PageSpinner />}>
+            {/* key = rota: cada página entra com um fade curto */}
+            <div key={location.pathname} className="page-enter h-full">
+              <Outlet />
+            </div>
+          </Suspense>
         </div>
       </main>
       

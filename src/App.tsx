@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import { unlockAudio } from "@/lib/sounds";
@@ -11,41 +11,52 @@ import { registerPushHandlers } from "@/lib/registerPushHandlers";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import Index from "./pages/Index";
-import Leads from "./pages/Leads";
-import Produtos from "./pages/Produtos";
-import Financeiro from "./pages/Financeiro";
-import Agenda from "./pages/Agenda";
-import Tarefas from "./pages/Tarefas";
-import Equipe from "./pages/Equipe";
-import Integracoes from "./pages/Integracoes";
-import Configuracoes from "./pages/Configuracoes";
-import Cobrancas from "./pages/Cobrancas";
-import Auth from "./pages/Auth";
-import Relatorios from "./pages/Relatorios";
-import OnboardingAdmin from "./pages/OnboardingAdmin";
-import Onboarding from "./pages/Onboarding";
-import Implementacoes from "./pages/Implementacoes";
-import Clientes from "./pages/Clientes";
-import MetaAds from "./pages/nutra/MetaAds";
-import MetaCallback from "./pages/nutra/MetaCallback";
-import Copies from "./pages/Copies";
-import CopyProjectDetail from "./pages/CopyProjectDetail";
-import NotFound from "./pages/NotFound";
-import WhatsAppOficial from "./pages/WhatsAppOficial";
-import WhatsAppCanais from "./pages/WhatsAppCanais";
-import WhatsAppBaileysInbox from "./pages/WhatsAppBaileysInbox";
-import GruposWA from "./pages/GruposWA";
-import EmailMarketing from "./pages/EmailMarketing";
-import CaptacaoLeads from "./pages/CaptacaoLeads";
-import Encurtador from "./pages/Encurtador";
-import WebhooksAutomacoes from "./pages/WebhooksAutomacoes";
-import PerfectPay from "./pages/PerfectPay";
-import InstagramAutomacoes from "./pages/InstagramAutomacoes";
-import InstagramFluxoEditor from "./pages/InstagramFluxoEditor";
-import Privacidade from "./pages/Privacidade";
-import ExclusaoDados from "./pages/ExclusaoDados";
-import DesignPreview from "./pages/DesignPreview";
+import { lazyPage } from "@/lib/lazyPage";
+
+// Páginas carregadas sob demanda (ver src/lib/lazyPage.ts)
+const Index = lazyPage(() => import("./pages/Index"));
+const Leads = lazyPage(() => import("./pages/Leads"));
+const Produtos = lazyPage(() => import("./pages/Produtos"));
+const Financeiro = lazyPage(() => import("./pages/Financeiro"));
+const Agenda = lazyPage(() => import("./pages/Agenda"));
+const Tarefas = lazyPage(() => import("./pages/Tarefas"));
+const Equipe = lazyPage(() => import("./pages/Equipe"));
+const Integracoes = lazyPage(() => import("./pages/Integracoes"));
+const Configuracoes = lazyPage(() => import("./pages/Configuracoes"));
+const Cobrancas = lazyPage(() => import("./pages/Cobrancas"));
+const Auth = lazyPage(() => import("./pages/Auth"));
+const Relatorios = lazyPage(() => import("./pages/Relatorios"));
+const OnboardingAdmin = lazyPage(() => import("./pages/OnboardingAdmin"));
+const Onboarding = lazyPage(() => import("./pages/Onboarding"));
+const Implementacoes = lazyPage(() => import("./pages/Implementacoes"));
+const Clientes = lazyPage(() => import("./pages/Clientes"));
+const MetaAds = lazyPage(() => import("./pages/nutra/MetaAds"));
+const MetaCallback = lazyPage(() => import("./pages/nutra/MetaCallback"));
+const Copies = lazyPage(() => import("./pages/Copies"));
+const CopyProjectDetail = lazyPage(() => import("./pages/CopyProjectDetail"));
+const NotFound = lazyPage(() => import("./pages/NotFound"));
+const WhatsAppOficial = lazyPage(() => import("./pages/WhatsAppOficial"));
+const WhatsAppCanais = lazyPage(() => import("./pages/WhatsAppCanais"));
+const WhatsAppBaileysInbox = lazyPage(() => import("./pages/WhatsAppBaileysInbox"));
+const GruposWA = lazyPage(() => import("./pages/GruposWA"));
+const EmailMarketing = lazyPage(() => import("./pages/EmailMarketing"));
+const CaptacaoLeads = lazyPage(() => import("./pages/CaptacaoLeads"));
+const Encurtador = lazyPage(() => import("./pages/Encurtador"));
+const WebhooksAutomacoes = lazyPage(() => import("./pages/WebhooksAutomacoes"));
+const PerfectPay = lazyPage(() => import("./pages/PerfectPay"));
+const InstagramAutomacoes = lazyPage(() => import("./pages/InstagramAutomacoes"));
+const InstagramFluxoEditor = lazyPage(() => import("./pages/InstagramFluxoEditor"));
+const Privacidade = lazyPage(() => import("./pages/Privacidade"));
+const ExclusaoDados = lazyPage(() => import("./pages/ExclusaoDados"));
+const DesignPreview = lazyPage(() => import("./pages/DesignPreview"));
+
+function PageSpinner() {
+  return (
+    <div className="min-h-[50vh] flex items-center justify-center">
+      <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 // Inbox and Calls removed: Inbox is now a popover in the header; Calls was merged into Agenda
 
 // Navegação de app: ao voltar para uma página, os dados aparecem na hora (do cache)
@@ -201,6 +212,7 @@ const App = () => (
         <Toaster />
         <Sonner position="top-center" richColors closeButton />
         <BrowserRouter future={{ v7_startTransition: true }}>
+        <Suspense fallback={<PageSpinner />}>
         <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/design-preview" element={<DesignPreview />} />
@@ -249,6 +261,7 @@ const App = () => (
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </TooltipProvider>
     </QueryClientProvider>
