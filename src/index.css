@@ -826,17 +826,18 @@
 :root[data-design="menta"] :is(.text-orange-400, .text-orange-500) { color: #c2410c; }
 
 /* Designs escuros: tons -700 (feitos para fundo claro) viram tons -300.
-   O editor de fluxo do Instagram é sempre claro, então fica de fora. */
-.dark .text-emerald-700:not(.react-flow *) { color: #6ee7b7; }
-.dark .text-amber-700:not(.react-flow *)   { color: #fcd34d; }
-.dark .text-yellow-700:not(.react-flow *)  { color: #fde047; }
-.dark .text-red-700:not(.react-flow *)     { color: #fca5a5; }
-.dark .text-rose-700:not(.react-flow *)    { color: #fda4af; }
-.dark .text-orange-700:not(.react-flow *)  { color: #fdba74; }
-.dark .text-blue-700:not(.react-flow *)    { color: #93c5fd; }
-.dark .text-cyan-700:not(.react-flow *)    { color: #67e8f9; }
-.dark .text-violet-700:not(.react-flow *)  { color: #c4b5fd; }
-.dark .text-pink-700:not(.react-flow *)    { color: #f9a8d4; }
+   Ficam de fora: o editor de fluxo do Instagram (sempre claro) e etiquetas
+   que já têm fundo claro próprio (bg-*-50/100/200), onde o -700 é o certo. */
+.dark .text-emerald-700:not(.react-flow *, [class*="-50 "], [class$="-50"], [class*="-100"], [class*="-200"]) { color: #6ee7b7; }
+.dark .text-amber-700:not(.react-flow *, [class*="-50 "], [class$="-50"], [class*="-100"], [class*="-200"])   { color: #fcd34d; }
+.dark .text-yellow-700:not(.react-flow *, [class*="-50 "], [class$="-50"], [class*="-100"], [class*="-200"])  { color: #fde047; }
+.dark .text-red-700:not(.react-flow *, [class*="-50 "], [class$="-50"], [class*="-100"], [class*="-200"])     { color: #fca5a5; }
+.dark .text-rose-700:not(.react-flow *, [class*="-50 "], [class$="-50"], [class*="-100"], [class*="-200"])    { color: #fda4af; }
+.dark .text-orange-700:not(.react-flow *, [class*="-50 "], [class$="-50"], [class*="-100"], [class*="-200"])  { color: #fdba74; }
+.dark .text-blue-700:not(.react-flow *, [class*="-50 "], [class$="-50"], [class*="-100"], [class*="-200"])    { color: #93c5fd; }
+.dark .text-cyan-700:not(.react-flow *, [class*="-50 "], [class$="-50"], [class*="-100"], [class*="-200"])    { color: #67e8f9; }
+.dark .text-violet-700:not(.react-flow *, [class*="-50 "], [class$="-50"], [class*="-100"], [class*="-200"])  { color: #c4b5fd; }
+.dark .text-pink-700:not(.react-flow *, [class*="-50 "], [class$="-50"], [class*="-100"], [class*="-200"])    { color: #f9a8d4; }
 
 /* Safe area para iPhone com notch */
 .safe-area-inset-bottom {
