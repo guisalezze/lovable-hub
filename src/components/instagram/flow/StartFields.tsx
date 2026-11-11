@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,6 +19,8 @@ export interface RuleMeta {
   post_id: string | null;
   media_label: string | null;
   public_replies: string[];
+  pending_next_reel: boolean;
+  next_reel_since: string | null;
 }
 
 interface IgPost {
@@ -141,23 +144,42 @@ export function StartFields({ meta, onMeta }: { meta: RuleMeta; onMeta: (patch: 
         <>
           <div className="space-y-1.5">
             <Label>Post</Label>
-            <div className="flex gap-2">
-              <Select
-                value={meta.post_id ?? "any"}
-                onValueChange={(v) => v === "any" && onMeta({ post_id: null, media_label: null })}
-              >
-                <SelectTrigger className="min-w-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">Qualquer post</SelectItem>
-                  {meta.post_id && <SelectItem value={meta.post_id}>{meta.media_label || meta.post_id}</SelectItem>}
-                </SelectContent>
-              </Select>
-              <Button type="button" variant="outline" className="shrink-0" onClick={() => setPick(true)}>
-                Escolher um post
-              </Button>
-            </div>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <Switch
+                checked={meta.pending_next_reel}
+                onCheckedChange={(v) =>
+                  onMeta(
+                    v
+                      ? { pending_next_reel: true, next_reel_since: new Date().toISOString(), post_id: null, media_label: null }
+                      : { pending_next_reel: false, next_reel_since: null },
+                  )
+                }
+              />
+              No próximo reel que eu publicar
+            </label>
+            {meta.pending_next_reel ? (
+              <p className="rounded-lg border border-pink-200 bg-pink-50 p-2.5 text-xs text-pink-900">
+                Aguardando o próximo reel. Quando você publicar, o fluxo passa a valer para ele. Até lá não responde a nada.
+              </p>
+            ) : (
+              <div className="flex gap-2">
+                <Select
+                  value={meta.post_id ?? "any"}
+                  onValueChange={(v) => v === "any" && onMeta({ post_id: null, media_label: null })}
+                >
+                  <SelectTrigger className="min-w-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Qualquer post</SelectItem>
+                    {meta.post_id && <SelectItem value={meta.post_id}>{meta.media_label || meta.post_id}</SelectItem>}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" className="shrink-0" onClick={() => setPick(true)}>
+                  Escolher um post
+                </Button>
+              </div>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label>Resposta pública no comentário</Label>

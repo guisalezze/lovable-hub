@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Pencil, Pause, Play, Trash2, Zap } from "lucide-react";
+import { Plus, Pencil, Pause, Play, Share2, Trash2, Zap } from "lucide-react";
 import { TRIGGER_LABEL, countBlocks, newFlow, validateRule, type Flow, type IgRule } from "@/lib/instagramFlow";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -25,9 +25,23 @@ export function useIgRules() {
   });
 }
 
+const B62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+/** Slug aleatório base62 (sem viés: descarta bytes >= 248). */
+function randomSlug(len = 10) {
+  let out = "";
+  while (out.length < len) {
+    for (const b of crypto.getRandomValues(new Uint8Array(len * 2))) {
+      if (b < 248 && out.length < len) out += B62[b % 62];
+    }
+  }
+  return out;
+}
+
 function when(r: IgRule) {
   const t = TRIGGER_LABEL[r.trigger] ?? r.trigger;
   if (r.trigger !== "comment") return t;
+  if (r.pending_next_reel) return `${t} · próximo reel (aguardando)`;
   return r.post_id ? `${t} · só no post: ${r.media_label || r.post_id}` : `${t} · em qualquer post`;
 }
 
@@ -91,6 +105,55 @@ export default function FlowsTable() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // cliques por regra (soma dos botões rastreados)
+  const { data: clicksByRule = {} } = useQuery({
+    queryKey: ["ig_link_click_totals_by_rule"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("ig_link_click_totals").select("rule_id,clicks");
+      if (error) throw error;
+      const m: Record<string, number> = {};
+      for (const r of data ?? []) m[r.rule_id] = (m[r.rule_id] ?? 0) + (r.clicks ?? 0);
+      return m;
+    },
+  });
+
+  const share = useMutation({
+    mutationFn: async (r: IgRule) => {
+      let slug = r.share_slug ?? null;
+      for (let i = 0; !slug && i < 3; i++) {
+        const candidate = randomSlug(10);
+        const { error } = await supabase
+          .from("ig_automations")
+          .update({ share_slug: candidate })
+          .eq("id", r.id);
+        if (!error) slug = candidate;
+        else if (error.code !== "23505") throw error; // 23505 = slug repetido: tenta outro
+      }
+      if (!slug) throw new Error("Não foi possível gerar o link. Tente de novo.");
+      const url = `${window.location.origin}/r/instagram/${slug}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link do relatório copiado", { description: url });
+      } catch {
+        toast.success("Link do relatório criado", { description: url });
+      }
+    },
+    onSuccess: refresh,
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const unshare = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("ig_automations").update({ share_slug: null }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refresh();
+      toast.success("Relatório não é mais público");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("ig_automations").delete().eq("id", id);
@@ -144,6 +207,7 @@ export default function FlowsTable() {
                 <TableHead>Quando</TableHead>
                 <TableHead>Palavras-chave</TableHead>
                 <TableHead>Blocos</TableHead>
+                <TableHead>Cliques</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -178,6 +242,7 @@ export default function FlowsTable() {
                     <TableCell className="text-sm">
                       {n} bloco{n === 1 ? "" : "s"}
                     </TableCell>
+                    <TableCell className="text-sm">{clicksByRule[r.id] ?? 0}</TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1 flex-wrap">
                         <Button size="sm" variant="outline" onClick={() => navigate(`/instagram-automacoes/${r.id}`)}>
@@ -198,6 +263,24 @@ export default function FlowsTable() {
                             </>
                           )}
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={share.isPending}
+                          onClick={() => share.mutate(r)}
+                        >
+                          <Share2 className="h-3.5 w-3.5 mr-1" /> Compartilhar relatório
+                        </Button>
+                        {r.share_slug && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={unshare.isPending}
+                            onClick={() => unshare.mutate(r.id)}
+                          >
+                            Parar de compartilhar
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant={confirmId === r.id ? "destructive" : "ghost"}

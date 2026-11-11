@@ -7,13 +7,14 @@ import { nodeSummary } from "./convert";
 import { BlockFields } from "./BlockFields";
 import { StartFields, type RuleMeta } from "./StartFields";
 
-export const NEW_TYPES: Exclude<NodeType, "start">[] = ["message", "delay", "tag", "condition", "webhook"];
+export const NEW_TYPES: Exclude<NodeType, "start">[] = ["message", "follow", "delay", "tag", "condition", "webhook"];
 const END = "__end";
 
 interface Props {
   node: FlowNode;
   flow: Flow;
   meta: RuleMeta;
+  ruleId: string;
   warnings: string[];
   onMeta: (patch: Partial<RuleMeta>) => void;
   onPatch: (id: string, fn: (n: FlowNode) => void) => void;
@@ -23,7 +24,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function NodePanel({ node, flow, meta, warnings, onMeta, onPatch, onSetOut, onDelete, onClose }: Props) {
+export function NodePanel({ node, flow, meta, ruleId, warnings, onMeta, onPatch, onSetOut, onDelete, onClose }: Props) {
   const info = IGN[node.type];
   const others = Object.values(flow.nodes).filter((n) => n.type !== "start" && n.id !== node.id);
 
@@ -64,7 +65,7 @@ export function NodePanel({ node, flow, meta, warnings, onMeta, onPatch, onSetOu
         {node.type === "start" ? (
           <StartFields key={node.id} meta={meta} onMeta={onMeta} />
         ) : (
-          <BlockFields n={node} patch={(fn) => onPatch(node.id, fn)} ruleName={meta.name} />
+          <BlockFields n={node} patch={(fn) => onPatch(node.id, fn)} ruleName={meta.name} ruleId={ruleId} />
         )}
 
         <div className="space-y-2 border-t pt-4">

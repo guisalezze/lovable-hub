@@ -6,9 +6,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { FlowNode } from "@/lib/instagramFlow";
+import {
+  FOLLOW_DEFAULT_BUTTON,
+  MAX_FOLLOW_BUTTON,
+  MAX_FOLLOW_TEXT,
+  type FlowNode,
+} from "@/lib/instagramFlow";
 
 type Patch = (fn: (n: FlowNode) => void) => void;
 
@@ -70,7 +76,72 @@ function WebhookTest({ url, ruleName }: { url: string; ruleName: string }) {
   );
 }
 
-export function BlockFields({ n, patch, ruleName }: { n: FlowNode; patch: Patch; ruleName: string }) {
+/** Cliques por botão de link deste fluxo: chave `${node_id}:${button_index}`. */
+function useClickTotals(ruleId: string) {
+  return useQuery({
+    queryKey: ["ig_link_click_totals", ruleId],
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ig_link_click_totals")
+        .select("node_id,button_index,clicks")
+        .eq("rule_id", ruleId);
+      if (error) throw error;
+      const m: Record<string, number> = {};
+      for (const r of data ?? []) m[`${r.node_id}:${r.button_index}`] = (m[`${r.node_id}:${r.button_index}`] ?? 0) + (r.clicks ?? 0);
+      return m;
+    },
+  }).data ?? {};
+}
+
+export function BlockFields({
+  n,
+  patch,
+  ruleName,
+  ruleId,
+}: {
+  n: FlowNode;
+  patch: Patch;
+  ruleName: string;
+  ruleId: string;
+}) {
+  const clicks = useClickTotals(ruleId);
+  if (n.type === "follow") {
+    const text = n.text ?? "";
+    return (
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label>Pedido para seguir</Label>
+          <Textarea
+            rows={5}
+            maxLength={MAX_FOLLOW_TEXT}
+            value={text}
+            onChange={(e) => patch((x) => void (x.text = e.target.value))}
+          />
+          <div className="flex justify-between text-[11px] text-muted-foreground">
+            <span>
+              Use {"{nome}"} (1º nome) e {"{usuario}"} (@ da pessoa).
+            </span>
+            <span>
+              {text.length}/{MAX_FOLLOW_TEXT}
+            </span>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Texto do botão</Label>
+          <Input
+            value={n.button ?? ""}
+            maxLength={MAX_FOLLOW_BUTTON}
+            placeholder={FOLLOW_DEFAULT_BUTTON}
+            onChange={(e) => patch((x) => void (x.button = e.target.value))}
+          />
+        </div>
+        <p className="rounded-lg border bg-muted/50 p-2.5 text-[11px] text-muted-foreground">
+          A Meta só informa se a pessoa segue depois que ela toca no botão.
+        </p>
+      </div>
+    );
+  }
   if (n.type === "message") {
     const text = n.text ?? "";
     const buttons = n.buttons ?? [];
@@ -106,7 +177,16 @@ export function BlockFields({ n, patch, ruleName }: { n: FlowNode; patch: Patch;
                   variant="ghost"
                   size="icon"
                   className="shrink-0"
-                  onClick={() => patch((x) => void x.buttons!.splice(i, 1))}
+                  onClick={() =>
+                    patch((x) => {
+                      x.buttons!.splice(i, 1);
+                      const rf = x.read_fallback;
+                      if (rf) {
+                        if (rf.button === i) delete x.read_fallback;
+                        else if (rf.button > i) rf.button -= 1;
+                      }
+                    })
+                  }
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -117,8 +197,14 @@ export function BlockFields({ n, patch, ruleName }: { n: FlowNode; patch: Patch;
                   patch((x) => {
                     const bt = x.buttons![i];
                     bt.type = v as "flow" | "url";
-                    if (v === "url") delete bt.next;
-                    else delete bt.url;
+                    if (v === "url") {
+                      delete bt.next;
+                      bt.track ??= true;
+                      if (x.read_fallback?.button === i) delete x.read_fallback;
+                    } else {
+                      delete bt.url;
+                      delete bt.track;
+                    }
                   })
                 }
               >
@@ -137,6 +223,22 @@ export function BlockFields({ n, patch, ruleName }: { n: FlowNode; patch: Patch;
                   onChange={(e) => patch((x) => void (x.buttons![i].url = e.target.value))}
                 />
               )}
+              {b.type === "url" && (
+                <div className="flex items-center justify-between gap-2">
+                  <label className="flex cursor-pointer items-center gap-2 text-xs">
+                    <Switch
+                      checked={b.track !== false}
+                      onCheckedChange={(v) => patch((x) => void (x.buttons![i].track = v))}
+                    />
+                    Rastrear cliques
+                  </label>
+                  {b.track !== false && (
+                    <span className="text-[11px] text-muted-foreground">
+                      {clicks[`${n.id}:${i}`] ?? 0} cliques
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           ))}
           {buttons.length < 3 && (
@@ -150,6 +252,60 @@ export function BlockFields({ n, patch, ruleName }: { n: FlowNode; patch: Patch;
             </Button>
           )}
         </div>
+        {buttons.some((b) => b.type !== "url" && b.label?.trim()) && (
+          <div className="space-y-2 rounded-lg border p-2.5">
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <Switch
+                checked={!!n.read_fallback}
+                onCheckedChange={(v) =>
+                  patch((x) => {
+                    if (!v) return void delete x.read_fallback;
+                    const first = (x.buttons ?? []).findIndex((b) => b.type !== "url" && b.label?.trim());
+                    x.read_fallback = { minutes: 5, button: Math.max(first, 0) };
+                  })
+                }
+              />
+              Se a pessoa ler e não tocar…
+            </label>
+            {n.read_fallback && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs">
+                  <span>em</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={60}
+                    className="h-8 w-20"
+                    value={n.read_fallback.minutes}
+                    onChange={(e) =>
+                      patch((x) => {
+                        if (x.read_fallback) x.read_fallback.minutes = Math.min(60, Math.max(1, Math.round(Number(e.target.value)) || 1));
+                      })
+                    }
+                  />
+                  <span>min, seguir pelo botão</span>
+                </div>
+                <Select
+                  value={String(n.read_fallback.button)}
+                  onValueChange={(v) => patch((x) => void (x.read_fallback && (x.read_fallback.button = Number(v))))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {buttons.map((b, i) =>
+                      b.type !== "url" && b.label?.trim() ? (
+                        <SelectItem key={i} value={String(i)}>
+                          🔘 {b.label}
+                        </SelectItem>
+                      ) : null,
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }

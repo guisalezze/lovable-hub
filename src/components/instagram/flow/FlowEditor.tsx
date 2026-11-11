@@ -65,6 +65,8 @@ const payloadOf = (meta: RuleMeta, flow: Flow) =>
     post_id: meta.post_id,
     media_label: meta.media_label,
     public_replies: meta.public_replies,
+    pending_next_reel: meta.pending_next_reel,
+    next_reel_since: meta.next_reel_since,
     flow,
   });
 
@@ -105,6 +107,8 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
     post_id: rule.post_id ?? null,
     media_label: rule.media_label ?? null,
     public_replies: rule.public_replies ?? [],
+    pending_next_reel: !!rule.pending_next_reel,
+    next_reel_since: rule.next_reel_since ?? null,
   }));
   const [nodes, setNodes] = useState<IgRFNode[]>(() => {
     const flow = rule.flow?.nodes?.start ? rule.flow : newFlow();
@@ -131,6 +135,7 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
       mediaLabel: meta.media_label,
       postId: meta.post_id,
       hasReplies: meta.trigger === "comment" && meta.public_replies.some((r) => r.trim()),
+      pendingNextReel: meta.trigger === "comment" && meta.pending_next_reel,
     }),
     [warnings, meta],
   );
@@ -271,6 +276,8 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
           post_id: v.post_id,
           media_label: v.media_label,
           public_replies: v.public_replies,
+          pending_next_reel: v.pending_next_reel,
+          next_reel_since: v.next_reel_since,
           flow: v.flow as unknown as Json,
           updated_at: new Date().toISOString(),
         })
@@ -288,6 +295,8 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
         post_id: v.post_id,
         media_label: v.media_label,
         public_replies: v.public_replies,
+        pending_next_reel: v.pending_next_reel,
+        next_reel_since: v.next_reel_since,
       };
       setMeta((cur) => (JSON.stringify(cur) === JSON.stringify(vars.meta) ? m : cur));
       setSavedSnap(payloadOf(m, vars.flow));
@@ -341,6 +350,7 @@ export default function FlowEditor({ rule }: { rule: IgRule }) {
       node={selectedNode}
       flow={flow}
       meta={meta}
+      ruleId={rule.id}
       warnings={warnings[selectedNode.id] ?? []}
       onMeta={(p) => setMeta((m) => ({ ...m, ...p }))}
       onPatch={patchNode}

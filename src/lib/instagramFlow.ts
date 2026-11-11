@@ -1,7 +1,7 @@
 // Formato e helpers do fluxo de automação do Instagram (spec §3, §9, §10.2).
 // Módulo puro (sem React/Supabase): usado pela lista e pelo construtor visual.
 
-export type NodeType = "start" | "message" | "delay" | "tag" | "condition" | "webhook";
+export type NodeType = "start" | "message" | "delay" | "tag" | "condition" | "webhook" | "follow";
 export type Trigger = "comment" | "dm" | "story" | "mention";
 export type MatchType = "contains" | "exact";
 
@@ -10,6 +10,15 @@ export interface FlowButton {
   type: "flow" | "url";
   url?: string;
   next?: string | null;
+  /** botão de link: rastrear cliques (ausente = true) */
+  track?: boolean;
+}
+
+export interface ReadFallback {
+  /** 1..60 */
+  minutes: number;
+  /** índice em buttons (precisa ser botão de fluxo) */
+  button: number;
 }
 
 export interface FlowNode {
@@ -24,6 +33,9 @@ export interface FlowNode {
   text?: string;
   image?: string;
   buttons?: FlowButton[];
+  read_fallback?: ReadFallback;
+  // follow: text (pedido) + button (rótulo); saídas yes / no
+  button?: string;
   // delay
   amount?: number;
   unit?: "min" | "h" | "d";
@@ -49,6 +61,9 @@ export interface IgRule {
   post_id: string | null;
   media_label: string | null;
   public_replies: string[] | null;
+  pending_next_reel?: boolean | null;
+  next_reel_since?: string | null;
+  share_slug?: string | null;
   flow: Flow | null;
   position: number;
   created_at: string | null;
@@ -68,7 +83,13 @@ export const IGN: Record<NodeType, { ico: string; cor: string; label: string }> 
   tag: { ico: "🏷", cor: "#7c3aed", label: "Tag" },
   condition: { ico: "⑂", cor: "#0d9488", label: "Condição" },
   webhook: { ico: "🔗", cor: "#475569", label: "Webhook" },
+  follow: { ico: "👤", cor: "#db2777", label: "Seguir" },
 };
+
+export const FOLLOW_DEFAULT_TEXT = "Me segue aqui e toque no botão abaixo pra eu te mandar 💛";
+export const FOLLOW_DEFAULT_BUTTON = "Já estou seguindo ✅";
+export const MAX_FOLLOW_TEXT = 640;
+export const MAX_FOLLOW_BUTTON = 20;
 
 /** Campos padrão de cada tipo de bloco novo (sem id/x/y). */
 export const IG_NEW: Record<Exclude<NodeType, "start">, () => Partial<FlowNode>> = {
@@ -77,6 +98,12 @@ export const IG_NEW: Record<Exclude<NodeType, "start">, () => Partial<FlowNode>>
   tag: () => ({ action: "add", tag: "" }),
   condition: () => ({ tag: "" }),
   webhook: () => ({ url: "" }),
+  follow: () => ({
+    text: FOLLOW_DEFAULT_TEXT,
+    button: FOLLOW_DEFAULT_BUTTON,
+    yes: null,
+    no: null,
+  }),
 };
 
 export const MAX_BLOCKS = 80;
@@ -94,6 +121,7 @@ const flowBtn = (b: FlowButton) => b.type !== "url" && !!b.label?.trim();
 
 /** Saídas de um bloco: [chave, rótulo]. Chave = next | yes | no | b0..b2. */
 export const outs = (n: FlowNode): [string, string][] => {
+  if (n.type === "follow") return [["yes", "✅ Segue"], ["no", "❌ Não seguiu"]];
   if (n.type === "condition") return [["yes", "✅ Tem a tag"], ["no", "❌ Não tem"]];
   if (n.type === "message" && (n.buttons || []).some(flowBtn)) {
     const r: [string, string][] = [];
@@ -150,6 +178,8 @@ export interface RuleDraft {
   post_id?: string | null;
   media_label?: string | null;
   public_replies?: string[] | null;
+  pending_next_reel?: boolean | null;
+  next_reel_since?: string | null;
   flow?: Flow | null;
 }
 
@@ -161,6 +191,8 @@ export interface ValidatedRule {
   post_id: string | null;
   media_label: string | null;
   public_replies: string[];
+  pending_next_reel: boolean;
+  next_reel_since: string | null;
   flow: Flow;
 }
 
@@ -187,7 +219,9 @@ export function validateRule(draft: RuleDraft): { rule: ValidatedRule; errors: s
   if (keywords.length > MAX_KEYWORDS) errors.push(`Use no máximo ${MAX_KEYWORDS} palavras-chave.`);
 
   const isComment = trigger === "comment";
-  const post_id = isComment ? draft.post_id?.trim() || null : null;
+  const pending_next_reel = isComment && !!draft.pending_next_reel;
+  const next_reel_since = pending_next_reel ? draft.next_reel_since || new Date().toISOString() : null;
+  const post_id = isComment && !pending_next_reel ? draft.post_id?.trim() || null : null;
   const media_label = isComment && post_id ? draft.media_label ?? null : null;
   const public_replies = isComment
     ? (draft.public_replies ?? []).map((r) => r.trim()).filter(Boolean)
@@ -205,9 +239,24 @@ export function validateRule(draft: RuleDraft): { rule: ValidatedRule; errors: s
     errors.push("O fluxo passou de 200 KB.");
   }
 
+  for (const n of Object.values(nodes)) {
+    if (n.type === "follow") {
+      if ((n.text ?? "").length > MAX_FOLLOW_TEXT) {
+        errors.push(`O pedido do bloco Seguir pode ter no máximo ${MAX_FOLLOW_TEXT} caracteres.`);
+      }
+      if ((n.button ?? "").length > MAX_FOLLOW_BUTTON) {
+        errors.push(`O botão do bloco Seguir pode ter no máximo ${MAX_FOLLOW_BUTTON} caracteres.`);
+      }
+    }
+    if (n.type === "message" && n.read_fallback) {
+      const m = n.read_fallback.minutes;
+      if (!Number.isInteger(m) || m < 1 || m > 60) errors.push("O tempo de espera da leitura deve ser de 1 a 60 minutos.");
+    }
+  }
+
   const match_type: MatchType = draft.match_type === "exact" ? "exact" : "contains";
   return {
-    rule: { name, trigger, keywords, match_type, post_id, media_label, public_replies, flow },
+    rule: { name, trigger, keywords, match_type, post_id, media_label, public_replies, pending_next_reel, next_reel_since, flow },
     errors,
   };
 }
@@ -240,7 +289,14 @@ export function nodeWarnings(flow: Flow, rule: WarnRule): Record<string, string[
       if ((n.buttons || []).some((b) => b.type === "url" && !HTTP_RE.test((b.url || "").trim()))) {
         add(n.id, "Botão de link sem endereço (http:// ou https://).");
       }
+      if (n.read_fallback) {
+        const b = n.buttons?.[n.read_fallback.button];
+        if (!b || b.type === "url" || !b.label?.trim()) {
+          add(n.id, "A opção de leitura aponta para um botão que não existe ou não continua o fluxo.");
+        }
+      }
     }
+    if (n.type === "follow" && !n.text?.trim()) add(n.id, "Pedido sem texto");
     if (n.type === "delay") {
       const mult = n.unit === "d" ? 24 : n.unit === "min" ? 1 / 60 : 1;
       if ((n.amount || 0) * mult > 23) {

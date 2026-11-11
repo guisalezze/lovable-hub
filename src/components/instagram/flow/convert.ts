@@ -92,7 +92,7 @@ export function addNodeLinked(
 ): { flow: Flow; id: string } {
   const id = uniqueNodeId(type, flow.nodes);
   const nodes = { ...flow.nodes, [id]: makeNode(type, id, x, y) };
-  if (type === "condition") {
+  if (type === "condition" || type === "follow") {
     nodes[id].yes = null;
     nodes[id].no = null;
     delete nodes[id].next;
@@ -162,6 +162,8 @@ export function nodeSummary(n: FlowNode): string {
       return `${n.action === "remove" ? "−" : "+"} ${n.tag || "(sem tag)"}`;
     case "condition":
       return n.tag ? `tem "${n.tag}"?` : "(sem tag)";
+    case "follow":
+      return n.text?.trim() ? cut(n.text.trim().replace(/\s+/g, " ")) : "(sem pedido)";
     case "webhook":
       return n.url ? cut(n.url.replace(/^https?:\/\//, "")) : "(sem URL)";
   }

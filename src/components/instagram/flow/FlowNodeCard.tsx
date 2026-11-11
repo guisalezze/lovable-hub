@@ -11,6 +11,7 @@ export interface FlowCtxValue {
   mediaLabel: string | null;
   postId: string | null;
   hasReplies: boolean;
+  pendingNextReel?: boolean;
 }
 
 export const FlowCtx = createContext<FlowCtxValue>({
@@ -20,6 +21,7 @@ export const FlowCtx = createContext<FlowCtxValue>({
   mediaLabel: null,
   postId: null,
   hasReplies: false,
+  pendingNextReel: false,
 });
 
 function FlowNodeCardImpl({ id, data, selected }: NodeProps<IgRFNode>) {
@@ -96,7 +98,11 @@ function Body({ n }: { n: IgRFNode["data"]["n"] }) {
       <div className="px-3 pb-2 flex flex-wrap gap-1">
         <Chip>
           {TRIGGER_LABEL[ctx.trigger] ?? ctx.trigger}
-          {ctx.trigger === "comment" && (ctx.postId ? ` · ${ctx.mediaLabel || "post"}` : " · qualquer post")}
+          {ctx.trigger === "comment" && (ctx.pendingNextReel
+              ? " · próximo reel (aguardando)"
+              : ctx.postId
+                ? ` · ${ctx.mediaLabel || "post"}`
+                : " · qualquer post")}
         </Chip>
         {ctx.keywords.length > 0 && <Chip>🔑 {ctx.keywords.slice(0, 3).join(", ")}{ctx.keywords.length > 3 ? "…" : ""}</Chip>}
         {ctx.hasReplies && <Chip>💬 responde no comentário</Chip>}
@@ -118,6 +124,20 @@ function Body({ n }: { n: IgRFNode["data"]["n"] }) {
             🔗 {b.label}
           </div>
         ))}
+      </div>
+    );
+  }
+  if (n.type === "follow") {
+    return (
+      <div className="px-3 pb-2 space-y-1.5">
+        {n.text?.trim() && (
+          <div className="rounded-xl bg-slate-100 px-2.5 py-1.5 text-slate-700 whitespace-pre-wrap line-clamp-4 break-words">
+            {n.text}
+          </div>
+        )}
+        <div className="rounded-lg border border-slate-200 px-2 py-1 text-center text-blue-600 truncate">
+          🔘 {n.button?.trim() || "Já estou seguindo ✅"}
+        </div>
       </div>
     );
   }
