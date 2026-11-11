@@ -813,6 +813,7 @@ async function resumeFlowRuns(started: number): Promise<number> {
 // ---- Manutenção periódica (no máx. a cada 5 min): limpeza, snapshot de seguidores, próximo reel, reconciliação ----
 const TIME_BUDGET_MS = 40_000; // não começa trabalho novo depois disso (limite da edge); vale para retomadas + manutenção
 const MAINTENANCE_EVERY_MS = 5 * 60e3;
+const MAINTENANCE_MARGIN_MS = 15_000; // folga mínima para a manutenção começar
 const RATE_LIMIT_CODES = [4, 17, 32, 368, 613]; // limites da Meta: encerram a varredura
 const RECONCILE_MAX_COMMENTS = 100; // comentários entregues ao autoReply por varredura
 const RECONCILE_WINDOW_MS = 72 * 3600e3;
@@ -982,6 +983,8 @@ async function reconcileComments(started: number): Promise<void> {
 // Cada etapa é isolada: erro numa não impede as outras; limite da Meta encerra as etapas que chamam a API.
 async function maintenance(configId: string, started: number): Promise<void> {
   const now = Date.now();
+  // pouco tempo depois das retomadas: nem reserva a rodada (senão ela seria perdida por 5 min); tenta no próximo minuto
+  if (now - started > TIME_BUDGET_MS - MAINTENANCE_MARGIN_MS) return;
   const { data: claimed } = await supabase
     .from("ig_config")
     .update({ last_reconcile_at: new Date(now).toISOString() })

@@ -10,6 +10,9 @@ const NOT_FOUND = () =>
     headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
   });
 
+// prévias de link (WhatsApp, Meta, etc.) e robôs não contam como clique; continuam sendo redirecionados
+const BOT_UA = /facebookexternalhit|facebot|meta-externalagent|whatsapp|telegrambot|slackbot|twitterbot|linkedinbot|discordbot|bot|crawler|spider/i;
+
 Deno.serve(async (req) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
     return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
@@ -31,7 +34,7 @@ Deno.serve(async (req) => {
   if (target.protocol !== "http:" && target.protocol !== "https:") return NOT_FOUND();
 
   // o clique nunca bloqueia o redirecionamento: erro na gravação só vai para o log (HEAD não conta)
-  if (req.method === "GET") {
+  if (req.method === "GET" && !BOT_UA.test(req.headers.get("user-agent") ?? "")) {
     try {
       const u = (q.get("u") ?? "").trim();
       const { error } = await supabase
