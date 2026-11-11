@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { initAppUpdates } from "./lib/appUpdate";
 
 // Tratamento de erro global para evitar tela branca
 window.addEventListener('error', (event) => {
@@ -19,6 +20,9 @@ window.addEventListener('unhandledrejection', (event) => {
 if (typeof navigator !== "undefined" && navigator.storage?.persist) {
   navigator.storage.persist().catch(() => {});
 }
+
+// Depois de um deploy, troca para a versão nova sozinho (ver src/lib/appUpdate.ts)
+initAppUpdates();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {

@@ -7,6 +7,17 @@ import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 
 declare const self: ServiceWorkerGlobalScope;
 
+// ── Atualização automática ─────────────────────────────────────────────────
+// Sem isto, a versão nova só entrava depois de fechar todas as abas do CRM.
+// Agora ela assume na hora; a página troca de versão no próximo clique de menu
+// ou quando a aba vai para segundo plano (ver src/lib/appUpdate.ts).
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 // ── Precache todos os assets gerados pelo Vite ──────────────────────────────
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();

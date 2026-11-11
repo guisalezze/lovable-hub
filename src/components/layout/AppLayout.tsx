@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { preloadPages } from "@/lib/lazyPage";
+import { reloadIfUpdateReady } from "@/lib/appUpdate";
 
 function PageSpinner() {
   return (
@@ -38,8 +39,10 @@ export function AppLayout() {
     preloadPages();
   }, []);
 
-  // Ao trocar de página, volta o conteúdo para o topo (como num app)
+  // Ao trocar de página, volta o conteúdo para o topo (como num app).
+  // Se saiu versão nova do CRM, aproveita a troca de página para carregá-la.
   useEffect(() => {
+    if (reloadIfUpdateReady()) return;
     scrollRef.current?.scrollTo({ top: 0 });
   }, [location.pathname]);
 
