@@ -201,7 +201,7 @@ export function useSalesByProduct({ since, until, projectId }: DashboardFilters)
 
       const byProduct: Record<string, number> = {};
       sales.forEach((s) => {
-        const name = s.product_name || "Sem nome";
+        const name = String(s.product_name || "Sem nome");
         byProduct[name] = (byProduct[name] || 0) + 1;
       });
 
@@ -327,7 +327,7 @@ export function useSalesByNutraProduct({ since, until, projectId }: NutraDashboa
       if (error) throw error;
       const byProduct: Record<string, number> = {};
       (data || []).forEach((s) => {
-        const name = s.product_name || "Sem nome";
+        const name = String(s.product_name || "Sem nome");
         byProduct[name] = (byProduct[name] || 0) + 1;
       });
       return Object.entries(byProduct).map(([produto, vendas]) => ({ produto, vendas })).sort((a, b) => b.vendas - a.vendas);

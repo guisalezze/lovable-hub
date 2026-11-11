@@ -434,7 +434,7 @@ export function FunilCanvas({
   initialGraph: FunilGraph;
   onChange: (g: FunilGraph) => void;
 }) {
-  const [nodes, setNodes, onNodesChange] = useNodesState<FNodeData>(initialGraph.nodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<FNodeData>>(initialGraph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
   const [selectedNode, setSelectedNode] = useState<Node<FNodeData> | null>(null);
 
