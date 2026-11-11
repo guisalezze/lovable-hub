@@ -1,9 +1,8 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, precacheAndRoute, createHandlerBoundToURL } from 'workbox-precaching';
 import { registerRoute, NavigationRoute } from 'workbox-routing';
-import { NetworkFirst, CacheFirst } from 'workbox-strategies';
+import { CacheFirst } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
-import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -15,7 +14,13 @@ self.addEventListener('install', () => {
   self.skipWaiting();
 });
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    Promise.all([
+      self.clients.claim(),
+      // Apaga o cache antigo das respostas do banco (não é mais usado, ver abaixo)
+      caches.delete('supabase-api-cache'),
+    ])
+  );
 });
 
 // ── Precache todos os assets gerados pelo Vite ──────────────────────────────
@@ -30,21 +35,15 @@ registerRoute(
   })
 );
 
-// ── Cache da API do Supabase ────────────────────────────────────────────────
-registerRoute(
-  ({ url }) => url.hostname.includes('supabase.co'),
-  new NetworkFirst({
-    cacheName: 'supabase-api-cache',
-    plugins: [
-      new ExpirationPlugin({ maxEntries: 50, maxAgeSeconds: 60 * 60 }),
-      new CacheableResponsePlugin({ statuses: [0, 200] }),
-    ],
-  })
-);
+// ── Respostas do banco (API do Supabase): NÃO são guardadas ─────────────────
+// Antes elas ficavam no navegador por até 1h, inclusive depois de sair da conta.
+// Leads, vendas e clientes não devem ficar gravados no aparelho. A navegação
+// continua rápida porque o React Query mantém os dados em memória com o app aberto.
 
-// ── Cache de storage do Supabase ────────────────────────────────────────────
+// ── Cache de arquivos públicos do storage (imagens, logos) ───────────────────
+// Só a pasta pública; arquivos privados não ficam salvos no aparelho.
 registerRoute(
-  ({ url }) => url.hostname.includes('supabase') && url.pathname.includes('/storage/'),
+  ({ url }) => url.hostname.includes('supabase') && url.pathname.includes('/storage/v1/object/public/'),
   new CacheFirst({
     cacheName: 'supabase-storage-cache',
     plugins: [

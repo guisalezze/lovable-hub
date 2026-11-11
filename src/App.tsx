@@ -72,6 +72,18 @@ const queryClient = new QueryClient({
   },
 });
 
+// Ao sair da conta (pelo botão ou sessão expirada), apaga os dados que ficaram
+// no aparelho: o cache do React Query em memória e os caches do navegador.
+supabase.auth.onAuthStateChange((event) => {
+  if (event !== "SIGNED_OUT") return;
+  queryClient.clear();
+  if (typeof caches !== "undefined") {
+    ["supabase-api-cache", "supabase-storage-cache"].forEach((name) => {
+      caches.delete(name).catch(() => {});
+    });
+  }
+});
+
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
