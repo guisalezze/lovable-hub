@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
  *   2. Crie o bloco `[data-design="<id>"] { ... }` no index.css.
  * O id também é lido no index.html (script inline) para evitar "flash" ao abrir.
  */
-export type DesignId = "vault" | "lima" | "claro";
+export type DesignId = "vault" | "lima" | "violeta" | "claro" | "menta";
 
 export interface DesignDef {
   id: DesignId;
@@ -40,12 +40,28 @@ export const DESIGNS: DesignDef[] = [
     themeColor: "#040505",
   },
   {
+    id: "violeta",
+    name: "Violeta",
+    description: "Roxo noturno com violeta e amarelo-lima",
+    dark: true,
+    swatch: ["#05040a", "#15101f", "#9d6bff"],
+    themeColor: "#05040A",
+  },
+  {
     id: "claro",
     name: "Claro",
     description: "Fundo claro, limpo, com destaque esmeralda",
     dark: false,
     swatch: ["#f4f5f2", "#ffffff", "#16a34a"],
     themeColor: "#F4F5F2",
+  },
+  {
+    id: "menta",
+    name: "Menta",
+    description: "Claro e suave, cinza-menta com verde-petróleo",
+    dark: false,
+    swatch: ["#ecf2f2", "#ffffff", "#5fdfa5"],
+    themeColor: "#ECF2F2",
   },
 ];
 

@@ -6,6 +6,11 @@ interface RevenueChartProps {
   isLoading?: boolean;
 }
 
+// Cores vindas do design ativo (ver --chart-main e tokens em index.css)
+const MAIN = "hsl(var(--chart-main))";
+const GRID = "hsl(var(--border))";
+const AXIS = "hsl(var(--muted-foreground))";
+
 export function RevenueChart({ data, isLoading }: RevenueChartProps) {
   return (
     <div className="material-card p-5">
@@ -24,24 +29,25 @@ export function RevenueChart({ data, isLoading }: RevenueChartProps) {
             <AreaChart data={data}>
               <defs>
                 <linearGradient id="colorReceita" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(172, 66%, 50%)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="hsl(172, 66%, 50%)" stopOpacity={0} />
+                  <stop offset="5%" stopColor={MAIN} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={MAIN} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 16%, 18%)" />
-              <XAxis dataKey="date" stroke="hsl(215, 15%, 55%)" fontSize={11} />
-              <YAxis stroke="hsl(215, 15%, 55%)" fontSize={11} />
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
+              <XAxis dataKey="date" stroke={AXIS} fontSize={11} />
+              <YAxis stroke={AXIS} fontSize={11} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "hsl(220, 18%, 10%)",
-                  border: "1px solid hsl(220, 16%, 18%)",
+                  backgroundColor: "hsl(var(--popover))",
+                  border: "1px solid hsl(var(--border))",
                   borderRadius: "8px",
                   fontSize: "12px",
+                  color: "hsl(var(--popover-foreground))",
                 }}
-                labelStyle={{ color: "hsl(210, 20%, 95%)" }}
+                labelStyle={{ color: "hsl(var(--popover-foreground))" }}
                 formatter={(value: number) => [`R$ ${value.toFixed(2)}`, "Receita"]}
               />
-              <Area type="monotone" dataKey="receita" stroke="hsl(172, 66%, 50%)" fillOpacity={1} fill="url(#colorReceita)" strokeWidth={2} />
+              <Area type="monotone" dataKey="receita" stroke={MAIN} fillOpacity={1} fill="url(#colorReceita)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         )}

@@ -61,6 +61,8 @@
     /* Nome da fonte por design (usado no tailwind.config.ts) — sempre definido */
     --font-sans-name: 'Nunito';
     --font-display-name: 'Raleway';
+    /* Cor principal dos gráficos do dashboard (Vault mantém o verde-água original) */
+    --chart-main: 172 66% 50%;
     /* Fundo do item ativo da sidebar (cada design pode trocar) */
     --nav-active-bg: hsl(var(--sidebar-accent));
     --nav-active-fg: hsl(var(--sidebar-accent-foreground));
@@ -220,8 +222,153 @@
     --font-display: 'Inter', system-ui, sans-serif;
     --tracking-normal: -0.01em;
 
+    --chart-main: 88 72% 62%;
     --nav-active-bg: linear-gradient(90deg, hsl(140 55% 20%), hsl(92 62% 42%));
     --nav-active-fg: hsl(0 0% 100%);
+  }
+
+  /* ================================================================
+     DESIGN: Violeta — roxo noturno, violeta vibrante + amarelo-lima
+     ================================================================ */
+  :root[data-design="violeta"] {
+    --background: 250 43% 3%;
+    --foreground: 265 20% 93%;
+
+    --card: 262 26% 8%;
+    --card-foreground: 265 20% 93%;
+
+    --popover: 262 26% 10%;
+    --popover-foreground: 265 20% 93%;
+
+    --primary: 265 92% 68%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 262 22% 13%;
+    --secondary-foreground: 265 20% 93%;
+
+    --muted: 262 22% 12%;
+    --muted-foreground: 265 10% 63%;
+
+    --accent: 262 24% 14%;
+    --accent-foreground: 66 80% 60%;
+
+    --destructive: 350 80% 62%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 80 70% 55%;
+    --success-foreground: 250 43% 6%;
+
+    --warning: 45 90% 56%;
+    --warning-foreground: 250 43% 6%;
+
+    --border: 262 22% 16%;
+    --input: 262 22% 18%;
+    --ring: 265 92% 68%;
+
+    --radius: 1rem;
+
+    --sidebar-background: 255 38% 4%;
+    --sidebar: 255 38% 4%;
+    --sidebar-foreground: 265 15% 85%;
+    --sidebar-primary: 66 80% 60%;
+    --sidebar-primary-foreground: 250 43% 6%;
+    --sidebar-accent: 262 24% 12%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 262 22% 12%;
+    --sidebar-ring: 265 92% 68%;
+
+    --chart-1: 265 92% 68%;
+    --chart-2: 66 80% 60%;
+    --chart-3: 290 75% 65%;
+    --chart-4: 190 70% 55%;
+    --chart-5: 350 80% 62%;
+
+    --font-sans-name: 'Inter';
+    --font-display-name: 'Inter';
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-display: 'Inter', system-ui, sans-serif;
+    --tracking-normal: -0.01em;
+
+    --chart-main: 265 92% 68%;
+    --nav-active-bg: linear-gradient(90deg, hsl(265 80% 52%), hsl(285 75% 58%));
+    --nav-active-fg: hsl(0 0% 100%);
+  }
+
+  /* ================================================================
+     DESIGN: Menta — claro e suave, cinza-menta + verde-petróleo
+     ================================================================ */
+  :root[data-design="menta"] {
+    --background: 180 18% 94%;
+    --foreground: 188 42% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 188 42% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 188 42% 11%;
+
+    --primary: 158 58% 34%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 180 14% 90%;
+    --secondary-foreground: 188 42% 14%;
+
+    --muted: 180 14% 91%;
+    --muted-foreground: 185 12% 38%;
+
+    --accent: 158 50% 92%;
+    --accent-foreground: 158 60% 26%;
+
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 62% 38%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 36 90% 45%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 180 14% 86%;
+    --input: 180 14% 84%;
+    --ring: 158 58% 34%;
+
+    --radius: 1.25rem;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 188 42% 14%;
+    --sidebar-primary: 158 58% 34%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 158 50% 93%;
+    --sidebar-accent-foreground: 188 42% 11%;
+    --sidebar-border: 180 14% 89%;
+    --sidebar-ring: 158 58% 34%;
+
+    --chart-1: 152 62% 42%;
+    --chart-2: 170 45% 55%;
+    --chart-3: 188 42% 24%;
+    --chart-4: 75 70% 52%;
+    --chart-5: 0 72% 55%;
+
+    --font-sans-name: 'Inter';
+    --font-display-name: 'Inter';
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-display: 'Inter', system-ui, sans-serif;
+    --tracking-normal: -0.015em;
+
+    --shadow-2xs: 0px 1px 2px 0px hsl(188 40% 15% / 0.04);
+    --shadow-xs:  0px 1px 3px 0px hsl(188 40% 15% / 0.05);
+    --shadow-sm:  0px 2px 6px 0px hsl(188 40% 15% / 0.06), 0px 1px 2px -1px hsl(188 40% 15% / 0.05);
+    --shadow:     0px 4px 10px 0px hsl(188 40% 15% / 0.07), 0px 1px 3px -1px hsl(188 40% 15% / 0.05);
+    --shadow-md:  0px 8px 18px 0px hsl(188 40% 15% / 0.08), 0px 2px 4px -1px hsl(188 40% 15% / 0.05);
+    --shadow-lg:  0px 12px 26px 0px hsl(188 40% 15% / 0.09), 0px 4px 6px -1px hsl(188 40% 15% / 0.05);
+    --shadow-xl:  0px 18px 34px 0px hsl(188 40% 15% / 0.11), 0px 8px 10px -1px hsl(188 40% 15% / 0.05);
+    --shadow-2xl: 0px 26px 50px 0px hsl(188 40% 15% / 0.16);
+
+    --chart-main: 152 62% 42%;
+    /* Pílula ativa em gradiente lima → menta, texto escuro */
+    --nav-active-bg: linear-gradient(90deg, hsl(75 85% 76%), hsl(152 62% 72%));
+    --nav-active-fg: hsl(188 42% 11%);
   }
 
   /* ================================================================
@@ -295,16 +442,113 @@
     --shadow-xl:  0px 16px 30px 0px hsl(150 20% 10% / 0.12), 0px 8px 10px -1px hsl(150 20% 10% / 0.06);
     --shadow-2xl: 0px 24px 48px 0px hsl(150 20% 10% / 0.18);
 
+    --chart-main: 142 72% 38%;
     --nav-active-bg: hsl(var(--sidebar-accent));
     --nav-active-fg: hsl(var(--sidebar-accent-foreground));
   }
 }
 
 /* Títulos mais leves nos designs modernos (estilo do dashboard de referência) */
-:root[data-design="lima"] .heading-display,
-:root[data-design="claro"] .heading-display {
+:root[data-design]:not([data-design="vault"]) .heading-display {
   font-weight: 600;
   letter-spacing: -0.025em;
+}
+
+/* ==================================================================
+   ESTILO DOS CARDS, FUNDO E SIDEBAR POR DESIGN
+   Alvo: .glass-card / .material-card (classes usadas no app todo)
+   e .app-card (componente <Card>). Vault e Claro mantêm o estilo original.
+   ================================================================== */
+
+/* ---- Sidebar flutuante (Verde Lima, Violeta, Menta) — só desktop ---- */
+:root[data-design="lima"] .app-sidebar,
+:root[data-design="violeta"] .app-sidebar,
+:root[data-design="menta"] .app-sidebar {
+  top: 0.75rem;
+  left: 0.75rem;
+  height: calc(100vh - 1.5rem);
+  border-radius: 1.25rem;
+  border: 1px solid hsl(var(--sidebar-border));
+}
+:root[data-design="lima"] .app-sidebar[aria-hidden="true"],
+:root[data-design="violeta"] .app-sidebar[aria-hidden="true"],
+:root[data-design="menta"] .app-sidebar[aria-hidden="true"] {
+  transform: translateX(calc(-100% - 1rem));
+}
+:root[data-design="lima"] .app-main-with-sidebar,
+:root[data-design="violeta"] .app-main-with-sidebar,
+:root[data-design="menta"] .app-main-with-sidebar {
+  margin-left: calc(15rem + 0.75rem);
+}
+
+/* ---- Verde Lima (Xira): cards chapados em grafite, sem sombra ---- */
+:root[data-design="lima"] .glass-card,
+:root[data-design="lima"] .material-card,
+:root[data-design="lima"] .app-card {
+  border-radius: 1.125rem;
+  border: 1px solid hsl(150 6% 12%);
+  background-color: hsl(var(--card));
+  background-image: linear-gradient(180deg, hsl(150 9% 10%), hsl(var(--card)) 45%);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.03);
+  backdrop-filter: none;
+}
+
+/* ---- Violeta (WhatsML): vidro translúcido sobre brilho roxo ---- */
+:root[data-design="violeta"] .app-shell {
+  background-color: hsl(var(--background));
+  background-image:
+    radial-gradient(60% 50% at 15% 0%, hsl(268 85% 35% / 0.35), transparent 70%),
+    radial-gradient(45% 40% at 95% 10%, hsl(290 70% 40% / 0.22), transparent 70%),
+    radial-gradient(50% 45% at 70% 100%, hsl(66 80% 45% / 0.07), transparent 70%);
+  background-attachment: fixed;
+}
+:root[data-design="violeta"] .app-sidebar {
+  background-color: hsl(255 38% 5% / 0.75);
+  backdrop-filter: blur(16px);
+}
+:root[data-design="violeta"] .glass-card,
+:root[data-design="violeta"] .material-card,
+:root[data-design="violeta"] .app-card {
+  border-radius: 1.125rem;
+  border: 1px solid hsl(270 60% 85% / 0.08);
+  background-color: hsl(262 30% 11% / 0.88);
+  background-image: linear-gradient(160deg, hsl(270 60% 70% / 0.07), transparent 40%);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.06),
+    0 12px 32px -14px hsl(265 90% 15% / 0.7);
+}
+/* Desfoque só no desktop: em celular pesa e deixa a rolagem menos fluida */
+@media (min-width: 768px) {
+  :root[data-design="violeta"] .glass-card,
+  :root[data-design="violeta"] .material-card,
+  :root[data-design="violeta"] .app-card {
+    background-color: hsl(262 30% 11% / 0.6);
+    backdrop-filter: blur(14px) saturate(140%);
+  }
+}
+
+/* ---- Menta (Wstack): cards brancos, bem arredondados, sombra suave ---- */
+:root[data-design="menta"] .app-shell {
+  background-color: hsl(var(--background));
+  background-image:
+    radial-gradient(55% 45% at 0% 0%, hsl(170 45% 85% / 0.7), transparent 70%),
+    radial-gradient(40% 35% at 100% 0%, hsl(75 70% 88% / 0.45), transparent 70%);
+  background-attachment: fixed;
+}
+:root[data-design="menta"] .app-sidebar {
+  box-shadow: 0 8px 24px -10px hsl(188 40% 15% / 0.12);
+}
+:root[data-design="menta"] .glass-card,
+:root[data-design="menta"] .material-card,
+:root[data-design="menta"] .app-card {
+  border-radius: 1.5rem;
+  border: 1px solid hsl(0 0% 100% / 0);
+  background-color: hsl(0 0% 100%);
+  background-image: radial-gradient(90% 70% at 100% 0%, hsl(152 60% 90% / 0.5), transparent 60%);
+  box-shadow:
+    0 1px 2px hsl(188 40% 15% / 0.04),
+    0 10px 28px -12px hsl(188 40% 15% / 0.14);
+  backdrop-filter: none;
 }
 
 /* Item ativo da navegação — o fundo vem do design atual */

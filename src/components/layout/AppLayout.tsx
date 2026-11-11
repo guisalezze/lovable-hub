@@ -56,13 +56,13 @@ export function AppLayout() {
   }, [handleKeyDown]);
 
   return (
-    <div className="flex min-h-screen w-full bg-background overflow-x-hidden">
+    <div className="app-shell flex min-h-screen w-full bg-background overflow-x-hidden">
       {/* Sidebar: no mobile é Sheet (overlay), no desktop é aside fixo */}
       <AppSidebar open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       <main className={cn(
         "flex flex-col min-h-screen overflow-hidden transition-[margin-left] duration-modal ease-in-out-apple",
         isMobile ? "w-full" : "flex-1",
-        !isMobile && sidebarOpen && "ml-60" // Compensar espaço do sidebar fixo no desktop
+        !isMobile && sidebarOpen && "ml-60 app-main-with-sidebar" // Compensar espaço do sidebar fixo no desktop
       )}>
         <header className="h-12 md:h-14 flex items-center border-b border-border px-2 sm:px-4 shrink-0 gap-1 sm:gap-2 relative">
           <button

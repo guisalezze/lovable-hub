@@ -24,7 +24,7 @@
     <!-- Aplica o design salvo antes da primeira pintura (evita flash). Mantenha em sincronia com src/lib/designs.ts -->
     <script>
       (function () {
-        var designs = { vault: ["#0A0A0A", true], lima: ["#040505", true], claro: ["#F4F5F2", false] };
+        var designs = { vault: ["#0A0A0A", true], lima: ["#040505", true], violeta: ["#05040A", true], claro: ["#F4F5F2", false], menta: ["#ECF2F2", false] };
         var id = "vault";
         try { var s = localStorage.getItem("vault-design"); if (s && designs[s]) id = s; } catch (e) {}
         var root = document.documentElement;

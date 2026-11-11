@@ -3,6 +3,7 @@ import { OperationalCards } from "@/components/dashboard/OperationalCards";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { SalesChart } from "@/components/dashboard/SalesChart";
 import { KpiCard } from "@/components/dashboard/KpiCard";
+import { DesignSwitcher } from "@/components/layout/DesignSwitcher";
 import { Target, TrendingUp, Users, DollarSign } from "lucide-react";
 
 // Dados 100% estáticos — sem Supabase, sem login. Só para avaliar o design visualmente.
@@ -25,7 +26,7 @@ const mockSalesData = [
 
 const DesignPreview = () => {
   return (
-    <div className="min-h-screen bg-background p-4 sm:p-8">
+    <div className="app-shell min-h-screen bg-background p-4 sm:p-8">
       <div className="space-y-4 sm:space-y-6 w-full max-w-7xl mx-auto relative">
         <div
           className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-[420px] opacity-60 dark:opacity-30"
@@ -44,6 +45,9 @@ const DesignPreview = () => {
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Dados fictícios — só para avaliar visual, animação e materiais
             </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            Trocar design <DesignSwitcher />
           </div>
         </div>
 
