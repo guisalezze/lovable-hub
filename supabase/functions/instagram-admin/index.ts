@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Painel do Instagram: só o que precisa do token da Meta.
-// Ações (POST JSON { action }): status | posts | webhook_test | set_token
+// Ações (POST JSON { action }): status | posts | webhook_test | set_token | conversations | messages | reply
 // Exige JWT de usuário do Supabase (Authorization: Bearer ...).
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -43,6 +43,54 @@ function checkWebhookUrl(raw: string): string | null {
     if (h === "::1" || h === "::" || /^f[cd]/.test(h) || /^fe[89ab]/.test(h) || h.startsWith("::ffff:")) return blocked;
   } else if (/^\d+$/.test(h) || /^0x/i.test(h)) {
     return blocked; // IP em formato decimal/hex
+  }
+  return null;
+}
+
+// --- Inbox (Conversas) ---
+const MSG_FIELDS = "messages.limit(30){message,from,created_time}";
+const WINDOW_MS = 24 * 60 * 60 * 1000;
+// ids de conversa/pessoa vindos do navegador: só caracteres seguros num segmento de URL
+const SAFE_ID = /^[A-Za-z0-9_\-=]{1,200}$/;
+
+type GraphMsg = { id?: string; message?: string; created_time?: string; from?: { id?: string; username?: string } };
+type GraphError = { message?: string; code?: number; error_subcode?: number };
+
+class GraphFail extends Error {
+  constructor(public code: number | undefined, message: string, public status: number) {
+    super(message);
+  }
+}
+
+// Traduz os erros mais comuns da Graph API para algo legível.
+function graphMessage(e: GraphError | undefined, status: number): string {
+  const code = e?.code;
+  const sub = e?.error_subcode;
+  if (code === 190) return "Token do Instagram inválido ou expirado. Cole um novo token.";
+  if (sub === 2534022 || sub === 2018278) {
+    return "Fora da janela de 24 h: a pessoa precisa mandar mensagem primeiro";
+  }
+  if (code === 551 || sub === 1545041) return "Esta pessoa não está disponível para receber mensagens.";
+  if (code === 4 || code === 17 || code === 32 || code === 613) return "Limite de chamadas do Instagram atingido. Tente de novo em alguns minutos.";
+  if (code === 10 || code === 200 || code === 3) return `Permissão insuficiente no Instagram: ${e?.message ?? "verifique as permissões do app"}`;
+  return `Instagram: ${e?.message || `HTTP ${status}`}`;
+}
+
+async function graphGet(path: string, token: string): Promise<Record<string, unknown>> {
+  const r = await fetch(`${GRAPH}${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new GraphFail(j.error?.code, graphMessage(j.error, r.status), r.status);
+  return j;
+}
+
+// Última mensagem enviada pela outra pessoa (não pela conta) numa lista da Graph (mais nova primeiro).
+function lastFromPerson(msgs: GraphMsg[], ownId: string, ownUsername: string | null): GraphMsg | null {
+  const sorted = [...msgs].sort((a, b) => Date.parse(b.created_time ?? "") - Date.parse(a.created_time ?? ""));
+  for (const m of sorted) {
+    const fid = String(m.from?.id ?? "");
+    const fun = m.from?.username ?? null;
+    const own = (ownId && fid === ownId) || (ownUsername && fun === ownUsername);
+    if (!own) return m;
   }
   return null;
 }
@@ -219,6 +267,94 @@ Deno.serve(async (req) => {
 
       // nunca devolve o token
       return json({ ok: true, username, subscribed, ...(subscribeError ? { subscribe_error: subscribeError } : {}), ...(cleanupError ? { cleanup_error: cleanupError } : {}) });
+    }
+
+    if (action === "conversations" || action === "messages" || action === "reply") {
+      const { data: cfg } = await supabase
+        .from("ig_config")
+        .select("access_token, instagram_user_id, username")
+        .limit(1)
+        .maybeSingle();
+      if (!cfg?.access_token) return json({ error: "Conta não conectada" }, 400);
+      const token = String(cfg.access_token);
+      const ownId = String(cfg.instagram_user_id ?? "");
+      const ownUsername: string | null = cfg.username ?? null;
+      const account = { id: ownId, username: ownUsername };
+
+      try {
+        if (action === "conversations") {
+          const full = "id,updated_time,participants,messages.limit(1){message,from,created_time}";
+          try {
+            const j = await graphGet(
+              `/me/conversations?platform=instagram&fields=${encodeURIComponent(full)}&limit=25`,
+              token,
+            );
+            return json({ account, conversations: j.data ?? [], details_unavailable: false });
+          } catch (e) {
+            if (!(e instanceof GraphFail) || e.code !== 1) throw e;
+            // erro genérico (código 1) com os campos detalhados: tenta só o básico
+            const j = await graphGet(`/me/conversations?platform=instagram&fields=id,updated_time&limit=25`, token);
+            return json({ account, conversations: j.data ?? [], details_unavailable: true });
+          }
+        }
+
+        if (action === "messages") {
+          const cid = String(body.conversation_id ?? "").trim();
+          if (!SAFE_ID.test(cid)) return json({ error: "Conversa inválida" }, 400);
+          const j = await graphGet(`/${cid}?fields=${encodeURIComponent(`id,participants,${MSG_FIELDS}`)}`, token);
+          const msgs = ((j.messages as { data?: GraphMsg[] } | undefined)?.data ?? []) as GraphMsg[];
+          const participants = ((j.participants as { data?: unknown[] } | undefined)?.data ?? []) as unknown[];
+          return json({ account, id: cid, participants, messages: msgs });
+        }
+
+        // reply
+        const recipient = String(body.recipient_id ?? "").trim();
+        const text = String(body.text ?? "").trim();
+        const cidIn = String(body.conversation_id ?? "").trim();
+        if (!SAFE_ID.test(recipient)) return json({ error: "Destinatário inválido" }, 400);
+        if (recipient === ownId) return json({ error: "Destinatário inválido" }, 400);
+        if (!text) return json({ error: "Escreva a mensagem." }, 400);
+        if (text.length > 1000) return json({ error: "Mensagem muito longa (máximo 1000 caracteres)." }, 400);
+        if (cidIn && !SAFE_ID.test(cidIn)) return json({ error: "Conversa inválida" }, 400);
+
+        // acha as mensagens da conversa com essa pessoa
+        let msgs: GraphMsg[] = [];
+        if (cidIn) {
+          const j = await graphGet(`/${cidIn}?fields=${encodeURIComponent(`id,participants,${MSG_FIELDS}`)}`, token);
+          const parts = ((j.participants as { data?: { id?: string }[] } | undefined)?.data ?? []);
+          if (parts.length && !parts.some((p) => String(p.id ?? "") === recipient)) {
+            return json({ error: "A pessoa não faz parte desta conversa." }, 400);
+          }
+          msgs = ((j.messages as { data?: GraphMsg[] } | undefined)?.data ?? []) as GraphMsg[];
+        } else {
+          const j = await graphGet(
+            `/me/conversations?platform=instagram&user_id=${encodeURIComponent(recipient)}&fields=${encodeURIComponent(`id,${MSG_FIELDS}`)}`,
+            token,
+          );
+          const conv = ((j.data as { messages?: { data?: GraphMsg[] } }[] | undefined) ?? [])[0];
+          msgs = conv?.messages?.data ?? [];
+        }
+
+        const last = lastFromPerson(msgs, ownId, ownUsername);
+        const lastAt = last?.created_time ? Date.parse(last.created_time) : NaN;
+        if (!last || !Number.isFinite(lastAt) || Date.now() - lastAt > WINDOW_MS) {
+          return json({ error: "Fora da janela de 24 h: a pessoa precisa mandar mensagem primeiro", outside_window: true }, 409);
+        }
+
+        const r = await fetch(`${GRAPH}/me/messages`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ recipient: { id: recipient }, message: { text } }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || j.error) {
+          return json({ error: graphMessage(j.error, r.status) }, r.status >= 500 ? 502 : 400);
+        }
+        return json({ ok: true, message_id: j.message_id ?? null });
+      } catch (e) {
+        if (e instanceof GraphFail) return json({ error: e.message }, e.status >= 500 ? 502 : 400);
+        throw e;
+      }
     }
 
     return json({ error: "Ação desconhecida" }, 400);

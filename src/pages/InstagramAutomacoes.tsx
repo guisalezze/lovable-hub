@@ -3,6 +3,8 @@ import AccountStatus from "@/components/instagram/AccountStatus";
 import FlowsTable from "@/components/instagram/FlowsTable";
 import ContactsSection from "@/components/instagram/ContactsSection";
 import RepliesSection from "@/components/instagram/RepliesSection";
+import InboxSection from "@/components/instagram/InboxSection";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function InstagramAutomacoes() {
   return (
@@ -12,9 +14,20 @@ export default function InstagramAutomacoes() {
         <h1 className="text-xl font-bold">Instagram</h1>
       </div>
       <AccountStatus />
-      <FlowsTable />
-      <ContactsSection />
-      <RepliesSection />
+      <Tabs defaultValue="automacoes">
+        <TabsList>
+          <TabsTrigger value="automacoes">Automações</TabsTrigger>
+          <TabsTrigger value="conversas">Conversas</TabsTrigger>
+        </TabsList>
+        <TabsContent value="automacoes" className="space-y-8 mt-6">
+          <FlowsTable />
+          <ContactsSection />
+          <RepliesSection />
+        </TabsContent>
+        <TabsContent value="conversas" className="mt-6">
+          <InboxSection />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

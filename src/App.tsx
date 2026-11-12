@@ -49,6 +49,7 @@ const InstagramFluxoEditor = lazyPage(() => import("./pages/InstagramFluxoEditor
 const Privacidade = lazyPage(() => import("./pages/Privacidade"));
 const ExclusaoDados = lazyPage(() => import("./pages/ExclusaoDados"));
 const DesignPreview = lazyPage(() => import("./pages/DesignPreview"));
+const InstagramReportPublic = lazyPage(() => import("./pages/InstagramReportPublic"));
 
 function PageSpinner() {
   return (
@@ -230,6 +231,7 @@ const App = () => (
           <Route path="/design-preview" element={<DesignPreview />} />
           <Route path="/privacidade" element={<Privacidade />} />
           <Route path="/exclusao-de-dados" element={<ExclusaoDados />} />
+          <Route path="/r/instagram/:slug" element={<InstagramReportPublic />} />
           <Route path="/onboarding/:token" element={<Onboarding />} />
           <Route path="/nutra/meta-callback" element={<AuthGuard><MetaCallback /></AuthGuard>} />
           <Route

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Instagram, KeyRound } from "lucide-react";
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 interface IgStatus {
   configured: boolean; // existe conta salva
@@ -27,6 +28,73 @@ const fmtDate = (iso?: string | null) =>
         year: "numeric",
       }).format(new Date(iso))
     : null;
+
+const fmtDay = (day: string) => {
+  const [, m, d] = day.split("-");
+  return `${d}/${m}`;
+};
+
+// Seguidores dos últimos 90 dias (ig_follower_snapshots, gravado pelo worker 1×/dia).
+function FollowerHistory() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["ig_follower_snapshots"],
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from("ig_follower_snapshots")
+        .select("day, followers")
+        .gte("day", since)
+        .order("day", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  if (isLoading) return null;
+  const points = data ?? [];
+  if (points.length < 2) {
+    return (
+      <p className="mt-3 text-xs text-muted-foreground">O histórico começa a ser gravado pelo worker 1×/dia.</p>
+    );
+  }
+  const first = points[0].followers;
+  const last = points[points.length - 1].followers;
+  const diff = last - first;
+
+  return (
+    <div className="mt-4">
+      <div className="flex items-baseline gap-2 mb-1">
+        <p className="text-xs font-medium">Seguidores (90 dias)</p>
+        <span className={`text-xs ${diff > 0 ? "text-emerald-600" : diff < 0 ? "text-red-600" : "text-muted-foreground"}`}>
+          {diff > 0 ? "+" : ""}
+          {diff.toLocaleString("pt-BR")} desde {fmtDay(points[0].day)}
+        </span>
+      </div>
+      <div className="h-28">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={points} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+            <XAxis dataKey="day" tickFormatter={fmtDay} tick={{ fontSize: 10 }} minTickGap={24} stroke="hsl(var(--muted-foreground))" />
+            <YAxis
+              domain={["dataMin", "dataMax"]}
+              tick={{ fontSize: 10 }}
+              width={48}
+              allowDecimals={false}
+              tickFormatter={(v: number) => v.toLocaleString("pt-BR")}
+              stroke="hsl(var(--muted-foreground))"
+            />
+            <Tooltip
+              labelFormatter={(d) => fmtDay(String(d))}
+              formatter={(v) => [Number(v).toLocaleString("pt-BR"), "Seguidores"]}
+              contentStyle={{ fontSize: 12, background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+            />
+            <Line type="monotone" dataKey="followers" stroke="#ec4899" strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
 
 export default function AccountStatus() {
   const qc = useQueryClient();
@@ -148,6 +216,9 @@ export default function AccountStatus() {
               </Badge>
             )}
             {tokenButton("outline", "Trocar token")}
+          </div>
+          <div className="basis-full">
+            <FollowerHistory />
           </div>
         </div>
       ) : (
