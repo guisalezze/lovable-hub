@@ -66,23 +66,27 @@ const isOwn = (u: IgUser | undefined, acc: Account | undefined) =>
 const otherOf = (parts: IgUser[] | undefined, acc: Account | undefined): IgUser | undefined =>
   (parts ?? []).find((p) => !isOwn(p, acc));
 
+// A Meta manda "2024-05-01T12:34:56+0000" (sem ":" no fuso); o Safari não entende esse formato.
+const parseIg = (iso?: string) =>
+  iso ? Date.parse(iso.replace(/([+-]\d{2})(\d{2})$/, "$1:$2")) : NaN;
+
 const relTime = (iso?: string) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return formatDistanceToNow(d, { addSuffix: true, locale: ptBR });
+  const t = parseIg(iso);
+  if (!Number.isFinite(t)) return "";
+  return formatDistanceToNow(new Date(t), { addSuffix: true, locale: ptBR });
 };
 
-const fullTime = (iso?: string) =>
-  iso
-    ? new Intl.DateTimeFormat("pt-BR", {
-        timeZone: "America/Sao_Paulo",
-        day: "2-digit",
-        month: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(new Date(iso))
-    : "";
+const fullTime = (iso?: string) => {
+  const t = parseIg(iso);
+  if (!Number.isFinite(t)) return "";
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(t));
+};
 
 const userLabel = (u: IgUser | undefined) => (u?.username ? `@${u.username}` : u?.id ? `ID ${u.id}` : "Pessoa");
 
@@ -220,7 +224,7 @@ function Thread({
   const ordered = useMemo(
     () =>
       [...(msgQ.data?.messages ?? [])].sort(
-        (a, b) => Date.parse(a.created_time ?? "") - Date.parse(b.created_time ?? ""),
+        (a, b) => (parseIg(a.created_time) || 0) - (parseIg(b.created_time) || 0),
       ),
     [msgQ.data],
   );
@@ -229,7 +233,7 @@ function Thread({
     for (let i = ordered.length - 1; i >= 0; i--) if (!isOwn(ordered[i].from, account)) return ordered[i];
     return undefined;
   }, [ordered, account]);
-  const lastAt = lastFromPerson?.created_time ? Date.parse(lastFromPerson.created_time) : NaN;
+  const lastAt = parseIg(lastFromPerson?.created_time);
   const insideWindow = Number.isFinite(lastAt) && Date.now() - lastAt <= WINDOW_MS;
 
   useEffect(() => {

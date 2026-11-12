@@ -48,7 +48,7 @@ function checkWebhookUrl(raw: string): string | null {
 }
 
 // --- Inbox (Conversas) ---
-const MSG_FIELDS = "messages.limit(30){message,from,created_time}";
+const MSG_FIELDS = "messages.limit(20){message,from,created_time}";
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 // ids de conversa/pessoa vindos do navegador: só caracteres seguros num segmento de URL
 const SAFE_ID = /^[A-Za-z0-9_\-=]{1,200}$/;
