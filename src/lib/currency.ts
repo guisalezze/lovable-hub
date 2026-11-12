@@ -31,7 +31,7 @@ export function formatMoney(v: number, cur: Currency = "BRL"): string {
 export function formatMoneyShort(v: number, cur: Currency = "BRL"): string {
   const sym = currencySymbol(cur);
   if (Math.abs(v) >= 1_000_000) return `${sym} ${(v / 1_000_000).toFixed(v % 1_000_000 === 0 ? 0 : 1)}M`;
-  if (Math.abs(v) >= 1_000) return `${sym} ${(v / 1_000).toFixed(1)}K`;
+  if (Math.abs(v) >= 1_000) return `${sym} ${(v / 1_000).toFixed(v % 1_000 === 0 ? 0 : 1)}K`;
   return `${sym} ${v.toFixed(0)}`;
 }
 
