@@ -66,18 +66,6 @@ verify_jwt = false
 [functions.resolve-username]
 verify_jwt = false
 
-[functions.instagram-webhook]
-verify_jwt = false
-
-[functions.instagram-worker]
-verify_jwt = false
-
-[functions.instagram-oauth]
-verify_jwt = false
-
-[functions.instagram-token-refresh]
-verify_jwt = false
-
 [functions.meta-capi]
 verify_jwt = false
 
@@ -88,4 +76,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.ig-report]
+verify_jwt = false
+
+[functions.zernio-webhook]
+verify_jwt = false
+
+[functions.ig-campaign-worker]
 verify_jwt = false
