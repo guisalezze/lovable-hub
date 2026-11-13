@@ -78,7 +78,7 @@ export interface Campaign {
   id: string;
   name: string;
   active: boolean;
-  post_mode: "post" | "any" | "next_reel";
+  post_mode: "post" | "any" | "next_reel" | "story";
   post_id: string | null;
   post_url: string | null;
   post_label: string | null;
@@ -392,6 +392,7 @@ export function campaignMatchesText(
 /** A campanha vale para comentários nesta mídia? (`next_reel` pendente não responde.) */
 export function campaignMatchesMedia(c: Pick<Campaign, "post_mode" | "post_id">, mediaId: string | null): boolean {
   if (c.post_mode === "any") return true;
+  if (c.post_mode === "story") return false; // só DM e resposta de story
   if (!c.post_id) return false;
   return !!mediaId && c.post_id === mediaId;
 }

@@ -258,6 +258,19 @@ export default function InstagramCampanhaEditor() {
         post_label: null,
         next_reel_since: null, // gravado na hora de salvar
       }));
+    } else if (mode === "story") {
+      setSwitchedToNextReel(false);
+      setForm((f) => ({
+        ...f,
+        post_mode: mode,
+        post_id: null,
+        post_url: null,
+        post_label: null,
+        next_reel_since: null,
+        dm_trigger: true,
+        match_any: false,
+        public_reply_enabled: false,
+      }));
     } else {
       setSwitchedToNextReel(false);
       setForm((f) => ({ ...f, post_mode: mode }));
@@ -338,6 +351,7 @@ export default function InstagramCampanhaEditor() {
     );
   }
 
+  const isStory = form.post_mode === "story";
   const hasLinks = !!form.link1_url.trim() || !!form.link2_url.trim();
   const dmMax = hasLinks ? LIMITS.dmWithButtons : LIMITS.dm;
 
@@ -372,13 +386,14 @@ export default function InstagramCampanhaEditor() {
           </Section>
 
           {/* 2 */}
-          <Section n={2} title="Post" hint="Em qual publicação os comentários disparam a campanha.">
-            <RadioGroup value={form.post_mode} onValueChange={(v) => setMode(v as PostMode)} className="grid gap-2 sm:grid-cols-3">
+          <Section n={2} title="Onde dispara" hint="Comentários em qual publicação, ou só DM e resposta de story.">
+            <RadioGroup value={form.post_mode} onValueChange={(v) => setMode(v as PostMode)} className="grid grid-cols-2 gap-2 lg:grid-cols-4">
               {(
                 [
                   ["post", "Um post específico"],
                   ["any", "Qualquer post"],
                   ["next_reel", "Próximo reel"],
+                  ["story", "Só DM e story"],
                 ] as const
               ).map(([v, l]) => (
                 <label
@@ -414,14 +429,22 @@ export default function InstagramCampanhaEditor() {
                   : "A campanha passa a valer para o primeiro reel publicado depois de salvar. Até lá ela não responde."}
               </p>
             )}
+            {form.post_mode === "story" && (
+              <p className="text-xs text-muted-foreground">
+                Não olha comentários. Dispara quando alguém responde qualquer story seu (inclusive Close Friends) ou manda DM
+                com uma das palavras-chave.
+              </p>
+            )}
           </Section>
 
           {/* 3 */}
           <Section n={3} title="Palavras-chave">
-            <label className="flex items-center gap-2 text-sm">
-              <Switch checked={form.match_any} onCheckedChange={(v) => set("match_any", v)} /> Qualquer comentário
-            </label>
-            {(!form.match_any || form.dm_trigger) && (
+            {!isStory && (
+              <label className="flex items-center gap-2 text-sm">
+                <Switch checked={form.match_any} onCheckedChange={(v) => set("match_any", v)} /> Qualquer comentário
+              </label>
+            )}
+            {(isStory || !form.match_any || form.dm_trigger) && (
               <>
                 <KeywordInput value={form.keywords} onChange={(v) => set("keywords", v)} />
                 <RadioGroup
@@ -439,11 +462,17 @@ export default function InstagramCampanhaEditor() {
               </>
             )}
             <FieldError msg={errors.keywords} />
-            <label className="flex items-center gap-2 text-sm">
-              <Switch checked={form.dm_trigger} onCheckedChange={(v) => set("dm_trigger", v)} /> Também responder DM e
-              resposta de story
-            </label>
-            {form.dm_trigger &&
+            {isStory ? (
+              <p className="text-xs text-muted-foreground">
+                A palavra que a pessoa escreve ao responder o story ou mandar DM. Reação com emoji não conta.
+              </p>
+            ) : (
+              <label className="flex items-center gap-2 text-sm">
+                <Switch checked={form.dm_trigger} onCheckedChange={(v) => set("dm_trigger", v)} /> Também responder DM e
+                resposta de story
+              </label>
+            )}
+            {!isStory && form.dm_trigger &&
               (form.match_any && form.keywords.length === 0 ? (
                 <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-400">
                   Sem palavras-chave, DMs e respostas de story nunca disparam: “Qualquer comentário” vale só para
@@ -458,6 +487,7 @@ export default function InstagramCampanhaEditor() {
           </Section>
 
           {/* 4 */}
+          {!isStory && (
           <Section
             n={4}
             title="Resposta pública"
@@ -499,6 +529,7 @@ export default function InstagramCampanhaEditor() {
               </>
             )}
           </Section>
+          )}
 
           {/* 5 */}
           <Section

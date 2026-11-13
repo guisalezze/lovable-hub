@@ -4,7 +4,7 @@ import type { Database } from "@/integrations/supabase/types";
 
 export type CampaignRow = Database["public"]["Tables"]["ig_campaigns"]["Row"];
 export type CampaignInsert = Database["public"]["Tables"]["ig_campaigns"]["Insert"];
-export type PostMode = "post" | "any" | "next_reel";
+export type PostMode = "post" | "any" | "next_reel" | "story";
 
 export const LIMITS = {
   name: 100,
@@ -103,6 +103,19 @@ export const TEMPLATES: CampaignTemplate[] = [
     form: {},
   },
   {
+    key: "story",
+    title: "Resposta de story",
+    description: "Quem responder o story (ou mandar DM) com a palavra recebe o link.",
+    form: {
+      name: "Resposta de story",
+      post_mode: "story",
+      dm_trigger: true,
+      keywords: ["quero"],
+      dm_message: "Oi {username}! Aqui está o link que você pediu no story 👇",
+      link1_label: "Abrir link",
+    },
+  },
+  {
     key: "produto",
     title: "Link do produto",
     description: "Quem comentar a palavra recebe o link do produto no DM.",
@@ -171,7 +184,7 @@ export const templateForm = (key: string | null | undefined): CampaignForm => {
 };
 
 export function rowToForm(r: CampaignRow): CampaignForm {
-  const mode = (["post", "any", "next_reel"].includes(r.post_mode) ? r.post_mode : "post") as PostMode;
+  const mode = (["post", "any", "next_reel", "story"].includes(r.post_mode) ? r.post_mode : "post") as PostMode;
   return {
     name: r.name,
     active: r.active,
@@ -216,14 +229,15 @@ const hasLinks = (f: CampaignForm) => !!f.link1_url.trim() || !!f.link2_url.trim
  * o worker pode ter preenchido o post depois que o editor abriu).
  */
 export function formToRow(f: CampaignForm, includePost = true): CampaignInsert {
+  const story = f.post_mode === "story";
   const row: CampaignInsert = {
     name: f.name.trim(),
     active: f.active,
     post_mode: f.post_mode,
     keywords: f.keywords.map((k) => k.trim()).filter(Boolean),
-    match_any: f.match_any,
+    match_any: story ? false : f.match_any,
     whole_word: f.whole_word,
-    dm_trigger: f.dm_trigger,
+    dm_trigger: story ? true : f.dm_trigger,
     public_reply_enabled: f.public_reply_enabled,
     public_replies: f.public_replies.map((p) => p.trim()).filter(Boolean),
     opening_enabled: f.opening_enabled,
@@ -241,7 +255,13 @@ export function formToRow(f: CampaignForm, includePost = true): CampaignInsert {
     followup_message: opt(f.followup_message),
     followup_delay_min: Math.round(f.followup_delay_min),
   };
-  if (includePost) {
+  if (story) {
+    row.public_reply_enabled = false; // não há comentário para responder
+    row.post_id = null;
+    row.post_url = null;
+    row.post_label = null;
+    row.next_reel_since = null;
+  } else if (includePost) {
     row.post_id = f.post_id;
     row.post_url = f.post_url;
     row.post_label = f.post_label ? cut(f.post_label, LIMITS.postLabel) : null;
@@ -272,7 +292,9 @@ export function validateForm(f: CampaignForm): FormErrors {
   if (f.post_mode === "post" && !f.post_id) e.post_id = "Escolha um post ou mude para “Qualquer post”.";
 
   const kws = f.keywords.map((k) => k.trim()).filter(Boolean);
-  if (!f.match_any && kws.length === 0)
+  if (f.post_mode === "story" && kws.length === 0)
+    e.keywords = "Adicione a palavra que a pessoa vai responder no story ou mandar no DM.";
+  else if (!f.match_any && kws.length === 0)
     e.keywords = "Adicione pelo menos uma palavra-chave ou marque “Qualquer comentário”.";
   else if (kws.length > LIMITS.keywords) e.keywords = `No máximo ${LIMITS.keywords} palavras-chave.`;
   else if (kws.some((k) => len(k) > LIMITS.keyword))
@@ -408,6 +430,7 @@ export const POST_MODE_LABEL: Record<PostMode, string> = {
   post: "Post escolhido",
   any: "Qualquer post",
   next_reel: "Próximo reel",
+  story: "Só DM e story",
 };
 
 export const STATUS_LABEL: Record<string, string> = {
