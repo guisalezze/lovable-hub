@@ -128,6 +128,10 @@ function errorFor(status: number, signals: ErrorSignals): ZernioError {
   }
   if (status === 404) return new ZernioError(404, "not_found", MSG[404], opts);
   if (status === 429) return new ZernioError(429, "rate_limited", MSG[429], opts);
+  // 408/425 podem vir de proxy no meio do caminho: a entrega pode ter acontecido
+  if (status === 408 || status === 425) {
+    return new ZernioError(status, "server_error", MSG.unconfirmed, { ...opts, confirmed: false });
+  }
   if (status >= 400 && status < 500) {
     if (signals.windowClosed) return new ZernioError(status, "window_closed", MSG.window_closed, opts);
     return new ZernioError(status, "client_error", `O Zernio recusou o pedido (HTTP ${status}).`, opts);
@@ -188,6 +192,7 @@ async function request<T>(method: string, path: string, opts: RequestOptions = {
       ...(opts.body === undefined ? {} : { body: JSON.stringify(opts.body) }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
       cache: "no-store",
+      redirect: "error", // nunca seguir redirecionamento levando o Authorization
     });
   } catch {
     throw new ZernioError(502, "network", MSG.network, { confirmed: false });
