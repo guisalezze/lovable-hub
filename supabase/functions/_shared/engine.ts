@@ -574,11 +574,6 @@ export async function ensureTrackedLinks(sb: Sb, c: Campaign): Promise<Array<Tra
   const out: Array<TrackedLink & { label: string }> = [];
   for (const w of wanted) {
     let row = existing.find((e) => e.position === w.position);
-    if (row && row.url !== w.url) {
-      const { error } = await sb.from("ig_tracked_links").update({ url: w.url }).eq("id", row.id);
-      if (error) dbFail("ig_tracked_links", error);
-      row = { ...row, url: w.url };
-    }
     if (!row) {
       for (let i = 0; i < 3 && !row; i++) {
         const { data, error } = await sb
@@ -589,7 +584,7 @@ export async function ensureTrackedLinks(sb: Sb, c: Campaign): Promise<Array<Tra
         if (!error) {
           row = data as TrackedLink;
         } else if (error.code === UNIQUE_VIOLATION) {
-          // corrida com outro processo (mesma posição) ou slug repetido: relê e tenta de novo
+          // corrida com o editor/outro job (mesma posição) ou slug repetido: relê e tenta de novo
           existing = await load();
           row = existing.find((e) => e.position === w.position);
         } else {
@@ -597,6 +592,12 @@ export async function ensureTrackedLinks(sb: Sb, c: Campaign): Promise<Array<Tra
         }
       }
       if (!row) throw new Error("ig_tracked_links: não foi possível criar o link");
+    }
+    // A linha pode ter vindo do editor (ou de uma corrida) com outra URL: a campanha manda.
+    if (row.url !== w.url) {
+      const { error } = await sb.from("ig_tracked_links").update({ url: w.url }).eq("id", row.id);
+      if (error) dbFail("ig_tracked_links", error);
+      row = { ...row, url: w.url };
     }
     out.push({ ...row, label: w.label });
   }
@@ -771,6 +772,16 @@ async function handleComment(ctx: Ctx, p: CommentPayload): Promise<void> {
       continue;
     }
 
+    // 5. escolhe a mensagem (antes do limite e da reserva: buildReveal pode falhar no banco)
+    let content: Content;
+    if (c.opening_enabled && (c.opening_message ?? "").trim()) {
+      content = openingMessage(c, p.username);
+    } else if (c.require_follow && (await followStatus(accountId, p.from)) === false) {
+      content = followPrompt(c, p.username);
+    } else {
+      content = await buildReveal(ctx, c, p.from, p.username);
+    }
+
     // 4. limite de 750/h
     if (!(await rpcBool(sb, "ig_take_slot"))) {
       if ((p.requeue ?? 0) < RATE_REQUEUE_MAX) {
@@ -787,16 +798,6 @@ async function handleComment(ctx: Ctx, p: CommentPayload): Promise<void> {
     if (dmDone(log) || !(await claimLog(sb, log))) {
       await releaseSlot(sb);
       continue;
-    }
-
-    // 5. escolhe a mensagem
-    let content: Content;
-    if (c.opening_enabled && (c.opening_message ?? "").trim()) {
-      content = openingMessage(c, p.username);
-    } else if (c.require_follow && (await followStatus(accountId, p.from)) === false) {
-      content = followPrompt(c, p.username);
-    } else {
-      content = await buildReveal(ctx, c, p.from, p.username);
     }
 
     // 6. resposta privada
@@ -854,6 +855,17 @@ async function doPublicReply(ctx: Ctx, log: DmLog, p: CommentPayload, variants: 
   }
 }
 
+/**
+ * Chave de idempotência do envio: estável para o mesmo job (um job recuperado depois de cair
+ * no meio do envio reusa a chave e o Zernio não manda de novo). `payload.gen` só muda quando o
+ * worker reagenda por recusa confirmada (JobRetry), para a nova tentativa não receber a
+ * resposta antiga guardada pelo Zernio.
+ */
+function opKey(ctx: Ctx, c: Campaign, op: string): string {
+  const gen = Number((ctx.job.payload as Obj).gen) || 0;
+  return `${ctx.job.id}:${c.id}:${op}:g${gen}`;
+}
+
 // ---- revelar por DM (toque, DM, reconferência, fallback de leitura) ----------------------
 
 async function revealByDm(
@@ -872,7 +884,7 @@ async function revealByDm(
     state.account_id as string,
     content.message,
     content.buttons,
-    `${ctx.job.id}:${c.id}:reveal:${ctx.job.attempts}`,
+    opKey(ctx, c, "reveal"),
   );
   if (!res.ok && res.windowClosed && quietWindowClosed) return res;
 
@@ -904,7 +916,7 @@ async function sendContentDm(ctx: Ctx, c: Campaign, igsid: string, conversationI
     ctx.state.account_id as string,
     content.message,
     content.buttons,
-    `${ctx.job.id}:${c.id}:${op}:${ctx.job.attempts}`,
+    opKey(ctx, c, op),
   );
 }
 
@@ -939,18 +951,26 @@ async function handlePostback(ctx: Ctx, p: PostbackPayload): Promise<void> {
   if (!(await insertReceipt(sb, receipt))) return;
 
   let res: SendResult | null = null;
-  if (parsed.kind === "rv") {
-    res = await revealByDm(ctx, c, igsid, p.username, p.conversationId, "button", false);
-  } else {
-    const follows = await followStatus(accountId, igsid);
-    if (follows !== false) {
-      // true ou null: libera (fail-open depois do toque)
+  try {
+    if (parsed.kind === "rv") {
       res = await revealByDm(ctx, c, igsid, p.username, p.conversationId, "button", false);
-    } else if (parsed.open) {
-      res = await sendContentDm(ctx, c, igsid, p.conversationId, followPrompt(c, p.username), "follow");
     } else {
-      await startRecheck(ctx, c, igsid, p.username, p.conversationId);
+      const follows = await followStatus(accountId, igsid);
+      if (follows !== false) {
+        // true ou null: libera (fail-open depois do toque)
+        res = await revealByDm(ctx, c, igsid, p.username, p.conversationId, "button", false);
+      } else if (parsed.open) {
+        res = await sendContentDm(ctx, c, igsid, p.conversationId, followPrompt(c, p.username), "follow");
+      } else {
+        await startRecheck(ctx, c, igsid, p.username, p.conversationId);
+      }
     }
+  } catch (e) {
+    // Erro de banco (ex.: ao montar os links) antes ou logo depois do envio: libera o toque para
+    // o job repetir. Se o DM já tinha saído, a repetição usa a mesma chave de idempotência
+    // (mesmo job, mesmo `gen`) e o Zernio não manda de novo.
+    if (res === null) await deleteReceipt(sb, receipt);
+    throw e;
   }
   await upsertContact(sb, igsid, p.username);
 
@@ -997,7 +1017,7 @@ async function startRecheck(
 }
 
 /** Libera as chaves das reconferências para um próximo toque poder começar outra rodada. */
-async function clearRecheckKeys(sb: Sb, campaignId: string, igsid: string): Promise<void> {
+export async function clearRecheckKeys(sb: Sb, campaignId: string, igsid: string): Promise<void> {
   const keys = RECHECK_DELAYS_MS.map((_, i) => recheckKey(campaignId, igsid, i + 1));
   const { error } = await sb.from("ig_jobs").update({ dedupe_key: null }).in("dedupe_key", keys);
   if (error) console.warn("ig_jobs (recheck):", error.message);
@@ -1044,8 +1064,10 @@ async function handleMessage(ctx: Ctx, p: MessagePayload): Promise<void> {
   if (!p?.mid || !p.from) return;
   const campaigns = (await activeCampaigns(sb)).filter((c) => c.dm_trigger);
   for (const c of campaigns) {
-    const m = campaignMatchesText(c, p.text ?? "");
-    if (!m.matched) continue;
+    // Em DM/story só palavra de verdade dispara (match_any aqui responderia toda conversa).
+    const keyword = matchKeyword(p.text ?? "", c.keywords, c.whole_word);
+    if (keyword === null) continue;
+    const m = { matched: true, keyword };
 
     const log = await ensureLog(sb, {
       campaign_id: c.id,
@@ -1056,12 +1078,13 @@ async function handleMessage(ctx: Ctx, p: MessagePayload): Promise<void> {
       trigger_text: p.story ? `(story) ${p.text ?? ""}`.trim() : p.text ?? "",
       matched_keyword: m.keyword,
     });
-    if (dmDone(log) || !(await claimLog(sb, log))) return;
-
+    if (dmDone(log)) return;
+    // Monta a mensagem antes da reserva (buildReveal pode falhar no banco).
     const content =
       c.require_follow && (await followStatus(state.account_id as string, p.from)) === false
         ? followPrompt(c, p.username)
         : await buildReveal(ctx, c, p.from, p.username);
+    if (!(await claimLog(sb, log))) return;
     const res = await sendContentDm(ctx, c, p.from, p.conversationId, content, "dm");
     await updateLog(sb, log.id, finalPatch(res));
     await upsertContact(sb, p.from, p.username);

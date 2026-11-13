@@ -382,6 +382,9 @@ begin
            count(*) filter (where l.status in ('skipped_dedup', 'skipped_rate_limit'))::int as skipped
     from public.ig_dm_logs l
     where l.campaign_id = c.id
+      -- só gatilhos originais (comentário/DM); revelação por botão e follow-up não contam
+      and l.trigger_ref not like 'reveal:%'
+      and l.trigger_ref not like 'followup:%'
       and l.created_at >= (v_from::timestamp at time zone 'America/Sao_Paulo')
     group by 1
   )
@@ -402,7 +405,9 @@ begin
          )
     into v_totals
     from public.ig_dm_logs l
-   where l.campaign_id = c.id;
+   where l.campaign_id = c.id
+     and l.trigger_ref not like 'reveal:%'
+     and l.trigger_ref not like 'followup:%';
 
   select coalesce(jsonb_agg(jsonb_build_object(
            'position', t.position,

@@ -20,6 +20,8 @@ import {
 import {
   activeCampaigns,
   campaignMatchesText,
+  clearRecheckKeys,
+  JobRetry,
   enqueueJob,
   loadState,
   logHandled,
@@ -34,7 +36,9 @@ import {
 
 const LOOP_MS = 50_000;
 const SLEEP_MS = 5_000;
-const CLAIM_LIMIT = 10;
+const CLAIM_LIMIT = 3;
+/** Não começa um job novo com menos que isto até o fim do laço (envios têm timeout de 30 s). */
+const JOB_MIN_LEFT_MS = 5_000;
 const BACKOFF_MIN = [5, 15, 45];
 const MAX_ATTEMPTS = 3;
 const STALE_MS = 10 * 60_000;
@@ -66,8 +70,18 @@ async function recoverStale(sb: Sb): Promise<void> {
     .update({ status: "dead", locked_at: null, last_error: "Execução interrompida 3 vezes" })
     .eq("status", "running")
     .lt("locked_at", cutoff)
-    .gte("attempts", MAX_ATTEMPTS);
+    .gte("attempts", MAX_ATTEMPTS)
+    .select("kind, payload");
   if (r2.error) console.error("recoverStale:", r2.error.message);
+  for (const row of (r2.data ?? []) as Array<Pick<JobRow, "kind" | "payload">>) await releaseRecheck(sb, row);
+}
+
+/** follow_recheck que terminou sem sucesso: libera as chaves para um próximo toque funcionar. */
+async function releaseRecheck(sb: Sb, job: Pick<JobRow, "kind" | "payload">): Promise<void> {
+  if (job.kind !== "follow_recheck") return;
+  const campaignId = typeof job.payload?.campaignId === "string" ? job.payload.campaignId : "";
+  const igsid = typeof job.payload?.igsid === "string" ? job.payload.igsid : "";
+  if (campaignId && igsid) await clearRecheckKeys(sb, campaignId, igsid);
 }
 
 async function finishJob(sb: Sb, job: JobRow, error: unknown): Promise<void> {
@@ -82,21 +96,42 @@ async function finishJob(sb: Sb, job: JobRow, error: unknown): Promise<void> {
       last_error: errMsg(error),
       run_at: new Date(Date.now() + delay * 60_000).toISOString(),
     };
+    // Recusa confirmada: a nova tentativa usa outra chave de idempotência (engine opKey).
+    // Outros erros (banco) mantêm a chave: se o envio já saiu, o Zernio não repete.
+    if (error instanceof JobRetry) {
+      patch.payload = { ...job.payload, gen: (Number(job.payload?.gen) || 0) + 1 };
+    }
   } else {
     patch = { status: "failed", locked_at: null, last_error: errMsg(error) };
   }
   const { error: upErr } = await sb.from("ig_jobs").update(patch).eq("id", job.id);
   if (upErr) console.error(`ig_jobs ${job.id}:`, upErr.message);
+  if (patch.status === "failed") await releaseRecheck(sb, job);
 }
 
-async function processBatch(sb: Sb, state: ZernioState, supabaseUrl: string): Promise<number> {
+/** Devolve um job reservado que não chegou a começar (desfaz a tentativa somada). */
+async function unclaim(sb: Sb, job: JobRow): Promise<void> {
+  const { error } = await sb
+    .from("ig_jobs")
+    .update({ status: "queued", locked_at: null, attempts: Math.max(0, job.attempts - 1) })
+    .eq("id", job.id)
+    .eq("status", "running");
+  if (error) console.error(`ig_jobs ${job.id} (devolver):`, error.message);
+}
+
+async function processBatch(sb: Sb, state: ZernioState, supabaseUrl: string, deadline: number): Promise<number> {
   const { data, error } = await sb.rpc("ig_claim_jobs", { p_limit: CLAIM_LIMIT });
   if (error) {
     console.error("ig_claim_jobs:", error.message);
     return 0;
   }
   const jobs = (data ?? []) as JobRow[];
-  for (const job of jobs) {
+  for (let i = 0; i < jobs.length; i++) {
+    const job = jobs[i];
+    if (deadline - Date.now() < JOB_MIN_LEFT_MS) {
+      for (const rest of jobs.slice(i)) await unclaim(sb, rest);
+      break;
+    }
     let failure: unknown = null;
     try {
       await runJob({ sb, state, supabaseUrl, job });
@@ -383,8 +418,8 @@ Deno.serve(async () => {
   let processed = 0;
   let maint: Record<string, unknown> | null = null;
   if (state) {
-    while (Date.now() < deadline) {
-      const n = await processBatch(sb, state, supabaseUrl);
+    while (deadline - Date.now() >= JOB_MIN_LEFT_MS) {
+      const n = await processBatch(sb, state, supabaseUrl, deadline);
       processed += n;
       if (n === CLAIM_LIMIT) continue; // ainda pode haver mais na fila
 
