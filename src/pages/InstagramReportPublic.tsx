@@ -3,9 +3,8 @@ import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BarChart3, Instagram, MousePointerClick } from "lucide-react";
-import { TRIGGER_LABEL } from "@/lib/instagramFlow";
 
-// Relatório público de uma automação do Instagram (/r/instagram/:slug).
+// Relatório público de uma campanha do Instagram (/r/instagram/:slug).
 // Só agregados vindos da edge pública ig-report; nada de contatos.
 
 interface ReportDay {
@@ -15,14 +14,14 @@ interface ReportDay {
   skipped: number;
 }
 interface ReportClick {
-  node_id: string;
-  button_index: number;
-  url_host: string;
+  position: number;
+  label: string;
+  host: string;
   clicks: number;
+  unique: number;
 }
 interface Report {
   name: string;
-  trigger: string;
   days: ReportDay[];
   totals: { sent: number; failed: number; skipped: number };
   clicks: ReportClick[];
@@ -96,7 +95,8 @@ export default function InstagramReportPublic() {
   const days = data.days ?? [];
   const totals = data.totals ?? { sent: 0, failed: 0, skipped: 0 };
   const clicks = data.clicks ?? [];
-  const totalClicks = clicks.reduce((s, c) => s + c.clicks, 0);
+  const totalClicks = clicks.reduce((s, c) => s + (c.clicks ?? 0), 0);
+  const totalUnique = clicks.reduce((s, c) => s + (c.unique ?? 0), 0);
 
   const cards = [
     { label: "Enviadas", value: totals.sent, cls: "text-emerald-600" },
@@ -108,12 +108,10 @@ export default function InstagramReportPublic() {
     <Shell>
       <header className="space-y-1">
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Instagram className="h-4 w-4 text-pink-500" /> Relatório de automação do Instagram
+          <Instagram className="h-4 w-4 text-pink-500" /> Relatório de campanha do Instagram
         </p>
         <h1 className="text-2xl font-bold break-words">{data.name}</h1>
-        <p className="text-sm text-muted-foreground">
-          Gatilho: {TRIGGER_LABEL[data.trigger] ?? data.trigger} · últimos 30 dias
-        </p>
+        <p className="text-sm text-muted-foreground">Totais desde o início · gráfico dos últimos 30 dias</p>
       </header>
 
       <div className="grid grid-cols-3 gap-3">
@@ -126,7 +124,7 @@ export default function InstagramReportPublic() {
       </div>
 
       <section className="rounded-xl border border-border p-3 sm:p-4">
-        <h2 className="text-sm font-semibold mb-3">Respostas por dia</h2>
+        <h2 className="text-sm font-semibold mb-3">Mensagens por dia (30 dias)</h2>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={days} margin={{ top: 4, right: 4, bottom: 0, left: -16 }}>
@@ -148,20 +146,25 @@ export default function InstagramReportPublic() {
 
       <section className="rounded-xl border border-border p-3 sm:p-4">
         <h2 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-          <MousePointerClick className="h-4 w-4" /> Cliques por botão
-          <span className="ml-auto text-xs font-normal text-muted-foreground">{n(totalClicks)} no total</span>
+          <MousePointerClick className="h-4 w-4" /> Cliques por link
+          <span className="ml-auto text-xs font-normal text-muted-foreground">
+            {n(totalClicks)} no total · {n(totalUnique)} únicos
+          </span>
         </h2>
         {clicks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhum botão com link rastreado.</p>
+          <p className="text-sm text-muted-foreground">Nenhum link rastreado nesta campanha.</p>
         ) : (
           <ul className="divide-y divide-border">
             {clicks.map((c) => (
-              <li key={`${c.node_id}|${c.button_index}|${c.url_host}`} className="py-2 flex items-center gap-3 text-sm">
+              <li key={c.position} className="py-2 flex items-center gap-3 text-sm">
                 <span className="min-w-0 flex-1 truncate">
-                  Botão {c.button_index + 1}
-                  {c.url_host && <span className="text-muted-foreground"> · {c.url_host}</span>}
+                  {c.label || `Link ${c.position}`}
+                  {c.host && <span className="text-muted-foreground"> · {c.host}</span>}
                 </span>
-                <span className="font-semibold tabular-nums">{n(c.clicks)}</span>
+                <span className="text-right tabular-nums">
+                  <span className="font-semibold">{n(c.clicks ?? 0)}</span>
+                  <span className="block text-[11px] text-muted-foreground">{n(c.unique ?? 0)} únicos</span>
+                </span>
               </li>
             ))}
           </ul>

@@ -45,7 +45,7 @@ const Encurtador = lazyPage(() => import("./pages/Encurtador"));
 const WebhooksAutomacoes = lazyPage(() => import("./pages/WebhooksAutomacoes"));
 const PerfectPay = lazyPage(() => import("./pages/PerfectPay"));
 const InstagramAutomacoes = lazyPage(() => import("./pages/InstagramAutomacoes"));
-const InstagramFluxoEditor = lazyPage(() => import("./pages/InstagramFluxoEditor"));
+const InstagramCampanhaEditor = lazyPage(() => import("./pages/InstagramCampanhaEditor"));
 const Privacidade = lazyPage(() => import("./pages/Privacidade"));
 const ExclusaoDados = lazyPage(() => import("./pages/ExclusaoDados"));
 const DesignPreview = lazyPage(() => import("./pages/DesignPreview"));
@@ -271,7 +271,7 @@ const App = () => (
             <Route path="/webhooks-automacoes" element={<WebhooksAutomacoes />} />
             <Route path="/perfectpay" element={<PerfectPay />} />
             <Route path="/instagram-automacoes" element={<InstagramAutomacoes />} />
-            <Route path="/instagram-automacoes/:id" element={<InstagramFluxoEditor />} />
+            <Route path="/instagram-automacoes/:id" element={<InstagramCampanhaEditor />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
