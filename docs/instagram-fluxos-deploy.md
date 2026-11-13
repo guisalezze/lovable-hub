@@ -1,5 +1,7 @@
 # Instagram Fluxos Visuais: roteiro de deploy
 
+> **Obsoleto (2026-11-13):** o módulo de fluxos visuais foi substituído pelas campanhas via Zernio. Veja `docs/instagram-zernio-deploy.md`.
+
 Ordem importa. A migration `20261031000002` (trava `ig_config`) quebra o front antigo, que lia `ig_config` direto; então publique o front novo logo depois.
 
 ## 1. Banco e edge functions
