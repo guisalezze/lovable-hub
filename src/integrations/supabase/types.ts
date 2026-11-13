@@ -1092,6 +1092,108 @@ export type Database = {
         }
         Relationships: []
       }
+      ig_campaigns: {
+        Row: {
+          active: boolean
+          created_at: string
+          dm_message: string
+          dm_trigger: boolean
+          follow_button: string | null
+          follow_message: string | null
+          followup_delay_min: number
+          followup_enabled: boolean
+          followup_message: string | null
+          id: string
+          keywords: string[]
+          link1_label: string | null
+          link1_url: string | null
+          link2_label: string | null
+          link2_url: string | null
+          match_any: boolean
+          name: string
+          next_reel_since: string | null
+          opening_button: string | null
+          opening_enabled: boolean
+          opening_message: string | null
+          post_id: string | null
+          post_label: string | null
+          post_mode: string
+          post_url: string | null
+          public_replies: string[]
+          public_reply_enabled: boolean
+          require_follow: boolean
+          share_slug: string | null
+          updated_at: string
+          whole_word: boolean
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          dm_message: string
+          dm_trigger?: boolean
+          follow_button?: string | null
+          follow_message?: string | null
+          followup_delay_min?: number
+          followup_enabled?: boolean
+          followup_message?: string | null
+          id?: string
+          keywords?: string[]
+          link1_label?: string | null
+          link1_url?: string | null
+          link2_label?: string | null
+          link2_url?: string | null
+          match_any?: boolean
+          name: string
+          next_reel_since?: string | null
+          opening_button?: string | null
+          opening_enabled?: boolean
+          opening_message?: string | null
+          post_id?: string | null
+          post_label?: string | null
+          post_mode?: string
+          post_url?: string | null
+          public_replies?: string[]
+          public_reply_enabled?: boolean
+          require_follow?: boolean
+          share_slug?: string | null
+          updated_at?: string
+          whole_word?: boolean
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          dm_message?: string
+          dm_trigger?: boolean
+          follow_button?: string | null
+          follow_message?: string | null
+          followup_delay_min?: number
+          followup_enabled?: boolean
+          followup_message?: string | null
+          id?: string
+          keywords?: string[]
+          link1_label?: string | null
+          link1_url?: string | null
+          link2_label?: string | null
+          link2_url?: string | null
+          match_any?: boolean
+          name?: string
+          next_reel_since?: string | null
+          opening_button?: string | null
+          opening_enabled?: boolean
+          opening_message?: string | null
+          post_id?: string | null
+          post_label?: string | null
+          post_mode?: string
+          post_url?: string | null
+          public_replies?: string[]
+          public_reply_enabled?: boolean
+          require_follow?: boolean
+          share_slug?: string | null
+          updated_at?: string
+          whole_word?: boolean
+        }
+        Relationships: []
+      }
       ig_config: {
         Row: {
           access_token: string
@@ -1187,6 +1289,74 @@ export type Database = {
           },
         ]
       }
+      ig_dm_logs: {
+        Row: {
+          attempts: number
+          campaign_id: string
+          created_at: string
+          error: string | null
+          id: string
+          ig_user_id: string | null
+          matched_keyword: string | null
+          public_error: string | null
+          public_sent_at: string | null
+          public_status: string | null
+          sent_at: string | null
+          source: string | null
+          status: string
+          trigger_ref: string
+          trigger_text: string | null
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          attempts?: number
+          campaign_id: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          ig_user_id?: string | null
+          matched_keyword?: string | null
+          public_error?: string | null
+          public_sent_at?: string | null
+          public_status?: string | null
+          sent_at?: string | null
+          source?: string | null
+          status?: string
+          trigger_ref: string
+          trigger_text?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          attempts?: number
+          campaign_id?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          ig_user_id?: string | null
+          matched_keyword?: string | null
+          public_error?: string | null
+          public_sent_at?: string | null
+          public_status?: string | null
+          sent_at?: string | null
+          source?: string | null
+          status?: string
+          trigger_ref?: string
+          trigger_text?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_dm_logs_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ig_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ig_events: {
         Row: {
           created_at: string | null
@@ -1208,6 +1378,24 @@ export type Database = {
           id?: string
           payload?: Json
           processed?: boolean | null
+        }
+        Relationships: []
+      }
+      ig_follower_history: {
+        Row: {
+          day: string
+          followers: number
+          updated_at: string
+        }
+        Insert: {
+          day: string
+          followers: number
+          updated_at?: string
+        }
+        Update: {
+          day?: string
+          followers?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1279,6 +1467,45 @@ export type Database = {
           },
         ]
       }
+      ig_jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          dedupe_key: string | null
+          id: number
+          kind: string
+          last_error: string | null
+          locked_at: string | null
+          payload: Json
+          run_at: string
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          dedupe_key?: string | null
+          id?: number
+          kind: string
+          last_error?: string | null
+          locked_at?: string | null
+          payload: Json
+          run_at?: string
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          dedupe_key?: string | null
+          id?: number
+          kind?: string
+          last_error?: string | null
+          locked_at?: string | null
+          payload?: Json
+          run_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       ig_link_clicks: {
         Row: {
           created_at: string
@@ -1346,6 +1573,21 @@ export type Database = {
           },
         ]
       }
+      ig_postback_receipts: {
+        Row: {
+          created_at: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
       ig_queue: {
         Row: {
           automation_id: string | null
@@ -1409,6 +1651,21 @@ export type Database = {
           },
         ]
       }
+      ig_rate: {
+        Row: {
+          count: number
+          hour: string
+        }
+        Insert: {
+          count?: number
+          hour: string
+        }
+        Update: {
+          count?: number
+          hour?: string
+        }
+        Relationships: []
+      }
       ig_replies: {
         Row: {
           created_at: string
@@ -1455,6 +1712,143 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      ig_tracked_link_clicks: {
+        Row: {
+          campaign_id: string | null
+          created_at: string
+          id: number
+          link_id: string
+          recipient: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          created_at?: string
+          id?: number
+          link_id: string
+          recipient?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          created_at?: string
+          id?: number
+          link_id?: string
+          recipient?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_tracked_link_clicks_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ig_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ig_tracked_link_clicks_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "ig_tracked_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ig_tracked_links: {
+        Row: {
+          campaign_id: string
+          id: string
+          position: number
+          slug: string
+          url: string
+        }
+        Insert: {
+          campaign_id: string
+          id?: string
+          position: number
+          slug: string
+          url: string
+        }
+        Update: {
+          campaign_id?: string
+          id?: string
+          position?: number
+          slug?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_tracked_links_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ig_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ig_webhook_events: {
+        Row: {
+          created_at: string
+          event: string | null
+          event_id: string | null
+          id: string
+          payload: Json | null
+        }
+        Insert: {
+          created_at?: string
+          event?: string | null
+          event_id?: string | null
+          id?: string
+          payload?: Json | null
+        }
+        Update: {
+          created_at?: string
+          event?: string | null
+          event_id?: string | null
+          id?: string
+          payload?: Json | null
+        }
+        Relationships: []
+      }
+      ig_zernio: {
+        Row: {
+          account_id: string | null
+          followers_count: number | null
+          id: number
+          ig_user_id: string | null
+          last_reconcile_at: string | null
+          last_worker_at: string | null
+          profile_id: string | null
+          updated_at: string
+          username: string | null
+          webhook_id: string | null
+          webhook_secret: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          followers_count?: number | null
+          id?: number
+          ig_user_id?: string | null
+          last_reconcile_at?: string | null
+          last_worker_at?: string | null
+          profile_id?: string | null
+          updated_at?: string
+          username?: string | null
+          webhook_id?: string | null
+          webhook_secret?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          followers_count?: number | null
+          id?: number
+          ig_user_id?: string | null
+          last_reconcile_at?: string | null
+          last_worker_at?: string | null
+          profile_id?: string | null
+          updated_at?: string
+          username?: string | null
+          webhook_id?: string | null
+          webhook_secret?: string | null
+        }
+        Relationships: []
       }
       implementation_documents: {
         Row: {
@@ -4086,6 +4480,31 @@ export type Database = {
         }
         Returns: boolean
       }
+      ig_campaign_report: { Args: { p_slug: string }; Returns: Json }
+      ig_claim_jobs: {
+        Args: { p_limit: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          dedupe_key: string | null
+          id: number
+          kind: string
+          last_error: string | null
+          locked_at: string | null
+          payload: Json
+          run_at: string
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "ig_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      ig_max_elem_len: { Args: { arr: string[] }; Returns: number }
+      ig_release_slot: { Args: never; Returns: undefined }
+      ig_take_slot: { Args: never; Returns: boolean }
       search_clients: {
         Args: { p_project_id?: string; search_term: string }
         Returns: {
