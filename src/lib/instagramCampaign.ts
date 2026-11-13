@@ -340,11 +340,33 @@ export function randomSlug(size = 10): string {
   return out.join("");
 }
 
-const isUniqueViolation = (err: { code?: string } | null) => err?.code === "23505";
+type PgError = { code?: string; message?: string; details?: string } | null;
+const isUniqueViolation = (err: PgError) => err?.code === "23505";
+/** Conflito na unicidade (campaign_id, position): a linha já existe (o motor pode ter criado). */
+const isPositionConflict = (err: PgError) =>
+  `${err?.message ?? ""} ${err?.details ?? ""}`.includes("ig_tracked_links_campaign_position_key") ||
+  /\(campaign_id, ?position\)/.test(err?.details ?? "");
+
+async function updateUrlAt(campaignId: string, pos: 1 | 2, url: string) {
+  const { data: row, error } = await supabase
+    .from("ig_tracked_links")
+    .select("id, url")
+    .eq("campaign_id", campaignId)
+    .eq("position", pos)
+    .maybeSingle();
+  if (error) throw error;
+  if (!row) throw new Error(`Link ${pos} em conflito, mas não encontrado.`);
+  if (row.url !== url) {
+    const { error: upErr } = await supabase.from("ig_tracked_links").update({ url }).eq("id", row.id);
+    if (upErr) throw upErr;
+  }
+}
 
 /**
  * Sincroniza ig_tracked_links (posições 1 e 2) com as URLs da campanha:
- * cria (slug novo), atualiza a URL quando mudou, apaga quando o link saiu.
+ * cria (slug novo) ou atualiza a URL quando mudou. Link removido NÃO apaga a
+ * linha: apagar levaria o histórico de cliques junto e quebraria botões já
+ * enviados; o motor só monta botões para as URLs atuais da campanha.
  */
 export async function syncTrackedLinks(campaignId: string, url1: string | null, url2: string | null) {
   const { data: rows, error } = await supabase
@@ -357,22 +379,27 @@ export async function syncTrackedLinks(campaignId: string, url1: string | null, 
   for (const pos of [1, 2] as const) {
     const row = (rows ?? []).find((r) => r.position === pos);
     const url = wanted[pos];
-    if (url && !row) {
-      let attempt = 0;
-      for (;;) {
-        const { error: insErr } = await supabase
-          .from("ig_tracked_links")
-          .insert({ campaign_id: campaignId, position: pos, slug: randomSlug(10), url });
-        if (!insErr) break;
-        if (isUniqueViolation(insErr) && attempt++ < 3) continue;
-        throw insErr;
+    if (!url) continue;
+    if (row) {
+      if (row.url !== url) {
+        const { error: upErr } = await supabase.from("ig_tracked_links").update({ url }).eq("id", row.id);
+        if (upErr) throw upErr;
       }
-    } else if (url && row && row.url !== url) {
-      const { error: upErr } = await supabase.from("ig_tracked_links").update({ url }).eq("id", row.id);
-      if (upErr) throw upErr;
-    } else if (!url && row) {
-      const { error: delErr } = await supabase.from("ig_tracked_links").delete().eq("id", row.id);
-      if (delErr) throw delErr;
+      continue;
+    }
+    let attempt = 0;
+    for (;;) {
+      const { error: insErr } = await supabase
+        .from("ig_tracked_links")
+        .insert({ campaign_id: campaignId, position: pos, slug: randomSlug(10), url });
+      if (!insErr) break;
+      if (isUniqueViolation(insErr) && isPositionConflict(insErr)) {
+        await updateUrlAt(campaignId, pos, url);
+        break;
+      }
+      // Conflito no slug: tenta outro slug.
+      if (isUniqueViolation(insErr) && attempt++ < 3) continue;
+      throw insErr;
     }
   }
 }

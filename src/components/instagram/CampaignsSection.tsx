@@ -47,6 +47,15 @@ async function countOf(q: PromiseLike<{ count: number | null; error: unknown }>)
   return count ?? 0;
 }
 
+// Só gatilhos originais: revelações e follow-ups não contam como envio novo.
+const triggerLogs = (campaignId: string) =>
+  supabase
+    .from("ig_dm_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", campaignId)
+    .not("trigger_ref", "like", "reveal:%")
+    .not("trigger_ref", "like", "followup:%");
+
 const reportUrl = (slug: string) => `${window.location.origin}/r/instagram/${slug}`;
 
 async function copyText(text: string) {
@@ -84,10 +93,10 @@ export default function CampaignsSection() {
         ids.map(async (id): Promise<[string, Stats]> => {
           const [sent, failed, clicks] = await Promise.all([
             countOf(
-              supabase.from("ig_dm_logs").select("id", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "sent"),
+              triggerLogs(id).eq("status", "sent"),
             ),
             countOf(
-              supabase.from("ig_dm_logs").select("id", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "failed"),
+              triggerLogs(id).eq("status", "failed"),
             ),
             countOf(supabase.from("ig_tracked_link_clicks").select("id", { count: "exact", head: true }).eq("campaign_id", id)),
           ]);

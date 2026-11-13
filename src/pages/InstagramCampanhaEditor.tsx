@@ -256,7 +256,7 @@ export default function InstagramCampanhaEditor() {
         post_id: null,
         post_url: null,
         post_label: null,
-        next_reel_since: new Date().toISOString(),
+        next_reel_since: null, // gravado na hora de salvar
       }));
     } else {
       setSwitchedToNextReel(false);
@@ -283,6 +283,8 @@ export default function InstagramCampanhaEditor() {
       // Modo próximo reel já salvo: não sobrescreve o post que o worker pode ter preenchido.
       const includePost = !(form.post_mode === "next_reel" && !switchedToNextReel && !isNew);
       const row = formToRow(form, includePost);
+      // O "próximo reel" conta a partir do momento em que a campanha é salva.
+      if (form.post_mode === "next_reel" && (switchedToNextReel || isNew)) row.next_reel_since = new Date().toISOString();
       let campaignId = id;
       if (isNew) {
         const { data, error } = await supabase.from("ig_campaigns").insert(row).select("id").single();
@@ -419,7 +421,7 @@ export default function InstagramCampanhaEditor() {
             <label className="flex items-center gap-2 text-sm">
               <Switch checked={form.match_any} onCheckedChange={(v) => set("match_any", v)} /> Qualquer comentário
             </label>
-            {!form.match_any && (
+            {(!form.match_any || form.dm_trigger) && (
               <>
                 <KeywordInput value={form.keywords} onChange={(v) => set("keywords", v)} />
                 <RadioGroup
@@ -441,6 +443,18 @@ export default function InstagramCampanhaEditor() {
               <Switch checked={form.dm_trigger} onCheckedChange={(v) => set("dm_trigger", v)} /> Também responder DM e
               resposta de story
             </label>
+            {form.dm_trigger &&
+              (form.match_any && form.keywords.length === 0 ? (
+                <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-400">
+                  Sem palavras-chave, DMs e respostas de story nunca disparam: “Qualquer comentário” vale só para
+                  comentários. Adicione palavras-chave para usar este gatilho.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  DMs e respostas de story só disparam quando batem uma palavra-chave; “Qualquer comentário” vale só
+                  para comentários.
+                </p>
+              ))}
           </Section>
 
           {/* 4 */}
