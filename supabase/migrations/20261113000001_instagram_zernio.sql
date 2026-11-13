@@ -325,6 +325,16 @@ create policy "auth_select_ig_dm_logs" on public.ig_dm_logs
 drop policy if exists "auth_select_ig_tracked_links" on public.ig_tracked_links;
 create policy "auth_select_ig_tracked_links" on public.ig_tracked_links
   for select using (auth.role() = 'authenticated');
+-- o editor de campanha cria/atualiza/remove os links rastreados da campanha
+drop policy if exists "auth_insert_ig_tracked_links" on public.ig_tracked_links;
+create policy "auth_insert_ig_tracked_links" on public.ig_tracked_links
+  for insert with check (auth.role() = 'authenticated');
+drop policy if exists "auth_update_ig_tracked_links" on public.ig_tracked_links;
+create policy "auth_update_ig_tracked_links" on public.ig_tracked_links
+  for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+drop policy if exists "auth_delete_ig_tracked_links" on public.ig_tracked_links;
+create policy "auth_delete_ig_tracked_links" on public.ig_tracked_links
+  for delete using (auth.role() = 'authenticated');
 
 drop policy if exists "auth_select_ig_tracked_link_clicks" on public.ig_tracked_link_clicks;
 create policy "auth_select_ig_tracked_link_clicks" on public.ig_tracked_link_clicks
