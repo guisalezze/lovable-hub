@@ -1,12 +1,26 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  connectUrl,
+  ensureWebhook,
+  hasZernioKey,
+  isZernioError,
+  listAccounts,
+  listConversations,
+  listMessages,
+  listPosts,
+  listProfiles,
+  randomHex,
+  sendDm,
+  ZernioError,
+} from "../_shared/zernio.ts";
 
-// Painel do Instagram: só o que precisa do token da Meta.
-// Ações (POST JSON { action }): status | posts | webhook_test | set_token | conversations | messages | reply
-// Exige JWT de usuário do Supabase (Authorization: Bearer ...).
+// Painel do Instagram (Zernio). POST JSON { action, ... }. Exige JWT de usuário do Supabase.
+// Ações: status | profiles | set_profile | accounts | connect | select_account | posts |
+//        conversations | messages | reply | disconnect
+// A chave do Zernio (ZERNIO_API_KEY) e o segredo do webhook nunca saem daqui.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const GRAPH = "https://graph.instagram.com/v25.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,351 +28,271 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-function json(body: unknown, status = 200) {
+function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
 
-// Bloqueia SSRF: só http(s) e nada de hosts locais/privados/metadata.
-function checkWebhookUrl(raw: string): string | null {
-  let u: URL;
-  try {
-    u = new URL(raw);
-  } catch {
-    return "URL inválida";
-  }
-  if (u.protocol !== "http:" && u.protocol !== "https:") return "URL deve começar com http:// ou https://";
-  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
-  const blocked = "Endereço não permitido (host local ou privado)";
-  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".internal") || h.endsWith(".local")) return blocked;
-  const m = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (m) {
-    const [a, b] = [Number(m[1]), Number(m[2])];
-    if (a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
-        (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224) return blocked;
-  } else if (h.includes(":")) {
-    // IPv6 literal: loopback, não especificado, ULA fc00::/7, link-local fe80::/10, IPv4 mapeado
-    if (h === "::1" || h === "::" || /^f[cd]/.test(h) || /^fe[89ab]/.test(h) || h.startsWith("::ffff:")) return blocked;
-  } else if (/^\d+$/.test(h) || /^0x/i.test(h)) {
-    return blocked; // IP em formato decimal/hex
-  }
-  return null;
-}
-
-// --- Inbox (Conversas) ---
-const MSG_FIELDS = "messages.limit(20){message,from,created_time}";
-const WINDOW_MS = 24 * 60 * 60 * 1000;
-// ids de conversa/pessoa vindos do navegador: só caracteres seguros num segmento de URL
-const SAFE_ID = /^[A-Za-z0-9_\-=]{1,200}$/;
-
-type GraphMsg = { id?: string; message?: string; created_time?: string; from?: { id?: string; username?: string } };
-type GraphError = { message?: string; code?: number; error_subcode?: number };
-
-class GraphFail extends Error {
-  constructor(public code: number | undefined, message: string, public status: number) {
+/** Erro de validação/estado que vira resposta JSON {error} com o status dado. */
+class HttpError extends Error {
+  constructor(public status: number, message: string) {
     super(message);
   }
 }
 
-// Traduz os erros mais comuns da Graph API para algo legível.
-function graphMessage(e: GraphError | undefined, status: number): string {
-  const code = e?.code;
-  const sub = e?.error_subcode;
-  if (code === 190) return "Token do Instagram inválido ou expirado. Cole um novo token.";
-  if (sub === 2534022 || sub === 2018278) {
-    return "Fora da janela de 24 h: a pessoa precisa mandar mensagem primeiro";
+// Zernio -> status HTTP para o navegador (nunca 401: o front trataria como sessão expirada).
+function statusFor(e: ZernioError): number {
+  switch (e.code) {
+    case "missing_key":
+      return 503;
+    case "payment_required":
+      return 402;
+    case "forbidden":
+      return 403;
+    case "not_found":
+      return 404;
+    case "rate_limited":
+      return 429;
+    case "window_closed":
+      return 409;
+    case "client_error":
+      return 400;
+    default:
+      return 502; // unauthorized (chave ruim), network, server_error, bad_response, bad_auth_url
   }
-  if (code === 551 || sub === 1545041) return "Esta pessoa não está disponível para receber mensagens.";
-  if (code === 4 || code === 17 || code === 32 || code === 613) return "Limite de chamadas do Instagram atingido. Tente de novo em alguns minutos.";
-  if (code === 10 || code === 200 || code === 3) return `Permissão insuficiente no Instagram: ${e?.message ?? "verifique as permissões do app"}`;
-  return `Instagram: ${e?.message || `HTTP ${status}`}`;
 }
 
-async function graphGet(path: string, token: string): Promise<Record<string, unknown>> {
-  const r = await fetch(`${GRAPH}${path}`, { headers: { Authorization: `Bearer ${token}` } });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || j.error) throw new GraphFail(j.error?.code, graphMessage(j.error, r.status), r.status);
-  return j;
-}
+const SAFE_ID = /^[A-Za-z0-9_\-=.:]{1,200}$/;
 
-// Última mensagem enviada pela outra pessoa (não pela conta) numa lista da Graph (mais nova primeiro).
-function lastFromPerson(msgs: GraphMsg[], ownId: string, ownUsername: string | null): GraphMsg | null {
-  const sorted = [...msgs].sort((a, b) => Date.parse(b.created_time ?? "") - Date.parse(a.created_time ?? ""));
-  for (const m of sorted) {
-    const fid = String(m.from?.id ?? "");
-    const fun = m.from?.username ?? null;
-    const own = (ownId && fid === ownId) || (ownUsername && fun === ownUsername);
-    if (!own) return m;
-  }
-  return null;
-}
+type Cfg = {
+  profile_id: string | null;
+  account_id: string | null;
+  ig_user_id: string | null;
+  username: string | null;
+  followers_count: number | null;
+  webhook_id: string | null;
+  webhook_secret: string | null;
+  last_worker_at: string | null;
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  if (req.method !== "POST") return json({ error: "Método não permitido" }, 405);
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   // --- autenticação: JWT de usuário válido ---
   const jwt = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
-  if (!jwt) return json({ error: "Unauthorized" }, 401);
+  if (!jwt) return json({ error: "Não autorizado" }, 401);
   const { data: userData, error: authErr } = await supabase.auth.getUser(jwt);
-  if (authErr || !userData?.user) return json({ error: "Unauthorized" }, 401);
+  if (authErr || !userData?.user) return json({ error: "Não autorizado" }, 401);
 
   let body: Record<string, unknown> = {};
   try {
-    body = await req.json();
+    const parsed: unknown = await req.json();
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) body = parsed as Record<string, unknown>;
   } catch {
     return json({ error: "JSON inválido" }, 400);
   }
   const action = String(body.action || "");
+  const str = (k: string): string => (typeof body[k] === "string" ? (body[k] as string).trim() : "");
+
+  async function loadCfg(): Promise<Cfg> {
+    const { data, error } = await supabase
+      .from("ig_zernio")
+      .select("profile_id, account_id, ig_user_id, username, followers_count, webhook_id, webhook_secret, last_worker_at")
+      .eq("id", 1)
+      .maybeSingle();
+    if (error) throw new HttpError(500, "Erro ao ler a configuração do Instagram.");
+    return (data as Cfg | null) ?? {
+      profile_id: null,
+      account_id: null,
+      ig_user_id: null,
+      username: null,
+      followers_count: null,
+      webhook_id: null,
+      webhook_secret: null,
+      last_worker_at: null,
+    };
+  }
+
+  async function saveCfg(patch: Record<string, unknown>): Promise<void> {
+    const { error } = await supabase.from("ig_zernio").upsert({ id: 1, ...patch }, { onConflict: "id" });
+    if (error) throw new HttpError(500, "Erro ao salvar a configuração do Instagram.");
+  }
+
+  function needAccount(cfg: Cfg): string {
+    if (!cfg.account_id) throw new HttpError(400, "Conecte uma conta do Instagram primeiro.");
+    return cfg.account_id;
+  }
 
   try {
-    if (action === "status") {
-      const { data: cfg } = await supabase.from("ig_config").select("*").limit(1).maybeSingle();
-      if (!cfg?.access_token) return json({ configured: false, connected: false });
-      let username: string | null = cfg.username ?? null;
-      let followers: number | null = null;
-      let error: string | null = null;
-      try {
-        const r = await fetch(`${GRAPH}/me?fields=username,followers_count`, {
-          headers: { Authorization: `Bearer ${cfg.access_token}` },
+    switch (action) {
+      case "status": {
+        const cfg = await loadCfg();
+        return json({
+          key_set: hasZernioKey(),
+          profile_id: cfg.profile_id,
+          account: cfg.account_id
+            ? { username: cfg.username, ig_user_id: cfg.ig_user_id, followers_count: cfg.followers_count }
+            : null,
+          webhook_ok: !!(cfg.webhook_id && cfg.webhook_secret),
+          last_worker_at: cfg.last_worker_at,
         });
-        const j = await r.json();
-        if (!r.ok || j.error) error = j.error?.message || `HTTP ${r.status}`;
-        else {
-          username = j.username ?? username;
-          followers = typeof j.followers_count === "number" ? j.followers_count : null;
-        }
-      } catch (e) {
-        error = (e as Error).message;
       }
-      return json({
-        connected: !error,
-        configured: true,
-        profile_picture_url: cfg.profile_picture_url ?? null,
-        username,
-        followers,
-        token_expires_at: cfg.token_expires_at ?? null,
-        error,
-      });
-    }
 
-    if (action === "posts") {
-      const { data: cfg } = await supabase.from("ig_config").select("access_token").limit(1).maybeSingle();
-      if (!cfg?.access_token) return json({ error: "Conta não conectada" }, 400);
-      const r = await fetch(
-        `${GRAPH}/me/media?fields=id,caption,media_type,thumbnail_url,media_url,permalink&limit=30`,
-        { headers: { Authorization: `Bearer ${cfg.access_token}` } },
-      );
-      const j = await r.json();
-      if (!r.ok || j.error) return json({ error: j.error?.message || `HTTP ${r.status}` }, 502);
-      return json({ posts: j.data ?? [] });
-    }
+      case "profiles": {
+        const profiles = await listProfiles();
+        return json({ profiles });
+      }
 
-    if (action === "webhook_test") {
-      const url = String(body.url || "").trim();
-      const bad = checkWebhookUrl(url);
-      if (bad) return json({ error: bad }, 400);
-      const payload = {
-        evento: "instagram.fluxo",
-        teste: true,
-        regra: { id: "teste", nome: String(body.rule_name || "Teste de fluxo") },
-        gatilho: "comment",
-        mensagem: "mensagem de teste",
-        contato: { ig_user_id: "0000000000", usuario: "usuario_teste", nome: "Fulana de Teste", tags: ["teste"] },
-        data: new Date().toISOString(),
-      };
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 10_000);
-      try {
-        const r = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          redirect: "manual", // não segue redirecionamento para hosts internos
-          signal: ctrl.signal,
+      case "set_profile": {
+        const profileId = str("profile_id");
+        if (!SAFE_ID.test(profileId)) return json({ error: "Informe o perfil do Zernio." }, 400);
+        const profiles = await listProfiles();
+        if (!profiles.some((p) => p.id === profileId)) return json({ error: "Perfil não encontrado no Zernio." }, 404);
+
+        const cfg = await loadCfg();
+        const secret = cfg.webhook_secret || randomHex(32);
+        const webhookId = await ensureWebhook(`${SUPABASE_URL}/functions/v1/zernio-webhook`, secret, cfg.webhook_id);
+        const patch: Record<string, unknown> = { profile_id: profileId, webhook_id: webhookId, webhook_secret: secret };
+        if (cfg.profile_id && cfg.profile_id !== profileId) {
+          // outro perfil: a conta antiga não vale mais
+          patch.account_id = null;
+          patch.ig_user_id = null;
+          patch.username = null;
+          patch.followers_count = null;
+        }
+        await saveCfg(patch);
+        return json({ ok: true, profile_id: profileId, webhook_ok: true });
+      }
+
+      case "accounts": {
+        const cfg = await loadCfg();
+        if (!cfg.profile_id) return json({ error: "Escolha um perfil do Zernio primeiro." }, 400);
+        const accounts = await listAccounts(cfg.profile_id);
+        return json({
+          accounts: accounts.map((a) => ({ id: a.id, username: a.username, ig_user_id: a.igUserId, picture: a.picture })),
         });
-        return json({ ok: r.ok, status: r.status });
-      } catch (e) {
-        const err = e as Error;
-        return json({ ok: false, status: 0, error: err.name === "AbortError" ? "Tempo esgotado (10 s)" : err.message });
-      } finally {
-        clearTimeout(timer);
-      }
-    }
-
-    if (action === "set_token") {
-      // Token de usuário do Instagram (IGAA...) gerado no painel do app da Meta.
-      const token = String(body.token ?? "").trim();
-      if (!token) return json({ error: "Cole o token do Instagram." }, 400);
-      if (token.length < 20 || token.length > 1000 || /\s/.test(token)) {
-        return json({ error: "Token inválido: confira se copiou o token inteiro, sem espaços." }, 400);
       }
 
-      // 1) valida o token e descobre a conta profissional (user_id)
-      let igUserId = "";
-      let username: string | null = null;
-      try {
-        const r = await fetch(`${GRAPH}/me?fields=user_id,username`, {
-          headers: { Authorization: `Bearer ${token}` },
+      case "connect": {
+        const cfg = await loadCfg();
+        if (!cfg.profile_id) return json({ error: "Escolha um perfil do Zernio primeiro." }, 400);
+        const redirect = str("redirect_url");
+        const origin = req.headers.get("origin") || "";
+        let ru: URL;
+        let ou: URL;
+        try {
+          ru = new URL(redirect);
+          ou = new URL(origin);
+        } catch {
+          return json({ error: "Endereço de retorno inválido." }, 400);
+        }
+        const secureOk = ru.protocol === "https:" || (ru.protocol === "http:" && ru.hostname === "localhost");
+        if (!secureOk || ru.origin !== ou.origin || ru.origin === "null") {
+          return json({ error: "Endereço de retorno inválido." }, 400);
+        }
+        const authUrl = await connectUrl(cfg.profile_id, ru.toString());
+        return json({ auth_url: authUrl });
+      }
+
+      case "select_account": {
+        const accountId = str("account_id");
+        if (!SAFE_ID.test(accountId)) return json({ error: "Informe a conta do Instagram." }, 400);
+        const cfg = await loadCfg();
+        if (!cfg.profile_id) return json({ error: "Escolha um perfil do Zernio primeiro." }, 400);
+        const acc = (await listAccounts(cfg.profile_id)).find((a) => a.id === accountId);
+        if (!acc) return json({ error: "Conta não encontrada neste perfil do Zernio." }, 404);
+        await saveCfg({
+          account_id: acc.id,
+          ig_user_id: acc.igUserId,
+          username: acc.username,
+          followers_count: acc.followersCount,
         });
-        const j = await r.json();
-        if (!r.ok || j.error) {
-          return json({ error: `Token recusado pelo Instagram: ${j.error?.message || `HTTP ${r.status}`}` }, 400);
-        }
-        igUserId = String(j.user_id || "");
-        username = j.username ?? null;
-      } catch (e) {
-        return json({ error: `Não foi possível validar o token: ${(e as Error).message}` }, 502);
-      }
-      if (!igUserId) return json({ error: "O Instagram não retornou o ID da conta para este token." }, 400);
-
-      // 2) tenta renovar para um token novo de 60 dias
-      let finalToken = token;
-      // Estimativa: se a renovação falhar (token com menos de 24 h não pode ser renovado),
-      // assume 60 dias. O job diário instagram-token-refresh corrige o valor real depois.
-      let expiresInSec = 60 * 24 * 60 * 60;
-      try {
-        const r = await fetch(
-          `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(token)}`,
-        );
-        const j = await r.json();
-        if (r.ok && j.access_token) {
-          finalToken = String(j.access_token);
-          if (typeof j.expires_in === "number" && j.expires_in > 0) expiresInSec = j.expires_in;
-        }
-      } catch {
-        // mantém o token colado
-      }
-      const expiresAt = new Date(Date.now() + expiresInSec * 1000).toISOString();
-
-      // 3) salva a conta (única) e remove qualquer outra
-      const { error: upErr } = await supabase.from("ig_config").upsert(
-        {
-          instagram_user_id: igUserId,
-          username,
-          access_token: finalToken,
-          token_expires_at: expiresAt,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "instagram_user_id" },
-      );
-      if (upErr) return json({ error: `Erro ao salvar a conta: ${upErr.message}` }, 500);
-      const { error: delErr } = await supabase.from("ig_config").delete().neq("instagram_user_id", igUserId);
-      const cleanupError = delErr ? delErr.message : undefined;
-
-      // 4) assina o webhook da conta; falha aqui é reportada, não fatal
-      let subscribed = false;
-      let subscribeError: string | undefined;
-      try {
-        const r = await fetch(
-          `${GRAPH}/${igUserId}/subscribed_apps?subscribed_fields=messages,comments,messaging_postbacks,messaging_seen`,
-          { method: "POST", headers: { Authorization: `Bearer ${finalToken}` } },
-        );
-        const j = await r.json().catch(() => ({}));
-        if (r.ok && !j.error && j.success !== false) subscribed = true;
-        else subscribeError = j.error?.message || `HTTP ${r.status}`;
-      } catch (e) {
-        subscribeError = (e as Error).message;
+        return json({ ok: true, account: { username: acc.username, ig_user_id: acc.igUserId } });
       }
 
-      // nunca devolve o token
-      return json({ ok: true, username, subscribed, ...(subscribeError ? { subscribe_error: subscribeError } : {}), ...(cleanupError ? { cleanup_error: cleanupError } : {}) });
-    }
-
-    if (action === "conversations" || action === "messages" || action === "reply") {
-      const { data: cfg } = await supabase
-        .from("ig_config")
-        .select("access_token, instagram_user_id, username")
-        .limit(1)
-        .maybeSingle();
-      if (!cfg?.access_token) return json({ error: "Conta não conectada" }, 400);
-      const token = String(cfg.access_token);
-      const ownId = String(cfg.instagram_user_id ?? "");
-      const ownUsername: string | null = cfg.username ?? null;
-      const account = { id: ownId, username: ownUsername };
-
-      try {
-        if (action === "conversations") {
-          const full = "id,updated_time,participants,messages.limit(1){message,from,created_time}";
-          try {
-            const j = await graphGet(
-              `/me/conversations?platform=instagram&fields=${encodeURIComponent(full)}&limit=25`,
-              token,
-            );
-            return json({ account, conversations: j.data ?? [], details_unavailable: false });
-          } catch (e) {
-            if (!(e instanceof GraphFail) || e.code !== 1) throw e;
-            // erro genérico (código 1) com os campos detalhados: tenta só o básico
-            const j = await graphGet(`/me/conversations?platform=instagram&fields=id,updated_time&limit=25`, token);
-            return json({ account, conversations: j.data ?? [], details_unavailable: true });
-          }
-        }
-
-        if (action === "messages") {
-          const cid = String(body.conversation_id ?? "").trim();
-          if (!SAFE_ID.test(cid)) return json({ error: "Conversa inválida" }, 400);
-          const j = await graphGet(`/${cid}?fields=${encodeURIComponent(`id,participants,${MSG_FIELDS}`)}`, token);
-          const msgs = ((j.messages as { data?: GraphMsg[] } | undefined)?.data ?? []) as GraphMsg[];
-          const participants = ((j.participants as { data?: unknown[] } | undefined)?.data ?? []) as unknown[];
-          return json({ account, id: cid, participants, messages: msgs });
-        }
-
-        // reply
-        const recipient = String(body.recipient_id ?? "").trim();
-        const text = String(body.text ?? "").trim();
-        const cidIn = String(body.conversation_id ?? "").trim();
-        if (!SAFE_ID.test(recipient)) return json({ error: "Destinatário inválido" }, 400);
-        if (recipient === ownId) return json({ error: "Destinatário inválido" }, 400);
-        if (!text) return json({ error: "Escreva a mensagem." }, 400);
-        if (text.length > 1000) return json({ error: "Mensagem muito longa (máximo 1000 caracteres)." }, 400);
-        if (cidIn && !SAFE_ID.test(cidIn)) return json({ error: "Conversa inválida" }, 400);
-
-        // acha as mensagens da conversa com essa pessoa
-        let msgs: GraphMsg[] = [];
-        if (cidIn) {
-          const j = await graphGet(`/${cidIn}?fields=${encodeURIComponent(`id,participants,${MSG_FIELDS}`)}`, token);
-          const parts = ((j.participants as { data?: { id?: string }[] } | undefined)?.data ?? []);
-          if (parts.length && !parts.some((p) => String(p.id ?? "") === recipient)) {
-            return json({ error: "A pessoa não faz parte desta conversa." }, 400);
-          }
-          msgs = ((j.messages as { data?: GraphMsg[] } | undefined)?.data ?? []) as GraphMsg[];
-        } else {
-          const j = await graphGet(
-            `/me/conversations?platform=instagram&user_id=${encodeURIComponent(recipient)}&fields=${encodeURIComponent(`id,${MSG_FIELDS}`)}`,
-            token,
-          );
-          const conv = ((j.data as { messages?: { data?: GraphMsg[] } }[] | undefined) ?? [])[0];
-          msgs = conv?.messages?.data ?? [];
-        }
-
-        const last = lastFromPerson(msgs, ownId, ownUsername);
-        const lastAt = last?.created_time ? Date.parse(last.created_time) : NaN;
-        if (!last || !Number.isFinite(lastAt) || Date.now() - lastAt > WINDOW_MS) {
-          return json({ error: "Fora da janela de 24 h: a pessoa precisa mandar mensagem primeiro", outside_window: true }, 409);
-        }
-
-        const r = await fetch(`${GRAPH}/me/messages`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ recipient: { id: recipient }, message: { text } }),
+      case "posts": {
+        const accountId = needAccount(await loadCfg());
+        const posts = await listPosts(accountId);
+        return json({
+          posts: posts.map((p) => ({
+            id: p.id,
+            caption: p.caption,
+            permalink: p.permalink,
+            is_reel: p.isReel,
+            thumbnail: p.thumbnail,
+            created_at: p.createdAt,
+          })),
         });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok || j.error) {
-          return json({ error: graphMessage(j.error, r.status) }, r.status >= 500 ? 502 : 400);
-        }
-        return json({ ok: true, message_id: j.message_id ?? null });
-      } catch (e) {
-        if (e instanceof GraphFail) return json({ error: e.message }, e.status >= 500 ? 502 : 400);
-        throw e;
       }
-    }
 
-    return json({ error: "Ação desconhecida" }, 400);
+      case "conversations": {
+        const accountId = needAccount(await loadCfg());
+        const convs = await listConversations(accountId);
+        return json({
+          conversations: convs.map((c) => ({
+            id: c.id,
+            participant_id: c.participantId,
+            username: c.username,
+            updated_at: c.updatedAt,
+            last_message: c.lastMessage,
+          })),
+        });
+      }
+
+      case "messages": {
+        const accountId = needAccount(await loadCfg());
+        const convId = str("conversation_id");
+        if (!SAFE_ID.test(convId)) return json({ error: "Conversa inválida." }, 400);
+        const msgs = await listMessages(convId, accountId); // mais nova primeiro
+        return json({
+          messages: msgs
+            .map((m) => ({
+              id: m.id,
+              text: m.text,
+              from_me: m.direction === "outgoing",
+              created_at: m.createdAt,
+            }))
+            .reverse(), // antiga -> nova
+        });
+      }
+
+      case "reply": {
+        const cfg = await loadCfg();
+        const accountId = needAccount(cfg);
+        const convId = str("conversation_id");
+        if (!SAFE_ID.test(convId)) return json({ error: "Conversa inválida." }, 400);
+        const text = typeof body.text === "string" ? body.text.trim() : "";
+        if (text.length < 1 || [...text].length > 1000) {
+          return json({ error: "A mensagem precisa ter de 1 a 1000 caracteres." }, 400);
+        }
+        const r = await sendDm(convId, accountId, text, undefined, `admin-reply:${convId}:${crypto.randomUUID()}`);
+        if (r.ok) return json({ ok: true, message_id: r.messageId });
+        if (r.windowClosed) return json({ error: "Fora da janela de 24 h" }, 409);
+        if (!r.confirmed) return json({ error: r.message }, 502);
+        const st = r.status === 429 ? 429 : r.status === 402 ? 402 : r.status === 403 ? 403 : r.status === 404 ? 404 : r.status >= 500 ? 502 : 400;
+        return json({ error: r.message }, st);
+      }
+
+      case "disconnect": {
+        await saveCfg({ account_id: null, ig_user_id: null, username: null, followers_count: null });
+        return json({ ok: true });
+      }
+
+      default:
+        return json({ error: "Ação desconhecida." }, 400);
+    }
   } catch (e) {
-    return json({ error: (e as Error).message }, 500);
+    if (e instanceof HttpError) return json({ error: e.message }, e.status);
+    if (isZernioError(e)) {
+      console.error("instagram-admin zernio:", action, e.code, e.status);
+      return json({ error: e.message }, statusFor(e));
+    }
+    console.error("instagram-admin:", action, e instanceof Error ? e.name : "erro");
+    return json({ error: "Erro interno. Tente novamente." }, 500);
   }
 });
