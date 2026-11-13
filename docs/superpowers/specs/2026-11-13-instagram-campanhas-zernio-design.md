@@ -64,7 +64,7 @@ Novas tabelas (RLS ligado em todas):
 `ig_rate` (só service_role): `hour timestamptz pk`, `count int`. Função `ig_take_slot()` security definer: insere/incrementa a hora atual (`date_trunc('hour', now())`) só se `count < 750`; devolve boolean. `ig_release_slot()` decrementa (piso 0).
 
 `ig_tracked_links` (authenticated select): `id uuid pk`, `campaign_id → cascade`, `position int` (1|2), `slug text unique` (10 base62), `url text`, `unique(campaign_id, position)`.
-`ig_link_clicks` (authenticated select; insert só service_role): `id bigserial`, `link_id → cascade`, `campaign_id uuid`, `recipient text` (hash, nunca o igsid puro), `created_at`.
+`ig_tracked_link_clicks` (nome novo; `ig_link_clicks` antiga existe) (authenticated select; insert só service_role): `id bigserial`, `link_id → cascade`, `campaign_id uuid`, `recipient text` (hash, nunca o igsid puro), `created_at`.
 
 `ig_follower_history` (authenticated select): `day date pk`, `followers int`, `updated_at`.
 
