@@ -21,6 +21,8 @@ import { createElement } from "./scene";
 import { History } from "./history";
 import { panBy, screenToWorld } from "./camera";
 import {
+  bendFromHandle,
+  bendHandlePoint,
   elementsInRect,
   getBounds,
   handleAtPoint,
@@ -64,6 +66,7 @@ type Gesture =
   | { kind: "panning"; last: Pt }
   | { kind: "erasing"; before: WbElement[]; removed: Set<string> }
   | { kind: "laser" }
+  | { kind: "bending"; id: string; before: WbElement[]; changed: boolean }
   | { kind: "rotating"; id: string; center: Pt; startAngle: number; origAngle: number; before: WbElement[]; changed: boolean };
 
 const SHAPE_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "line", "arrow"];
@@ -85,6 +88,11 @@ function transformElement(el: WbElement, from: Bounds, to: Bounds): WbElement {
     if (abs.length === 0) return el;
     const scaled = scalePoints(abs, from, to);
     const [ox, oy] = scaled[0];
+    let bend: [number, number] | undefined;
+    if (el.bend) {
+      const [bx, by] = scalePoints([[el.x + el.bend[0], el.y + el.bend[1]]], from, to)[0];
+      bend = [bx - ox, by - oy];
+    }
     const xs = scaled.map((p) => p[0]);
     const ys = scaled.map((p) => p[1]);
     return {
@@ -94,6 +102,7 @@ function transformElement(el: WbElement, from: Bounds, to: Bounds): WbElement {
       width: Math.max(...xs) - Math.min(...xs),
       height: Math.max(...ys) - Math.min(...ys),
       points: scaled.map(([px, py]) => [px - ox, py - oy]),
+      ...(bend ? { bend } : {}),
     };
   }
   const sx = from.width === 0 ? 1 : to.width / from.width;
@@ -494,6 +503,19 @@ export class WhiteboardEngine {
       case "erasing":
         this.eraseAt(g, w);
         break;
+      case "bending": {
+        g.changed = true;
+        const snap = 4 / this.camera.zoom; // perto da corda a seta volta a ser reta
+        this.elements = g.before.map((el) => {
+          if (el.id !== g.id) return el;
+          const bend = bendFromHandle(el, w, snap);
+          const next = { ...el };
+          if (bend) next.bend = bend;
+          else delete next.bend;
+          return next;
+        });
+        break;
+      }
       case "laser":
         this.trails = addLaserPoint(this.trails, w, this.clock());
         break;
@@ -554,6 +576,9 @@ export class WhiteboardEngine {
       case "rotating":
         if (g.changed) this.commit();
         break;
+      case "bending":
+        if (g.changed) this.commit();
+        break;
       case "laser":
         this.trails = endLaserTrail(this.trails, this.clock());
         break;
@@ -583,6 +608,14 @@ export class WhiteboardEngine {
 
   private downSelect(p: PointerInput, w: Pt): void {
     const selected = this.getSelected();
+    // bolinha de curvar do meio de uma seta/linha (só com um elemento selecionado): tem prioridade sobre as alças
+    if (selected.length === 1 && !selected[0].locked) {
+      const hp = bendHandlePoint(selected[0]);
+      if (hp && Math.hypot(w.x - hp.x, w.y - hp.y) <= 8 / this.camera.zoom) {
+        this.gesture = { kind: "bending", id: selected[0].id, before: this.elements, changed: false };
+        return;
+      }
+    }
     const frame = selectionFrame(selected, this.camera.zoom);
     if (frame) {
       const handle = handleAtPoint(frame, w, this.camera.zoom);

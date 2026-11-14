@@ -23,27 +23,28 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import type { Tool } from "@/lib/whiteboard/types";
 
-const TOOLS: { tool: Tool; label: string; shortcut: string; icon: ReactNode }[] = [
+const TOOLS: { tool: Tool; label: string; shortcut: string; icon: ReactNode; hint?: string }[] = [
   { tool: "select", label: "Seleção", shortcut: "V", icon: <MousePointer2 className="h-4 w-4" /> },
   { tool: "hand", label: "Mão", shortcut: "H", icon: <Hand className="h-4 w-4" /> },
   { tool: "rectangle", label: "Retângulo", shortcut: "R", icon: <Square className="h-4 w-4" /> },
   { tool: "diamond", label: "Losango", shortcut: "D", icon: <Diamond className="h-4 w-4" /> },
   { tool: "ellipse", label: "Elipse", shortcut: "O", icon: <Circle className="h-4 w-4" /> },
-  { tool: "arrow", label: "Seta", shortcut: "A", icon: <MoveUpRight className="h-4 w-4" /> },
-  { tool: "line", label: "Linha", shortcut: "L", icon: <Minus className="h-4 w-4" /> },
+  { tool: "arrow", label: "Seta", shortcut: "A", icon: <MoveUpRight className="h-4 w-4" />, hint: "Para curvar: selecione e arraste a bolinha do meio" },
+  { tool: "line", label: "Linha", shortcut: "L", icon: <Minus className="h-4 w-4" />, hint: "Para curvar: selecione e arraste a bolinha do meio" },
   { tool: "pencil", label: "Lápis", shortcut: "P", icon: <Pencil className="h-4 w-4" /> },
   { tool: "text", label: "Texto", shortcut: "T", icon: <Type className="h-4 w-4" /> },
   { tool: "eraser", label: "Borracha", shortcut: "E", icon: <Eraser className="h-4 w-4" /> },
   { tool: "laser", label: "Laser", shortcut: "K", icon: <Zap className="h-4 w-4" /> },
 ];
 
-function Tip({ label, shortcut, children }: { label: string; shortcut?: string; children: ReactNode }) {
+function Tip({ label, shortcut, hint, children }: { label: string; shortcut?: string; hint?: string; children: ReactNode }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent side="bottom">
         {label}
         {shortcut ? <span className="ml-2 text-muted-foreground">{shortcut}</span> : null}
+        {hint ? <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div> : null}
       </TooltipContent>
     </Tooltip>
   );
@@ -55,7 +56,7 @@ export function ToolPalette({ tool, onTool }: { tool: Tool; onTool: (tool: Tool)
   return (
     <div className={cn(island, "flex items-center gap-0.5")} role="toolbar" aria-label="Ferramentas do quadro">
       {TOOLS.map((t) => (
-        <Tip key={t.tool} label={t.label} shortcut={t.shortcut}>
+        <Tip key={t.tool} label={t.label} shortcut={t.shortcut} hint={t.hint}>
           <Button
             type="button"
             variant="ghost"

@@ -4,7 +4,7 @@ import type { Drawable, Options } from "roughjs/bin/core";
 import getStroke from "perfect-freehand";
 import type { Camera, LaserTrail, WbElement } from "./types";
 import { resolveColor, type ThemeColors } from "./theme";
-import { getBounds, rotatedAabb, selectionFrame, type Bounds } from "./geometry";
+import { bendHandlePoint, getBounds, rotatedAabb, selectionFrame, type Bounds } from "./geometry";
 import { laserAlpha } from "./laser";
 import { FONT_FAMILY, TEXT_LINE_HEIGHT, textLines } from "./text";
 
@@ -95,10 +95,17 @@ export function buildDrawables(el: WbElement, theme: ThemeColors): Drawable[] {
     case "arrow": {
       const pts = absPoints(el);
       if (pts.length < 2) return [];
-      const out = [generator.linearPath(pts, { ...opts, fill: undefined })];
+      const curved = el.bend && pts.length === 2 ? ([el.x + el.bend[0], el.y + el.bend[1]] as [number, number]) : null;
+      const out = [
+        curved
+          ? generator.path(`M ${pts[0][0]} ${pts[0][1]} Q ${curved[0]} ${curved[1]} ${pts[1][0]} ${pts[1][1]}`, { ...opts, fill: undefined })
+          : generator.linearPath(pts, { ...opts, fill: undefined }),
+      ];
       if (el.type === "arrow") {
         const head = 10 + el.strokeWidth * 2;
-        out.push(generator.linearPath(arrowHead(pts[pts.length - 2], pts[pts.length - 1], head), { ...opts, fill: undefined }));
+        // numa curva a ponta segue a tangente do fim (do ponto de controle até a ponta)
+        const from = curved ?? pts[pts.length - 2];
+        out.push(generator.linearPath(arrowHead(from, pts[pts.length - 1], head), { ...opts, fill: undefined }));
       }
       return out;
     }
@@ -113,7 +120,7 @@ function signature(el: WbElement, theme: ThemeColors): string {
   return [
     el.type, el.x, el.y, el.width, el.height, el.seed, el.strokeWidth, el.roundness,
     resolveColor(el.strokeColor, theme), resolveColor(el.backgroundColor, theme),
-    pts ? pts.length : 0, last,
+    pts ? pts.length : 0, last, el.bend ? el.bend.join(",") : "",
   ].join("|");
 }
 
@@ -296,6 +303,21 @@ export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
         ctx.stroke();
       }
     });
+  }
+
+  if (args.showSelection !== false && selected.length === 1 && !selected[0].locked) {
+    const hp = bendHandlePoint(selected[0]); // bolinha de curvar
+    if (hp) {
+      ctx.save();
+      ctx.fillStyle = theme.selection;
+      ctx.strokeStyle = theme.background;
+      ctx.lineWidth = 1.5 / camera.zoom;
+      ctx.beginPath();
+      ctx.arc(hp.x, hp.y, 5.5 / camera.zoom, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   if (args.trails && args.trails.length > 0) drawLaser(ctx, args.trails, camera.zoom, args.now ?? performance.now());

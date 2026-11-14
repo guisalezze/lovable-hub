@@ -31,6 +31,8 @@ export interface WbElement {
   angle: number;
   /** line/arrow/freedraw: pontos relativos a (x, y) */
   points?: [number, number][];
+  /** arrow/line de 2 pontos: ponto de controle da curva (relativo a x,y, como os pontos). Sem isto, a linha é reta. */
+  bend?: [number, number];
   /** type "text": conteúdo (linhas separadas por 
 ) e tamanho da fonte */
   text?: string;

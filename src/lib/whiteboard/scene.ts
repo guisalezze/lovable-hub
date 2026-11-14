@@ -66,6 +66,7 @@ function elementError(raw: unknown, index: number): string | null {
   if (e.groupId !== null && typeof e.groupId !== "string") return `${at}: campo "groupId" inválido`;
   if (e.text !== undefined && typeof e.text !== "string") return `${at}: campo "text" inválido`;
   if (e.fontSize !== undefined && !isNum(e.fontSize)) return `${at}: campo "fontSize" inválido`;
+  if (e.bend !== undefined && !(Array.isArray(e.bend) && e.bend.length === 2 && isNum(e.bend[0]) && isNum(e.bend[1]))) return `${at}: campo "bend" inválido`;
   if (e.points !== undefined && !isPoints(e.points)) return `${at}: campo "points" inválido`;
   return null;
 }

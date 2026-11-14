@@ -20,10 +20,54 @@ function absPoints(el: WbElement): Pt[] {
   return (el.points ?? []).map(([px, py]) => ({ x: el.x + px, y: el.y + py }));
 }
 
+/**
+ * Pontos do caminho de uma linha/seta. Com `bend` (e 2 pontos) é uma curva de Bézier quadrática amostrada;
+ * sem, são os próprios pontos.
+ */
+export function curvePoints(el: WbElement, steps = 24): Pt[] {
+  const pts = absPoints(el);
+  if (!el.bend || pts.length !== 2) return pts;
+  const [a, b] = pts;
+  const c = { x: el.x + el.bend[0], y: el.y + el.bend[1] };
+  const out: Pt[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const m = 1 - t;
+    out.push({ x: m * m * a.x + 2 * m * t * c.x + t * t * b.x, y: m * m * a.y + 2 * m * t * c.y + t * t * b.y });
+  }
+  return out;
+}
+
+/** Onde fica a bolinha de curvar (meio da curva): só em seta/linha de 2 pontos, sem rotação. */
+export function bendHandlePoint(el: WbElement): Pt | null {
+  if (el.type !== "arrow" && el.type !== "line") return null;
+  if (el.angle) return null; // girar muda o centro da caixa a cada curvatura: não suportado
+  const pts = absPoints(el);
+  if (pts.length !== 2) return null;
+  const [a, b] = pts;
+  if (!el.bend) return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const c = { x: el.x + el.bend[0], y: el.y + el.bend[1] };
+  return { x: 0.25 * a.x + 0.5 * c.x + 0.25 * b.x, y: 0.25 * a.y + 0.5 * c.y + 0.25 * b.y };
+}
+
+/**
+ * Curvatura para a curva passar por `world` (onde a bolinha foi solta). undefined = perto da corda (`snap`):
+ * a linha volta a ser reta.
+ */
+export function bendFromHandle(el: WbElement, world: Pt, snap: number): [number, number] | undefined {
+  const pts = absPoints(el);
+  if (pts.length !== 2) return undefined;
+  const [a, b] = pts;
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  if (Math.hypot(world.x - mid.x, world.y - mid.y) <= snap) return undefined;
+  // a curva passa por B(0.5) = 0.25a + 0.5c + 0.25b = world  =>  c = 2*world - mid
+  return [2 * world.x - mid.x - el.x, 2 * world.y - mid.y - el.y];
+}
+
 /** Caixa sem rotação. Linhas e lápis usam os pontos; formas usam x/y/width/height. */
 export function getBounds(el: WbElement): Bounds {
   if (isLinear(el)) {
-    const pts = absPoints(el);
+    const pts = curvePoints(el);
     if (pts.length === 0) return { x: el.x, y: el.y, width: 0, height: 0 };
     const xs = pts.map((p) => p.x);
     const ys = pts.map((p) => p.y);
@@ -123,7 +167,7 @@ export function hitTest(el: WbElement, p: Pt, tolerance: number): boolean {
   const tol = tolerance + el.strokeWidth / 2;
 
   if (isLinear(el)) {
-    const pts = absPoints(el);
+    const pts = curvePoints(el);
     if (pts.length === 0) return false;
     if (pts.length === 1) return Math.hypot(local.x - pts[0].x, local.y - pts[0].y) <= tol;
     for (let i = 0; i < pts.length - 1; i++) {
