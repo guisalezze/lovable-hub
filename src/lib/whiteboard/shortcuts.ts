@@ -7,7 +7,17 @@ export type ShortcutAction =
   | { kind: "delete" }
   | { kind: "selectAll" }
   | { kind: "duplicate" }
-  | { kind: "escape" };
+  | { kind: "escape" }
+  | { kind: "copy" }
+  | { kind: "paste" }
+  | { kind: "cut" }
+  | { kind: "group" }
+  | { kind: "ungroup" }
+  | { kind: "lock" }
+  | { kind: "forward" }
+  | { kind: "backward" }
+  | { kind: "front" }
+  | { kind: "back" };
 
 const TOOL_KEYS: Record<string, Tool> = {
   v: "select", "1": "select",
@@ -55,6 +65,20 @@ export function resolveShortcut(e: ShortcutEvent): ShortcutAction | null {
         return { kind: "duplicate" };
       case "a":
         return { kind: "selectAll" };
+      case "c":
+        return { kind: "copy" };
+      case "v":
+        return { kind: "paste" };
+      case "x":
+        return { kind: "cut" };
+      case "g":
+        return e.shiftKey ? { kind: "ungroup" } : { kind: "group" };
+      case "l":
+        return e.shiftKey ? { kind: "lock" } : null; // Ctrl+L é da barra de endereço do navegador
+      case "]":
+        return { kind: "front" };
+      case "[":
+        return { kind: "back" };
       default:
         return null;
     }
@@ -62,6 +86,8 @@ export function resolveShortcut(e: ShortcutEvent): ShortcutAction | null {
 
   if (key === "Delete" || key === "Backspace") return { kind: "delete" };
   if (key === "Escape") return { kind: "escape" };
+  if (key === "]") return { kind: "forward" };
+  if (key === "[") return { kind: "backward" };
   const tool = TOOL_KEYS[key];
   return tool ? { kind: "tool", tool } : null;
 }

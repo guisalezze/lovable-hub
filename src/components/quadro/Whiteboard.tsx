@@ -7,6 +7,8 @@ import { getSelectionBounds } from "@/lib/whiteboard/geometry";
 import type { StylePatch, Tool, WbElement } from "@/lib/whiteboard/types";
 import { BottomBar, ToolPalette } from "./Toolbar";
 import { StylePanel } from "./StylePanel";
+import { BoardContextMenu, type MenuAction } from "./BoardContextMenu";
+import { clipboard } from "@/lib/whiteboard/ops";
 
 const DRAWING_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "arrow", "line", "pencil"];
 
@@ -40,6 +42,7 @@ export function Whiteboard({ initialElements, onChange, header, banner }: Whiteb
   const [canRedo, setCanRedo] = useState(false);
   const [style, setStyle] = useState<StylePatch>({});
   const [selectedCount, setSelectedCount] = useState(0);
+  const [menuInfo, setMenuInfo] = useState({ count: 0, hasGroup: false, allLocked: false, canPaste: false });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -130,11 +133,49 @@ export function Whiteboard({ initialElements, onChange, header, banner }: Whiteb
     focusBoard();
   };
 
+  const refreshMenuInfo = (e: React.MouseEvent) => {
+    const engine = engineRef.current;
+    const canvas = canvasRef.current;
+    if (!engine || !canvas) return;
+    const r = canvas.getBoundingClientRect();
+    engine.selectAtPoint({ x: e.clientX - r.left, y: e.clientY - r.top }); // botão direito seleciona o que está sob o cursor
+    setMenuInfo({ ...engine.getSelectionInfo(), canPaste: clipboard.items.length > 0 });
+  };
+
+  const runMenuAction = (action: MenuAction) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    switch (action) {
+      case "copy": engine.copy(); break;
+      case "paste": engine.paste(); break;
+      case "duplicate": engine.duplicate(); break;
+      case "group": engine.group(); break;
+      case "ungroup": engine.ungroup(); break;
+      case "front": engine.bringToFront(); break;
+      case "forward": engine.bringForward(); break;
+      case "backward": engine.sendBackward(); break;
+      case "back": engine.sendToBack(); break;
+      case "lock": engine.toggleLock(); break;
+      case "delete": engine.deleteSelection(); break;
+      case "align-left": engine.align("left"); break;
+      case "align-center": engine.align("center"); break;
+      case "align-right": engine.align("right"); break;
+      case "align-top": engine.align("top"); break;
+      case "align-middle": engine.align("middle"); break;
+      case "align-bottom": engine.align("bottom"); break;
+    }
+    focusBoard();
+  };
+
   const showStylePanel = selectedCount > 0 || DRAWING_TOOLS.includes(tool);
 
   return (
     <div ref={rootRef} data-whiteboard-root tabIndex={0} className="relative h-full w-full select-none overflow-hidden bg-background outline-none">
-      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />
+      <BoardContextMenu {...menuInfo} onAction={runMenuAction} onContextMenu={refreshMenuInfo}>
+        <div className="absolute inset-0">
+          <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />
+        </div>
+      </BoardContextMenu>
 
       {header ? <div className="absolute left-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm backdrop-blur">{header}</div> : null}
 

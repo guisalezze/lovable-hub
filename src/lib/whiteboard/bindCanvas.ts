@@ -132,7 +132,38 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
         engine.clearSelection();
         break;
       case "duplicate":
-        break; // chega na Task 12
+        engine.duplicate();
+        break;
+      case "copy":
+        engine.copy();
+        break;
+      case "paste":
+        engine.paste();
+        break;
+      case "cut":
+        engine.cut();
+        break;
+      case "group":
+        engine.group();
+        break;
+      case "ungroup":
+        engine.ungroup();
+        break;
+      case "lock":
+        engine.toggleLock();
+        break;
+      case "forward":
+        engine.bringForward();
+        break;
+      case "backward":
+        engine.sendBackward();
+        break;
+      case "front":
+        engine.bringToFront();
+        break;
+      case "back":
+        engine.sendToBack();
+        break;
     }
   };
   const onKeyUp = (e: KeyboardEvent) => {

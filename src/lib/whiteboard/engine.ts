@@ -1,10 +1,26 @@
 import type { Camera, ElementType, LaserTrail, StylePatch, Tool, WbElement } from "./types";
 import { DEFAULT_STYLE } from "./palette";
+import {
+  alignElements,
+  bringForward,
+  bringToFront,
+  clipboard,
+  cloneElements,
+  duplicateElements,
+  expandToGroups,
+  groupElements,
+  sendBackward,
+  sendToBack,
+  toggleLock,
+  ungroupElements,
+  type AlignMode,
+} from "./ops";
 import { createElement } from "./scene";
 import { History } from "./history";
 import { panBy, screenToWorld } from "./camera";
 import {
   elementsInRect,
+  getBounds,
   handleAtPoint,
   hitTest,
   resizeBounds,
@@ -42,7 +58,8 @@ type Gesture =
   | { kind: "resizing"; handle: HandleId; start: Pt; before: WbElement[]; ids: Set<string>; origBounds: Bounds; changed: boolean }
   | { kind: "marquee"; start: Pt; base: Set<string> }
   | { kind: "panning"; last: Pt }
-  | { kind: "erasing"; before: WbElement[]; removed: Set<string> };
+  | { kind: "erasing"; before: WbElement[]; removed: Set<string> }
+  | { kind: "rotating"; id: string; center: Pt; startAngle: number; origAngle: number; before: WbElement[]; changed: boolean };
 
 const SHAPE_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "line", "arrow"];
 const HIT_TOLERANCE = 6; // px de tela
@@ -168,6 +185,115 @@ export class WhiteboardEngine {
     return this.getStyleOfSelection() ?? { ...DEFAULT_STYLE, ...this.defaultStyle };
   }
 
+  // ---- edição: copiar, colar, grupos, camadas, bloqueio, alinhar -------------
+
+  copy(): void {
+    const selected = this.getSelected();
+    if (selected.length === 0) return;
+    clipboard.items = cloneElements(selected, 0);
+    clipboard.pasteCount = 0;
+  }
+
+  cut(): void {
+    this.copy();
+    this.deleteSelection();
+  }
+
+  paste(): void {
+    if (clipboard.items.length === 0) return;
+    clipboard.pasteCount += 1; // cada colagem desloca um pouco mais, para não empilhar no mesmo lugar
+    const copies = cloneElements(clipboard.items, 20 * clipboard.pasteCount);
+    this.elements = [...this.elements, ...copies];
+    this.setSelection(new Set(copies.map((c) => c.id)));
+    this.commit();
+  }
+
+  duplicate(): void {
+    const ids = new Set(this.getSelected().map((el) => el.id));
+    if (ids.size === 0) return;
+    const { elements, newIds } = duplicateElements(this.elements, ids);
+    this.elements = elements;
+    this.setSelection(new Set(newIds));
+    this.commit();
+  }
+
+  group(): void {
+    const ids = new Set(this.getSelected().map((el) => el.id));
+    if (ids.size < 2) return;
+    this.elements = groupElements(this.elements, ids);
+    this.commit();
+  }
+
+  ungroup(): void {
+    const ids = new Set(this.getSelected().map((el) => el.id));
+    if (ids.size === 0) return;
+    const next = ungroupElements(this.elements, ids);
+    if (next.every((el, i) => el === this.elements[i])) return;
+    this.elements = next;
+    this.commit();
+  }
+
+  bringToFront(): void {
+    this.reorder(bringToFront);
+  }
+
+  sendToBack(): void {
+    this.reorder(sendToBack);
+  }
+
+  bringForward(): void {
+    this.reorder(bringForward);
+  }
+
+  sendBackward(): void {
+    this.reorder(sendBackward);
+  }
+
+  toggleLock(): void {
+    const ids = new Set(this.selectedIds);
+    if (ids.size === 0) return;
+    this.elements = toggleLock(this.elements, ids);
+    this.commit();
+  }
+
+  align(mode: AlignMode): void {
+    const next = alignElements(this.elements, new Set(this.selectedIds), mode);
+    if (next.every((el, i) => el === this.elements[i])) return;
+    this.elements = next;
+    this.commit();
+  }
+
+  /** Clique direito: seleciona o que está sob o cursor (se já estava na seleção, mantém a seleção). */
+  selectAtPoint(screen: Pt): void {
+    const hit = this.hitElement(this.toWorld(screen));
+    if (!hit) {
+      this.clearSelection();
+      return;
+    }
+    if (this.selectedIds.has(hit.id)) return;
+    this.setSelection(expandToGroups(this.elements, new Set([hit.id])));
+    this.invalidate();
+  }
+
+  /** Resumo da seleção para o menu de contexto saber o que habilitar. */
+  getSelectionInfo(): { count: number; hasGroup: boolean; allLocked: boolean } {
+    const selected = this.getSelected();
+    return {
+      count: selected.length,
+      hasGroup: selected.some((el) => el.groupId !== null),
+      allLocked: selected.length > 0 && selected.every((el) => el.locked),
+    };
+  }
+
+  private reorder(fn: (all: WbElement[], ids: Set<string>) => WbElement[]): void {
+    const ids = new Set(this.selectedIds);
+    if (ids.size === 0) return;
+    const next = fn(this.elements, ids);
+    if (next.every((el, i) => el === this.elements[i])) return;
+    this.elements = next;
+    this.commit();
+  }
+
   clearSelection(): void {
     this.setSelection(new Set());
     this.invalidate();
@@ -250,7 +376,7 @@ export class WhiteboardEngine {
           height: Math.abs(w.y - g.start.y),
         };
         this.marquee = rect;
-        this.setSelection(new Set([...g.base, ...elementsInRect(this.elements, rect)]));
+        this.setSelection(expandToGroups(this.elements, new Set([...g.base, ...elementsInRect(this.elements, rect)])));
         break;
       }
       case "panning":
@@ -260,6 +386,17 @@ export class WhiteboardEngine {
       case "erasing":
         this.eraseAt(g, w);
         break;
+      case "rotating": {
+        const cur = Math.atan2(w.y - g.center.y, w.x - g.center.x);
+        let angle = g.origAngle + (cur - g.startAngle);
+        if (p.shift) {
+          const step = Math.PI / 12; // 15°
+          angle = Math.round(angle / step) * step;
+        }
+        g.changed = true;
+        this.elements = g.before.map((el) => (el.id === g.id ? { ...el, angle } : el));
+        break;
+      }
     }
     this.invalidate();
   }
@@ -303,6 +440,9 @@ export class WhiteboardEngine {
           this.commit();
         }
         break;
+      case "rotating":
+        if (g.changed) this.commit();
+        break;
       case "panning":
         break;
     }
@@ -330,6 +470,20 @@ export class WhiteboardEngine {
     const frame = selectionFrame(selected, this.camera.zoom);
     if (frame) {
       const handle = handleAtPoint(frame, w, this.camera.zoom);
+      if (handle === "rotate" && selected.length === 1) {
+        const b = getBounds(selected[0]);
+        const center = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+        this.gesture = {
+          kind: "rotating",
+          id: selected[0].id,
+          center,
+          startAngle: Math.atan2(w.y - center.y, w.x - center.x),
+          origAngle: selected[0].angle,
+          before: this.elements,
+          changed: false,
+        };
+        return;
+      }
       if (handle && handle !== "rotate") {
         const ids = new Set(selected.filter((el) => !el.locked).map((el) => el.id));
         this.gesture = { kind: "resizing", handle, start: w, before: this.elements, ids, origBounds: frame.bounds, changed: false };
@@ -339,15 +493,16 @@ export class WhiteboardEngine {
 
     const hit = this.hitElement(w);
     if (hit) {
+      const members = expandToGroups(this.elements, new Set([hit.id])); // clicar num membro pega o grupo todo
       if (p.shift && this.selectedIds.has(hit.id)) {
         const next = new Set(this.selectedIds);
-        next.delete(hit.id);
+        for (const id of members) next.delete(id);
         this.setSelection(next);
         this.invalidate();
         return;
       }
-      if (p.shift) this.setSelection(new Set([...this.selectedIds, hit.id]));
-      else if (!this.selectedIds.has(hit.id)) this.setSelection(new Set([hit.id]));
+      if (p.shift) this.setSelection(new Set([...this.selectedIds, ...members]));
+      else if (!this.selectedIds.has(hit.id)) this.setSelection(members);
       const ids = new Set(this.getSelected().filter((el) => !el.locked).map((el) => el.id));
       this.gesture = { kind: "moving", start: w, before: this.elements, ids, moved: false };
       this.invalidate();
@@ -450,6 +605,7 @@ export class WhiteboardEngine {
   private commit(): void {
     this.history.push(this.elements);
     this.cb.onChange(this.elements);
+    this.invalidate(); // operações pelo teclado/menu não passam por pointerUp: sem isto o canvas ficaria desatualizado
   }
 
   private applyHistory(elements: WbElement[]): void {
