@@ -249,3 +249,39 @@ export function scalePoints(points: [number, number][], from: Bounds, to: Bounds
   const sy = from.height === 0 ? 1 : to.height / from.height;
   return points.map(([px, py]) => [to.x + (px - from.x) * sx, to.y + (py - from.y) * sy]);
 }
+
+/** Moldura de seleção: caixa, ângulo e quais alças existem. */
+export interface SelectionFrame {
+  bounds: Bounds;
+  angle: number;
+  handles: [HandleId, Pt][];
+}
+
+/**
+ * Regras das alças:
+ * - um elemento reto: oito de tamanho + girar;
+ * - um elemento girado: só a de girar;
+ * - vários: só as de tamanho (sem girar);
+ * - tudo bloqueado: caixa sem alças.
+ */
+export function selectionFrame(selected: WbElement[], zoom: number): SelectionFrame | null {
+  if (selected.length === 0) return null;
+  if (selected.length === 1) {
+    const el = selected[0];
+    const bounds = getBounds(el);
+    if (el.locked) return { bounds, angle: el.angle, handles: [] };
+    const all = handlePoints(bounds, zoom, true);
+    return { bounds, angle: el.angle, handles: el.angle ? all.filter(([id]) => id === "rotate") : all };
+  }
+  const bounds = getSelectionBounds(selected)!;
+  if (selected.every((e) => e.locked)) return { bounds, angle: 0, handles: [] };
+  return { bounds, angle: 0, handles: handlePoints(bounds, zoom, false) };
+}
+
+/** Alça sob o ponto p (coordenadas do mundo), respeitando a rotação da moldura. */
+export function handleAtPoint(frame: SelectionFrame, p: Pt, zoom: number): HandleId | null {
+  if (frame.handles.length === 0) return null;
+  const local = frame.angle ? rotate(p, center(frame.bounds), -frame.angle) : p;
+  const id = getHandleAt(frame.bounds, local, zoom, frame.handles.some(([h]) => h === "rotate"));
+  return id && frame.handles.some(([h]) => h === id) ? id : null;
+}

@@ -141,3 +141,49 @@ describe("scalePoints", () => {
     expect(out.flat().every(Number.isFinite)).toBe(true);
   });
 });
+
+import { selectionFrame, handleAtPoint } from "./geometry";
+
+describe("selectionFrame / handleAtPoint", () => {
+  const flat = () => createElement("rectangle", 0, 0, { width: 100, height: 20 });
+
+  it("sem seleção não há moldura", () => {
+    expect(selectionFrame([], 1)).toBeNull();
+  });
+
+  it("um elemento reto tem as oito alças e a de girar", () => {
+    const frame = selectionFrame([flat()], 1);
+    expect(frame.angle).toBe(0);
+    expect(frame.handles.map((h) => h[0]).sort()).toEqual(
+      ["e", "n", "ne", "nw", "rotate", "s", "se", "sw", "w"].sort(),
+    );
+  });
+
+  it("elemento girado só tem a alça de girar", () => {
+    const turned = { ...flat(), angle: Math.PI / 2 };
+    const frame = selectionFrame([turned], 1);
+    expect(frame.handles.map((h) => h[0])).toEqual(["rotate"]);
+    expect(handleAtPoint(frame, { x: 84, y: 10 }, 1)).toBe("rotate");
+    expect(handleAtPoint(frame, { x: 40, y: 60 }, 1)).toBeNull();
+  });
+
+  it("vários elementos têm alças de tamanho e não de girar", () => {
+    const frame = selectionFrame([flat(), createElement("rectangle", 200, 0, { width: 10, height: 10 })], 1);
+    const ids = frame.handles.map((h) => h[0]);
+    expect(ids).toContain("se");
+    expect(ids).not.toContain("rotate");
+    expect(frame.bounds).toEqual({ x: 0, y: 0, width: 210, height: 20 });
+  });
+
+  it("tudo bloqueado: caixa sem alças", () => {
+    const frame = selectionFrame([{ ...flat(), locked: true }], 1);
+    expect(frame.handles).toEqual([]);
+    expect(handleAtPoint(frame, { x: 100, y: 20 }, 1)).toBeNull();
+  });
+
+  it("handleAtPoint acha o canto de um elemento reto", () => {
+    const frame = selectionFrame([flat()], 1);
+    expect(handleAtPoint(frame, { x: 100, y: 20 }, 1)).toBe("se");
+    expect(handleAtPoint(frame, { x: 50, y: 10 }, 1)).toBeNull();
+  });
+});
