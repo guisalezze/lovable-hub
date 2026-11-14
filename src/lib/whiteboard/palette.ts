@@ -29,4 +29,6 @@ export const DEFAULT_STYLE: Required<StylePatch> = {
   strokeWidth: 2,
   roundness: "round",
   fontSize: 24,
+  fontFamily: "sans",
+  textAlign: "left",
 };

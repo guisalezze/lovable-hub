@@ -1,7 +1,7 @@
 import type { ElementType, WbElement } from "./types";
 import { boundaryPoint, elementCenter, pointInElementBox } from "./geometry";
 
-const BINDABLE: ElementType[] = ["rectangle", "diamond", "ellipse", "text"];
+const BINDABLE: ElementType[] = ["rectangle", "diamond", "ellipse", "text", "note"];
 /** Folga entre a ponta da seta e a borda da forma. */
 export const BIND_GAP = 2;
 

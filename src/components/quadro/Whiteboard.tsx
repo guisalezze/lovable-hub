@@ -7,7 +7,8 @@ import { getSelectionBounds } from "@/lib/whiteboard/geometry";
 import type { Camera, StylePatch, Tool, WbElement } from "@/lib/whiteboard/types";
 import { BottomBar, ToolPalette } from "./Toolbar";
 import { StylePanel } from "./StylePanel";
-import { TextEditor } from "./TextEditor";
+import { RichTextEditor } from "./RichTextEditor";
+import { TEXT_TYPES } from "@/lib/whiteboard/textblock";
 import { usePresentationMode } from "./usePresentationMode";
 import { BoardContextMenu, type MenuAction } from "./BoardContextMenu";
 import { clipboard } from "@/lib/whiteboard/ops";
@@ -15,7 +16,7 @@ import { toast } from "sonner";
 import { ExportMenu, type ExportKind } from "./ExportMenu";
 import { copyPngToClipboard, downloadBlob, exportFileName, exportToPng, exportToSvg } from "@/lib/whiteboard/export";
 
-const DRAWING_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "arrow", "line", "pencil", "text"];
+const DRAWING_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "arrow", "line", "pencil", "text", "note"];
 
 export interface WhiteboardProps {
   /** Elementos com que o quadro abre. Lido só uma vez, na montagem. */
@@ -81,10 +82,10 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
     const syncStyle = () => {
       setStyle(engine.getActiveStyle());
       const selected = engine.getSelected();
-      const textTool = engine.tool === "text";
+      const textTool = engine.tool === "text" || engine.tool === "note";
       setTextMode({
-        only: selected.length > 0 ? selected.every((e) => e.type === "text") : textTool,
-        has: textTool || selected.some((e) => e.type === "text"),
+        only: selected.length > 0 ? selected.every((e) => e.type === "text") : engine.tool === "text",
+        has: textTool || selected.some((e) => TEXT_TYPES.includes(e.type)),
       });
     };
     const engine = new WhiteboardEngine({
@@ -291,14 +292,21 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
       ) : null}
 
       {editing ? (
-        <TextEditor
+        <RichTextEditor
           key={editing.el.id}
           element={editing.el}
           camera={editing.camera}
           theme={editing.theme}
-          onCommit={(text) => {
-            engineRef.current?.commitText(editing.el.id, text);
+          onCommit={(runs) => {
+            engineRef.current?.commitRuns(editing.el.id, runs);
             focusBoard();
+          }}
+          onStyle={(patch) => {
+            const engine = engineRef.current;
+            if (!engine) return;
+            engine.updateEditing(patch);
+            const el = engine.getEditingElement();
+            if (el) setEditing((cur) => (cur ? { ...cur, el } : cur));
           }}
         />
       ) : null}

@@ -3,7 +3,8 @@ import type { WbElement } from "./types";
 import { resolveColor, type ThemeColors } from "./theme";
 import { rotatedAabb } from "./geometry";
 import { absPoints, buildDrawables, freedrawPath } from "./render";
-import { FONT_FAMILY, TEXT_LINE_HEIGHT, textLines } from "./text";
+import { FONT_FAMILIES } from "./layout";
+import { hasText, textBlockFor } from "./textblock";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -15,6 +16,50 @@ export interface ExportOptions {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Texto do elemento como <text>, um por trecho com o mesmo estilo (marca-texto vira um retângulo atrás). */
+function appendSvgText(group: SVGGElement, el: WbElement, theme: ThemeColors) {
+  const block = textBlockFor(el);
+  const size = el.fontSize ?? 24;
+  const family = FONT_FAMILIES[el.fontFamily ?? "sans"];
+  const color = resolveColor(el.strokeColor, theme);
+
+  const addText = (text: string, x: number, y: number, style: { bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean }) => {
+    const t = document.createElementNS(SVG_NS, "text");
+    t.setAttribute("x", String(round2(x)));
+    t.setAttribute("y", String(round2(y)));
+    t.setAttribute("font-size", String(size));
+    t.setAttribute("font-family", family);
+    t.setAttribute("dominant-baseline", "text-before-edge");
+    t.setAttribute("fill", color);
+    if (style.bold) t.setAttribute("font-weight", "700");
+    if (style.italic) t.setAttribute("font-style", "italic");
+    const deco = [style.underline ? "underline" : "", style.strike ? "line-through" : ""].filter(Boolean).join(" ");
+    if (deco) t.setAttribute("text-decoration", deco);
+    t.setAttribute("xml:space", "preserve");
+    t.textContent = text;
+    group.appendChild(t);
+  };
+
+  for (const line of block.layout.lines) {
+    const y = block.y + line.y;
+    if (line.marker) addText(line.marker, block.x + line.markerX, y, {});
+    for (const seg of line.segments) {
+      const x = block.x + seg.x;
+      if (seg.style.highlight) {
+        const bg = document.createElementNS(SVG_NS, "rect");
+        bg.setAttribute("x", String(round2(x)));
+        bg.setAttribute("y", String(round2(y)));
+        bg.setAttribute("width", String(round2(seg.width)));
+        bg.setAttribute("height", String(round2(line.height)));
+        bg.setAttribute("fill", seg.style.highlight);
+        bg.setAttribute("fill-opacity", "0.6");
+        group.appendChild(bg);
+      }
+      addText(seg.text, x, y, seg.style);
+    }
+  }
+}
 
 /** SVG completo dos elementos, enquadrado na caixa do conteúdo mais o preenchimento. */
 export function exportToSvg(elements: WbElement[], opts: ExportOptions): string {
@@ -66,20 +111,21 @@ export function exportToSvg(elements: WbElement[], opts: ExportOptions): string 
       path.setAttribute("fill", resolveColor(el.strokeColor, opts.theme));
       group.appendChild(path);
     } else if (el.type === "text") {
-      const size = el.fontSize ?? 24;
-      textLines(el.text ?? "").forEach((line, i) => {
-        const t = document.createElementNS(SVG_NS, "text");
-        t.setAttribute("x", String(round2(el.x)));
-        t.setAttribute("y", String(round2(el.y + i * size * TEXT_LINE_HEIGHT)));
-        t.setAttribute("font-size", String(size));
-        t.setAttribute("font-family", FONT_FAMILY);
-        t.setAttribute("dominant-baseline", "text-before-edge");
-        t.setAttribute("fill", resolveColor(el.strokeColor, opts.theme));
-        t.textContent = line;
-        group.appendChild(t);
-      });
+      appendSvgText(group, el, opts.theme);
     } else {
-      for (const drawable of buildDrawables(el, opts.theme)) group.appendChild(rc.draw(drawable));
+      if (el.type === "note") {
+        const paper = document.createElementNS(SVG_NS, "rect");
+        paper.setAttribute("x", String(round2(el.x)));
+        paper.setAttribute("y", String(round2(el.y)));
+        paper.setAttribute("width", String(round2(el.width)));
+        paper.setAttribute("height", String(round2(el.height)));
+        paper.setAttribute("rx", "6");
+        paper.setAttribute("fill", resolveColor(el.backgroundColor, opts.theme));
+        group.appendChild(paper);
+      } else {
+        for (const drawable of buildDrawables(el, opts.theme)) group.appendChild(rc.draw(drawable));
+      }
+      if (hasText(el)) appendSvgText(group, el, opts.theme);
     }
     svg.appendChild(group);
   }

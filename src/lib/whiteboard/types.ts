@@ -5,7 +5,8 @@ export type ElementType =
   | "line"
   | "arrow"
   | "freedraw"
-  | "text";
+  | "text"
+  | "note";
 
 export type Tool =
   | "select"
@@ -16,9 +17,24 @@ export type Tool =
   | "line"
   | "pencil"
   | "text"
+  | "note"
   | "eraser"
   | "laser"
   | "hand";
+
+export type TextAlign = "left" | "center" | "right";
+export type FontFamily = "sans" | "serif" | "mono" | "hand";
+
+/** Um pedaço de texto com o mesmo estilo. "\n" separa linhas. */
+export interface TextRun {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  /** Cor do marca-texto (qualquer cor CSS). */
+  highlight?: string;
+}
 
 /** Elemento do quadro. A ordem no array é a ordem de camadas (o último fica por cima). */
 export interface WbElement {
@@ -39,6 +55,10 @@ export interface WbElement {
 ) e tamanho da fonte */
   text?: string;
   fontSize?: number;
+  /** Texto com estilo por trecho. Se existir, manda; `text` guarda o mesmo conteúdo sem estilos. */
+  runs?: TextRun[];
+  textAlign?: TextAlign;
+  fontFamily?: FontFamily;
   /** "auto" = cor de texto do tema */
   strokeColor: string;
   /** "transparent" = sem preenchimento */
@@ -75,4 +95,4 @@ export interface LaserTrail {
 }
 
 /** Propriedades de aparência que o painel de estilo edita. */
-export type StylePatch = Partial<Pick<WbElement, "strokeColor" | "backgroundColor" | "strokeWidth" | "roundness" | "fontSize">>;
+export type StylePatch = Partial<Pick<WbElement, "strokeColor" | "backgroundColor" | "strokeWidth" | "roundness" | "fontSize" | "fontFamily" | "textAlign">>;

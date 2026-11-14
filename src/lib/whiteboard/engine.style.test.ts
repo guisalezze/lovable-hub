@@ -78,7 +78,7 @@ describe("getStyleOfSelection / getActiveStyle", () => {
   it("sem seleção: getStyleOfSelection é null e getActiveStyle mostra o padrão", () => {
     const { engine } = setup();
     expect(engine.getStyleOfSelection()).toBeNull();
-    expect(engine.getActiveStyle()).toEqual({ strokeColor: "auto", backgroundColor: "transparent", strokeWidth: 2, roundness: "round", fontSize: 24 });
+    expect(engine.getActiveStyle()).toEqual({ strokeColor: "auto", backgroundColor: "transparent", strokeWidth: 2, roundness: "round", fontSize: 24, fontFamily: "sans", textAlign: "left" });
     engine.applyStyle({ strokeWidth: 7 });
     expect(engine.getActiveStyle().strokeWidth).toBe(7);
   });

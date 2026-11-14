@@ -124,12 +124,21 @@ describe("editar texto existente", () => {
     expect(engine.editingId).toBe(engine.elements[0].id);
   });
 
-  it("duplo clique numa forma que não é texto não abre edição de texto", () => {
+  it("duplo clique numa forma abre o texto DELA (texto dentro da forma), sem criar outro elemento", () => {
     const { engine } = setup();
-    engine.load([createElement("rectangle", 0, 0, { width: 100, height: 50, backgroundColor: "#fff" })]);
+    const rect = createElement("rectangle", 0, 0, { width: 100, height: 50, backgroundColor: "#fff" });
+    engine.load([rect]);
     engine.doubleClick({ x: 50, y: 25 });
-    expect(engine.editingId).toBeNull();
+    expect(engine.editingId).toBe(rect.id);
     expect(engine.elements).toHaveLength(1);
+  });
+
+  it("duplo clique no meio de uma forma sem preenchimento também edita o texto dela", () => {
+    const { engine } = setup();
+    const rect = createElement("rectangle", 0, 0, { width: 300, height: 200 }); // só a borda "acerta"
+    engine.load([rect]);
+    engine.doubleClick({ x: 150, y: 100 });
+    expect(engine.editingId).toBe(rect.id);
   });
 });
 
@@ -148,9 +157,9 @@ describe("texto como elemento", () => {
     expect(hitTest(t, { x: 300, y: 300 }, 4)).toBe(false);
   });
 
-  it("tamanho da fonte pelo painel: aplica só em texto e remede", () => {
+  it("tamanho da fonte pelo painel: aplica em quem tem texto, remede o texto solto e ignora seta", () => {
     const { engine } = setup();
-    engine.load([textEl(0, 0, "Olá"), createElement("rectangle", 200, 0, { width: 50, height: 50 })]);
+    engine.load([textEl(0, 0, "Olá"), createElement("arrow", 200, 0, { points: [[0, 0], [50, 0]] })]);
     engine.selectAll();
     engine.applyStyle({ fontSize: 40 });
     expect(engine.elements[0].fontSize).toBe(40);

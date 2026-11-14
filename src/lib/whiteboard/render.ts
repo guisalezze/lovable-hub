@@ -7,7 +7,8 @@ import { resolveColor, type ThemeColors } from "./theme";
 import { bendHandlePoint, endpointHandles, getBounds, rotatedAabb, selectionFrame, type Bounds } from "./geometry";
 import type { Guide } from "./snap";
 import { laserAlpha } from "./laser";
-import { FONT_FAMILY, TEXT_LINE_HEIGHT, textLines } from "./text";
+import { fontString } from "./layout";
+import { hasText, textBlockFor, type TextBlock } from "./textblock";
 
 const GRID_STEP = 24; // unidades do mundo
 const generator = rough.generator();
@@ -211,12 +212,61 @@ export interface DrawArgs {
   highlightId?: string | null;
 }
 
-function drawText(ctx: CanvasRenderingContext2D, el: WbElement, theme: ThemeColors) {
+const blockCache = new WeakMap<WbElement, { sig: string; block: TextBlock }>();
+
+function blockFor(el: WbElement): TextBlock {
+  const sig = [el.type, el.text, el.runs ? JSON.stringify(el.runs) : "", el.fontSize, el.fontFamily, el.textAlign, el.width, el.height].join("|");
+  const hit = blockCache.get(el);
+  if (hit && hit.sig === sig) return hit.block;
+  const block = textBlockFor(el);
+  blockCache.set(el, { sig, block });
+  return block;
+}
+
+/** Texto com estilo (negrito, itálico, sublinhado, tachado, marca-texto), listas e alinhamento. */
+function drawTextBlock(ctx: CanvasRenderingContext2D, el: WbElement, theme: ThemeColors) {
+  const block = blockFor(el);
   const size = el.fontSize ?? 24;
-  ctx.font = `${size}px ${FONT_FAMILY}`;
+  const family = el.fontFamily ?? "sans";
+  const color = resolveColor(el.strokeColor, theme);
+  const thickness = Math.max(1, size / 16);
+  ctx.save();
   ctx.textBaseline = "top";
-  ctx.fillStyle = resolveColor(el.strokeColor, theme);
-  textLines(el.text ?? "").forEach((line, i) => ctx.fillText(line, el.x, el.y + i * size * TEXT_LINE_HEIGHT));
+  for (const line of block.layout.lines) {
+    const y = block.y + line.y;
+    if (line.marker) {
+      ctx.font = fontString({ size, family, bold: false, italic: false });
+      ctx.fillStyle = color;
+      ctx.fillText(line.marker, block.x + line.markerX, y);
+    }
+    for (const seg of line.segments) {
+      const x = block.x + seg.x;
+      if (seg.style.highlight) {
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = seg.style.highlight;
+        ctx.fillRect(x, y, seg.width, line.height);
+        ctx.restore();
+      }
+      ctx.font = fontString({ size, family, bold: !!seg.style.bold, italic: !!seg.style.italic });
+      ctx.fillStyle = color;
+      ctx.fillText(seg.text, x, y);
+      if (seg.style.underline) ctx.fillRect(x, y + size * 1.05, seg.width, thickness);
+      if (seg.style.strike) ctx.fillRect(x, y + size * 0.55, seg.width, thickness);
+    }
+  }
+  ctx.restore();
+}
+
+/** Papel da nota autoadesiva: cor de fundo com cantos arredondados e uma sombra leve. */
+function drawNote(ctx: CanvasRenderingContext2D, el: WbElement, theme: ThemeColors) {
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = resolveColor(el.backgroundColor, theme);
+  ctx.fill(new Path2D(roundedRectPath(el.x, el.y, el.width, el.height)));
+  ctx.restore();
 }
 
 function drawLaser(ctx: CanvasRenderingContext2D, trails: LaserTrail[], zoom: number, now: number) {
@@ -268,7 +318,8 @@ export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
   }
 
   for (const el of elements) {
-    if (el.id === args.hiddenId) continue;
+    const editing = el.id === args.hiddenId; // o campo de texto mostra o texto em edição: some só o texto (a forma continua)
+    if (editing && el.type === "text") continue;
     if (!isElementVisible(el, camera, width, height)) continue;
     withRotation(ctx, getBounds(el), el.angle, () => {
       if (el.type === "freedraw") {
@@ -281,9 +332,11 @@ export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
           ctx.restore();
         }
       } else if (el.type === "text") {
-        drawText(ctx, el, theme);
+        drawTextBlock(ctx, el, theme);
       } else {
-        for (const drawable of drawablesFor(el, theme)) rc!.draw(drawable);
+        if (el.type === "note") drawNote(ctx, el, theme);
+        else for (const drawable of drawablesFor(el, theme)) rc!.draw(drawable);
+        if (!editing && hasText(el)) drawTextBlock(ctx, el, theme);
       }
     });
   }

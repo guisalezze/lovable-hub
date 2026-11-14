@@ -13,6 +13,7 @@ import {
   Presentation,
   Redo2,
   Square,
+  StickyNote,
   Type,
   Undo2,
   Zap,
@@ -34,6 +35,7 @@ const TOOLS: { tool: Tool; label: string; shortcut: string; icon: ReactNode; hin
   { tool: "line", label: "Linha", shortcut: "L", icon: <Minus className="h-4 w-4" />, hint: "Para curvar: selecione e arraste a bolinha do meio" },
   { tool: "pencil", label: "Lápis", shortcut: "P", icon: <Pencil className="h-4 w-4" /> },
   { tool: "text", label: "Texto", shortcut: "T", icon: <Type className="h-4 w-4" /> },
+  { tool: "note", label: "Nota", shortcut: "N", icon: <StickyNote className="h-4 w-4" />, hint: "Clique para criar uma nota, ou arraste no tamanho que quiser" },
   { tool: "eraser", label: "Borracha", shortcut: "E", icon: <Eraser className="h-4 w-4" /> },
   { tool: "laser", label: "Laser", shortcut: "K", icon: <Zap className="h-4 w-4" /> },
 ];

@@ -6,6 +6,14 @@ export function textLines(text: string): string[] {
   return text.replace(/\r\n/g, "\n").split("\n");
 }
 
+// mesmas famílias de layout.ts (duplicadas aqui para text.ts não depender de layout.ts)
+const FAMILIES = {
+  sans: FONT_FAMILY,
+  serif: 'Georgia, "Times New Roman", serif',
+  mono: '"Cascadia Code", Consolas, "Courier New", monospace',
+  hand: '"Segoe Print", "Comic Sans MS", "Bradley Hand", cursive',
+};
+
 let measureCtx: CanvasRenderingContext2D | null | undefined;
 
 function getMeasureContext(): CanvasRenderingContext2D | null {
@@ -20,6 +28,16 @@ function getMeasureContext(): CanvasRenderingContext2D | null {
     measureCtx = null;
   }
   return measureCtx;
+}
+
+/** Largura de um texto numa fonte (px). Usa o canvas do navegador; nos testes (sem canvas), uma estimativa. */
+export function canvasMeasure(text: string, font: { size: number; bold: boolean; italic: boolean; family: string }): number {
+  const ctx = getMeasureContext();
+  if (ctx) {
+    ctx.font = `${font.italic ? "italic " : ""}${font.bold ? "700 " : ""}${font.size}px ${(FAMILIES as Record<string, string>)[font.family] ?? FONT_FAMILY}`;
+    return ctx.measureText(text).width;
+  }
+  return text.length * font.size * 0.55 * (font.bold ? 1.08 : 1);
 }
 
 /** Tamanho (unidades do mundo) que o texto ocupa. A largura é a da linha mais comprida. */

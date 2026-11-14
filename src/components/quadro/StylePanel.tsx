@@ -1,7 +1,21 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { COLOR_NAMES, FILL_COLORS, FONT_SIZES, STROKE_COLORS, STROKE_WIDTHS } from "@/lib/whiteboard/palette";
-import type { StylePatch } from "@/lib/whiteboard/types";
+import { FONT_FAMILIES } from "@/lib/whiteboard/layout";
+import type { FontFamily, StylePatch, TextAlign } from "@/lib/whiteboard/types";
+import { AlignCenter, AlignLeft, AlignRight } from "lucide-react";
+
+const FAMILIES: { family: FontFamily; label: string }[] = [
+  { family: "sans", label: "Sem serifa" },
+  { family: "serif", label: "Com serifa" },
+  { family: "mono", label: "Monoespaçada" },
+  { family: "hand", label: "Manuscrita" },
+];
+const ALIGNS: { align: TextAlign; label: string; icon: typeof AlignLeft }[] = [
+  { align: "left", label: "Alinhar à esquerda", icon: AlignLeft },
+  { align: "center", label: "Centralizar", icon: AlignCenter },
+  { align: "right", label: "Alinhar à direita", icon: AlignRight },
+];
 
 interface StylePanelProps {
   /** Valor atual de cada propriedade; undefined = a seleção tem valores diferentes. */
@@ -74,6 +88,26 @@ export function StylePanel({ style, onChange, textOnly = false, showFontSize = f
             </Choice>
           ))}
         </Section>
+      ) : null}
+      {showFontSize ? (
+        <>
+          <Section title="Fonte">
+            {FAMILIES.map((f) => (
+              <Choice key={f.family} label={`Fonte ${f.label}`} selected={style.fontFamily === f.family} onPick={() => onChange({ fontFamily: f.family })}>
+                <span className="text-sm leading-none" style={{ fontFamily: FONT_FAMILIES[f.family] }}>
+                  Aa
+                </span>
+              </Choice>
+            ))}
+          </Section>
+          <Section title="Alinhamento">
+            {ALIGNS.map((a) => (
+              <Choice key={a.align} label={a.label} selected={style.textAlign === a.align} onPick={() => onChange({ textAlign: a.align })}>
+                <a.icon className="h-4 w-4" />
+              </Choice>
+            ))}
+          </Section>
+        </>
       ) : null}
       {textOnly ? null : (
       <>

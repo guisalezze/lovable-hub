@@ -1,6 +1,6 @@
 import type { ElementType, Scene, WbElement } from "./types";
 
-const ELEMENT_TYPES: ElementType[] = ["rectangle", "diamond", "ellipse", "line", "arrow", "freedraw", "text"];
+const ELEMENT_TYPES: ElementType[] = ["rectangle", "diamond", "ellipse", "line", "arrow", "freedraw", "text", "note"];
 
 export function newId(): string {
   const c = globalThis.crypto;
@@ -65,6 +65,23 @@ function elementError(raw: unknown, index: number): string | null {
   if (typeof e.locked !== "boolean") return `${at}: campo "locked" inválido`;
   if (e.groupId !== null && typeof e.groupId !== "string") return `${at}: campo "groupId" inválido`;
   if (e.text !== undefined && typeof e.text !== "string") return `${at}: campo "text" inválido`;
+  if (e.textAlign !== undefined && !["left", "center", "right"].includes(e.textAlign as string)) return `${at}: campo "textAlign" inválido`;
+  if (e.fontFamily !== undefined && !["sans", "serif", "mono", "hand"].includes(e.fontFamily as string)) return `${at}: campo "fontFamily" inválido`;
+  if (e.runs !== undefined) {
+    const ok =
+      Array.isArray(e.runs) &&
+      e.runs.every((r) => {
+        const o = r as Record<string, unknown> | null;
+        return (
+          !!o &&
+          typeof o === "object" &&
+          typeof o.text === "string" &&
+          ["bold", "italic", "underline", "strike"].every((k) => o[k] === undefined || typeof o[k] === "boolean") &&
+          (o.highlight === undefined || typeof o.highlight === "string")
+        );
+      });
+    if (!ok) return `${at}: campo "runs" inválido`;
+  }
   if (e.fontSize !== undefined && !isNum(e.fontSize)) return `${at}: campo "fontSize" inválido`;
   if (e.bindings !== undefined) {
     const b = e.bindings as Record<string, unknown> | null;

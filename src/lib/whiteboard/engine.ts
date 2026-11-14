@@ -1,7 +1,9 @@
 import type { Camera, ElementType, LaserTrail, StylePatch, Tool, WbElement } from "./types";
 import { DEFAULT_STYLE } from "./palette";
 import { addLaserPoint, endLaserTrail, pruneLaser } from "./laser";
-import { measureText } from "./text";
+import { NOTE_DEFAULT_SIZE, NOTE_DEFAULT_STYLE, TEXT_TYPES, refitElement } from "./textblock";
+import { elementRuns, normalizeRuns, plainFromRuns, runsFromPlain, trimRunsEnd } from "./richtext";
+import type { TextRun } from "./types";
 import { computeSnap, type Guide } from "./snap";
 import { applyBindings, findBindTarget, isBindable, moveEndpoint, pruneBindings, reconcileMoving, syncBindings } from "./binding";
 import {
@@ -75,7 +77,8 @@ type Gesture =
   | { kind: "endpoint"; id: string; which: "start" | "end"; before: WbElement[]; changed: boolean }
   | { kind: "rotating"; id: string; center: Pt; startAngle: number; origAngle: number; before: WbElement[]; changed: boolean };
 
-const SHAPE_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "line", "arrow"];
+const SHAPE_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "line", "arrow", "note"];
+const TEXT_STYLE_KEYS = ["fontSize", "fontFamily", "textAlign"] as const;
 const HIT_TOLERANCE = 6; // px de tela
 const MIN_SHAPE = 2; // px de tela: menor que isso é só um clique
 
@@ -116,7 +119,7 @@ function transformElement(el: WbElement, from: Bounds, to: Bounds): WbElement {
   if (el.type === "text") {
     // redimensionar texto escala a fonte (e a caixa é remedida), nunca abaixo de 8
     const fontSize = Math.max(8, Math.round((el.fontSize ?? DEFAULT_STYLE.fontSize) * Math.max(sx, sy)));
-    return { ...el, x: to.x + (el.x - from.x) * sx, y: to.y + (el.y - from.y) * sy, fontSize, ...measureText(el.text ?? "", fontSize) };
+    return refitElement({ ...el, x: to.x + (el.x - from.x) * sx, y: to.y + (el.y - from.y) * sy, fontSize });
   }
   return {
     ...el,
@@ -145,6 +148,8 @@ export class WhiteboardEngine {
   /** Id do texto que está sendo escrito agora (o campo de texto da interface cuida dele). */
   editingId: string | null = null;
   private newTextId: string | null = null;
+  /** Como o elemento estava ao começar a edição (para saber se algo mudou ao confirmar). */
+  private editBase: WbElement | null = null;
   /** Espaço segurado: qualquer arrasto vira mover a câmera. */
   spaceHeld = false;
 
@@ -193,15 +198,13 @@ export class WhiteboardEngine {
     let changed = false;
     this.elements = this.elements.map((el) => {
       if (!targets.has(el.id)) return el;
-      // o tamanho da fonte só vale para texto
-      const applicable = keys.filter((k) => k !== "fontSize" || el.type === "text");
+      // tamanho, fonte e alinhamento só valem para quem guarda texto
+      const applicable = keys.filter((k) => !(TEXT_STYLE_KEYS as readonly string[]).includes(k) || TEXT_TYPES.includes(el.type));
       if (!applicable.some((k) => el[k] !== patch[k])) return el;
       changed = true;
       const next: WbElement = { ...el };
       for (const k of applicable) (next as unknown as Record<string, unknown>)[k] = patch[k];
-      if (el.type === "text" && applicable.includes("fontSize")) {
-        Object.assign(next, measureText(next.text ?? "", next.fontSize ?? DEFAULT_STYLE.fontSize));
-      }
+      if (applicable.some((k) => (TEXT_STYLE_KEYS as readonly string[]).includes(k))) return refitElement(next);
       return next;
     });
     if (changed) this.commit();
@@ -219,10 +222,22 @@ export class WhiteboardEngine {
       backgroundColor: common("backgroundColor"),
       strokeWidth: common("strokeWidth"),
       roundness: common("roundness"),
-      fontSize: (() => {
-        const texts = selected.filter((el) => el.type === "text");
-        return texts.length > 0 && texts.every((t) => t.fontSize === texts[0].fontSize) ? texts[0].fontSize : undefined;
-      })(),
+      ...this.textStyleOf(selected),
+    };
+  }
+
+  /** Valor comum de tamanho, fonte e alinhamento entre os elementos com texto da seleção. */
+  private textStyleOf(selected: WbElement[]): StylePatch {
+    const texts = selected.filter((el) => TEXT_TYPES.includes(el.type));
+    const common = <K extends (typeof TEXT_STYLE_KEYS)[number]>(key: K, fallback: StylePatch[K]): StylePatch[K] => {
+      if (texts.length === 0) return undefined;
+      const first = texts[0][key] ?? fallback;
+      return texts.every((t) => (t[key] ?? fallback) === first) ? first : undefined;
+    };
+    return {
+      fontSize: common("fontSize", DEFAULT_STYLE.fontSize),
+      fontFamily: common("fontFamily", DEFAULT_STYLE.fontFamily),
+      textAlign: common("textAlign", DEFAULT_STYLE.textAlign),
     };
   }
 
@@ -239,63 +254,109 @@ export class WhiteboardEngine {
 
   // ---- texto -----------------------------------------------------------
 
-  /** Começa um texto novo em w (coordenadas do mundo). Só entra no histórico quando for confirmado com conteúdo. */
+  /** Começa um texto solto novo em w (coordenadas do mundo). Só entra no histórico quando confirmado com conteúdo. */
   beginText(w: Pt): void {
     const fontSize = this.defaultStyle.fontSize ?? DEFAULT_STYLE.fontSize;
-    const el = createElement("text", w.x, w.y, { ...this.defaultStyle, text: "", fontSize, ...measureText("", fontSize) });
+    const el = refitElement(createElement("text", w.x, w.y, { ...this.defaultStyle, text: "", fontSize }));
     this.elements = [...this.elements, el];
     this.newTextId = el.id;
+    this.editBase = null;
     this.editingId = el.id;
     this.setSelection(new Set());
     this.cb.onEditText?.(el.id);
     this.invalidate();
   }
 
-  /** Abre a edição de um texto que já existe. */
+  /** Abre a edição do texto de um elemento que já existe (texto solto, nota ou forma). */
   editText(id: string): void {
-    const el = this.elements.find((e) => e.id === id && e.type === "text");
+    const el = this.elements.find((e) => e.id === id && TEXT_TYPES.includes(e.type));
     if (!el) return;
     this.newTextId = null;
+    this.editBase = el;
     this.editingId = id;
     this.setSelection(new Set([id]));
     this.cb.onEditText?.(id);
     this.invalidate();
   }
 
-  /** Duplo clique: edita o texto sob o cursor, ou cria um texto novo no vazio. */
+  /** O elemento que está sendo editado agora (com as mudanças de fonte/alinhamento feitas durante a edição). */
+  getEditingElement(): WbElement | null {
+    return this.elements.find((e) => e.id === this.editingId) ?? null;
+  }
+
+  /** Muda tamanho, fonte ou alinhamento do que está sendo escrito. Sem histórico: entra junto com o texto, ao confirmar. */
+  updateEditing(patch: Pick<StylePatch, "fontSize" | "fontFamily" | "textAlign">): void {
+    const id = this.editingId;
+    if (!id) return;
+    this.defaultStyle = { ...this.defaultStyle, ...patch };
+    this.elements = this.elements.map((e) => (e.id === id ? refitElement({ ...e, ...patch }) : e));
+    this.invalidate();
+  }
+
+  /** Duplo clique: edita o texto do elemento sob o cursor (ou da forma que contém o ponto), ou cria um texto novo no vazio. */
   doubleClick(screen: Pt): void {
     if (this.editingId) return;
     const w = this.toWorld(screen);
     const hit = this.hitElement(w);
     if (hit) {
-      if (hit.type === "text" && !hit.locked) this.editText(hit.id);
+      if (TEXT_TYPES.includes(hit.type) && !hit.locked) this.editText(hit.id);
+      return;
+    }
+    // forma sem preenchimento: só a borda "acerta", mas duplo clique no meio dela também edita o texto dela
+    const container = findBindTarget(this.elements, w, 0, new Set());
+    if (container) {
+      if (!container.locked) this.editText(container.id);
       return;
     }
     if (this.tool === "select" || this.tool === "text") this.beginText(w);
   }
 
-  /** Termina a edição. Texto novo vazio some sem rastro; texto antigo esvaziado é apagado (com desfazer). */
   commitText(id: string, text: string): void {
+    this.commitRuns(id, runsFromPlain(text));
+  }
+
+  /**
+   * Termina a edição com o texto (com estilo) dado.
+   * Texto solto vazio some (sem rastro se era novo; com desfazer se já existia). Forma ou nota esvaziada só perde o texto.
+   */
+  commitRuns(id: string, runs: TextRun[]): void {
     const el = this.elements.find((e) => e.id === id);
     if (!el || this.editingId !== id) return;
     const wasNew = this.newTextId === id;
+    const base = this.editBase;
     this.editingId = null;
     this.newTextId = null;
+    this.editBase = null;
     this.cb.onEditText?.(null);
 
-    const clean = text.replace(/\s+$/, ""); // sem espaços nem linhas em branco no fim
-    if (clean.trim() === "") {
-      this.elements = this.elements.filter((e) => e.id !== id);
-      this.setSelection(new Set([...this.selectedIds].filter((s) => s !== id)));
-      if (wasNew) this.invalidate();
-      else this.commit();
+    const clean = normalizeRuns(trimRunsEnd(runs));
+    const plain = plainFromRuns(clean);
+
+    if (plain.trim() === "") {
+      if (el.type === "text") {
+        this.elements = this.elements.filter((e) => e.id !== id);
+        this.setSelection(new Set([...this.selectedIds].filter((s) => s !== id)));
+        if (wasNew) this.invalidate();
+        else this.commit();
+        return;
+      }
+      const hadText = !!(base && (base.text || base.runs?.length));
+      this.elements = this.elements.map((e) => {
+        if (e.id !== id) return e;
+        const { text: _text, runs: _runs, ...rest } = e;  
+        return rest;
+      });
+      this.setSelection(new Set([id]));
+      if (hadText) this.commit();
+      else this.invalidate();
       return;
     }
 
-    const changed = wasNew || clean !== el.text;
-    this.elements = this.elements.map((e) =>
-      e.id === id ? { ...e, text: clean, ...measureText(clean, e.fontSize ?? DEFAULT_STYLE.fontSize) } : e,
-    );
+    const next = refitElement({ ...el, text: plain, runs: clean });
+    // mudou de verdade? compara o conteúdo e o estilo (não o tamanho, que é recalculado a partir deles)
+    const key = (e: WbElement) => JSON.stringify([normalizeRuns(elementRuns(e)), e.fontSize, e.fontFamily, e.textAlign]);
+    const changed = wasNew || !base || key(base) !== key(next);
+    if (changed) this.elements = this.elements.map((e) => (e.id === id ? next : e));
     if (this.tool === "text") {
       this.tool = "select";
       this.cb.onToolChange("select");
@@ -584,9 +645,16 @@ export class WhiteboardEngine {
 
     switch (g.kind) {
       case "creating": {
-        const el = this.elements.find((e) => e.id === g.id);
+        let el = this.elements.find((e) => e.id === g.id);
         const min = MIN_SHAPE / this.camera.zoom;
-        const tooSmall = !el || (el.width < min && el.height < min);
+        let tooSmall = !el || (el.width < min && el.height < min);
+        if (el && el.type === "note" && tooSmall) {
+          // um clique com a ferramenta de nota cria uma nota de tamanho padrão
+          el = { ...el, ...NOTE_DEFAULT_SIZE };
+          const sized = el;
+          this.elements = this.elements.map((e) => (e.id === g.id ? sized : e));
+          tooSmall = false;
+        }
         if (tooSmall) {
           this.elements = g.before;
         } else {
@@ -595,6 +663,7 @@ export class WhiteboardEngine {
           this.cb.onToolChange("select");
           this.setSelection(new Set([g.id]));
           this.commit();
+          if (el && el.type === "note") this.editText(g.id); // nota nova já abre para escrever
         }
         break;
       }
@@ -724,7 +793,16 @@ export class WhiteboardEngine {
 
   private downCreate(w: Pt): void {
     const type = this.tool as ElementType;
-    const el = createElement(type, w.x, w.y, { ...this.defaultStyle, ...(type === "line" || type === "arrow" ? { points: [[0, 0], [0, 0]] } : {}) });
+    const ds = this.defaultStyle;
+    const noteStyle =
+      type === "note"
+        ? {
+            backgroundColor: ds.backgroundColor && ds.backgroundColor !== "transparent" ? ds.backgroundColor : NOTE_DEFAULT_STYLE.backgroundColor,
+            strokeColor: ds.strokeColor && ds.strokeColor !== "auto" ? ds.strokeColor : NOTE_DEFAULT_STYLE.strokeColor,
+            fontSize: ds.fontSize ?? NOTE_DEFAULT_STYLE.fontSize,
+          }
+        : {};
+    const el = createElement(type, w.x, w.y, { ...ds, ...noteStyle, ...(type === "line" || type === "arrow" ? { points: [[0, 0], [0, 0]] } : {}) });
     this.gesture = { kind: "creating", id: el.id, start: w, before: this.elements };
     this.elements = [...this.elements, el];
     this.invalidate();
