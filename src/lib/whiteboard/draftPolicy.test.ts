@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { decideDraft } from "./draftPolicy";
-import { createElement } from "./scene";
+import { createElement, docFromElements } from "./scene";
+import { addPage } from "./pages";
 
-const mine = [createElement("rectangle", 0, 0, { width: 10, height: 10 })];
-const theirs = [createElement("ellipse", 50, 50, { width: 20, height: 20 })];
-const server = (updatedAt: string, elements = theirs) => ({ updatedAt, elements });
-const draft = (baseUpdatedAt: string | null, savedAt = 1000) => ({ elements: mine, savedAt, baseUpdatedAt });
+const mine = docFromElements([createElement("rectangle", 0, 0, { width: 10, height: 10 })], "p1");
+const theirs = docFromElements([createElement("ellipse", 50, 50, { width: 20, height: 20 })], "p1");
+const server = (updatedAt: string, doc = theirs) => ({ updatedAt, doc });
+const draft = (baseUpdatedAt: string | null, savedAt = 1000) => ({ doc: mine, savedAt, baseUpdatedAt });
 
 describe("decideDraft", () => {
   it("sem rascunho não há o que recuperar", () => {
@@ -31,7 +32,12 @@ describe("decideDraft", () => {
   });
 
   it("rascunho idêntico ao que já está no servidor é ignorado, mesmo com versão diferente", () => {
-    expect(decideDraft({ elements: theirs, savedAt: 5, baseUpdatedAt: "T0" }, server("T9", theirs))).toBe("none");
-    expect(decideDraft({ elements: theirs, savedAt: 5, baseUpdatedAt: "T9" }, server("T9", theirs))).toBe("none");
+    expect(decideDraft({ doc: theirs, savedAt: 5, baseUpdatedAt: "T0" }, server("T9", theirs))).toBe("none");
+    expect(decideDraft({ doc: theirs, savedAt: 5, baseUpdatedAt: "T9" }, server("T9", theirs))).toBe("none");
+  });
+
+  it("uma página a mais já é uma diferença", () => {
+    const withExtra = addPage(mine).doc;
+    expect(decideDraft({ doc: withExtra, savedAt: 1, baseUpdatedAt: "T1" }, server("T1", mine))).toBe("recover");
   });
 });

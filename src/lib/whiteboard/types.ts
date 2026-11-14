@@ -77,6 +77,20 @@ export interface Camera {
   zoom: number;
 }
 
+/** Uma página do quadro (um quadro pode ter várias, como abas). */
+export interface Page {
+  id: string;
+  name: string;
+  elements: WbElement[];
+}
+
+/** Documento completo de um quadro: páginas e qual está aberta. */
+export interface SceneDoc {
+  version: 2;
+  pages: Page[];
+  activePageId: string;
+}
+
 export interface Scene {
   version: 1;
   elements: WbElement[];

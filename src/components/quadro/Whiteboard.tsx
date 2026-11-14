@@ -4,7 +4,9 @@ import { bindCanvas, type CanvasBinding } from "@/lib/whiteboard/bindCanvas";
 import { readThemeColors, type ThemeColors } from "@/lib/whiteboard/theme";
 import { fitCamera, zoomAt } from "@/lib/whiteboard/camera";
 import { getSelectionBounds } from "@/lib/whiteboard/geometry";
-import type { Camera, StylePatch, Tool, WbElement } from "@/lib/whiteboard/types";
+import type { Camera, SceneDoc, StylePatch, Tool, WbElement } from "@/lib/whiteboard/types";
+import { activePage, addPage, deletePage, duplicatePage, movePage, renamePage, setActivePage, updateActiveElements } from "@/lib/whiteboard/pages";
+import { PageTabs } from "./PageTabs";
 import { BottomBar, ToolPalette } from "./Toolbar";
 import { StylePanel } from "./StylePanel";
 import { RichTextEditor } from "./RichTextEditor";
@@ -20,10 +22,10 @@ import { copyPngToClipboard, downloadBlob, exportFileName, exportToPng, exportTo
 const DRAWING_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "arrow", "line", "pencil", "text", "note"];
 
 export interface WhiteboardProps {
-  /** Elementos com que o quadro abre. Lido só uma vez, na montagem. */
-  initialElements: WbElement[];
-  /** Chamado uma vez por gesto concluído (e a cada desfazer/refazer). */
-  onChange: (elements: WbElement[]) => void;
+  /** Documento (páginas) com que o quadro abre. Lido só uma vez, na montagem. */
+  initialDoc: SceneDoc;
+  /** Chamado uma vez por gesto concluído (e a cada desfazer/refazer, e a cada mudança de página). */
+  onChange: (doc: SceneDoc) => void;
   /** Ilha no canto superior esquerdo (voltar, título, status de salvamento). */
   header?: ReactNode;
   /** Faixa no topo, no centro (avisos como conflito de edição). */
@@ -36,14 +38,16 @@ export interface WhiteboardProps {
  * Quadro: canvas + barras. Só recebe e entrega elementos; não sabe nada de banco de dados,
  * então funciona igual dentro do CRM e numa página de teste.
  */
-export function Whiteboard({ initialElements, onChange, header, banner, exportName = "quadro" }: WhiteboardProps) {
+export function Whiteboard({ initialDoc, onChange, header, banner, exportName = "quadro" }: WhiteboardProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<WhiteboardEngine | null>(null);
   const bindingRef = useRef<CanvasBinding | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const initialRef = useRef(initialElements);
+  const initialRef = useRef(initialDoc);
+  const docRef = useRef(initialDoc); // documento atual (a página aberta é atualizada a cada gesto)
+  const [doc, setDoc] = useState(initialDoc); // só muda quando as páginas mudam (abas)
 
   const presentation = usePresentationMode(rootRef);
   const presentationRef = useRef(false);
@@ -107,7 +111,9 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
     };
     const engine = new WhiteboardEngine({
       onChange: (els) => {
-        onChangeRef.current(els);
+        const next = updateActiveElements(docRef.current, els);
+        docRef.current = next;
+        onChangeRef.current(next);
         syncStyle();
       },
       onToolChange: (t) => {
@@ -124,7 +130,7 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
         setEditing(el ? { el, camera: { ...engine.camera }, theme } : null); // o campo de texto fica onde o texto vai aparecer
       },
     });
-    engine.load(initialRef.current);
+    engine.load(activePage(initialRef.current)?.elements ?? []);
 
     binding = bindCanvas(canvas, engine, {
       root,
@@ -208,6 +214,49 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
   );
 
   const focusBoard = () => rootRef.current?.focus({ preventScroll: true });
+
+  /** Aplica uma mudança de páginas. `reload` = a página aberta mudou: carrega os elementos dela no quadro. */
+  const applyDoc = (next: SceneDoc, reload: boolean) => {
+    docRef.current = next;
+    setDoc(next);
+    const engine = engineRef.current;
+    if (reload && engine) {
+      engine.load(activePage(next)?.elements ?? []);
+      engine.camera = fitCamera(getSelectionBounds(engine.elements), viewport());
+      bindingRef.current?.render();
+    }
+    onChangeRef.current(next);
+  };
+  const pageActions = {
+    select: (id: string) => {
+      const next = setActivePage(docRef.current, id);
+      if (next !== docRef.current) applyDoc(next, true);
+      focusBoard();
+    },
+    add: () => {
+      applyDoc(addPage(docRef.current).doc, true);
+      focusBoard();
+    },
+    rename: (id: string, name: string) => {
+      const next = renamePage(docRef.current, id, name);
+      if (next !== docRef.current) applyDoc(next, false);
+    },
+    remove: (id: string) => {
+      const before = docRef.current;
+      const next = deletePage(before, id);
+      if (next !== before) applyDoc(next, next.activePageId !== before.activePageId);
+      focusBoard();
+    },
+    duplicate: (id: string) => {
+      const { doc: next } = duplicatePage(docRef.current, id);
+      if (next !== docRef.current) applyDoc(next, true);
+      focusBoard();
+    },
+    move: (id: string, toIndex: number) => {
+      const next = movePage(docRef.current, id, toIndex);
+      if (next !== docRef.current) applyDoc(next, false);
+    },
+  };
 
   const applyStyle = (patch: StylePatch) => {
     const engine = engineRef.current;
@@ -364,6 +413,21 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
       ) : null}
 
       {banner ? <div className="absolute left-1/2 top-16 z-20 -translate-x-1/2">{banner}</div> : null}
+
+      {!presentation.active ? (
+        <div className="absolute bottom-3 right-3 z-10">
+          <PageTabs
+            pages={doc.pages.map((p) => ({ id: p.id, name: p.name }))}
+            activeId={doc.activePageId}
+            onSelect={pageActions.select}
+            onAdd={pageActions.add}
+            onRename={pageActions.rename}
+            onDelete={pageActions.remove}
+            onDuplicate={pageActions.duplicate}
+            onMove={pageActions.move}
+          />
+        </div>
+      ) : null}
 
       {!presentation.active ? (
         <div className="absolute bottom-3 left-3 z-10">

@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useWhiteboards, type WhiteboardListItem } from "@/hooks/useWhiteboards";
+import { BackupMenu } from "@/components/quadro/BackupMenu";
 
 export default function Quadros() {
   const navigate = useNavigate();
@@ -57,10 +58,13 @@ export default function Quadros() {
           <h1 className="text-2xl font-semibold tracking-tight">Quadros</h1>
           <p className="text-sm text-muted-foreground">Desenhe funis, estratégias e aulas num espaço sem limites.</p>
         </div>
-        <Button onClick={createAndOpen} disabled={create.isPending}>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo quadro
-        </Button>
+        <div className="flex items-center gap-2">
+          <BackupMenu />
+          <Button onClick={createAndOpen} disabled={create.isPending}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo quadro
+          </Button>
+        </div>
       </div>
 
       {list.isLoading ? (

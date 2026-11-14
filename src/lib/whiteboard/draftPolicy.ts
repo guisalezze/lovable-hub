@@ -1,9 +1,9 @@
-import type { WbElement } from "./types";
+import type { SceneDoc } from "./types";
 
 export type DraftDecision = "none" | "recover" | "conflict";
 
 interface Draft {
-  elements: WbElement[];
+  doc: SceneDoc;
   savedAt: number;
   /** updated_at do servidor no momento em que o rascunho foi gravado (a versão em que ele se baseia). */
   baseUpdatedAt: string | null;
@@ -17,8 +17,8 @@ interface Draft {
  *   a pessoa escolhe, nada é sobrescrito em silêncio.
  * Nunca compara relógios: a hora do computador não prova nada sobre qual versão é mais nova.
  */
-export function decideDraft(draft: Draft | null, server: { updatedAt: string; elements: WbElement[] }): DraftDecision {
+export function decideDraft(draft: Draft | null, server: { updatedAt: string; doc: SceneDoc }): DraftDecision {
   if (!draft) return "none";
-  if (JSON.stringify(draft.elements) === JSON.stringify(server.elements)) return "none";
+  if (JSON.stringify(draft.doc) === JSON.stringify(server.doc)) return "none";
   return draft.baseUpdatedAt !== null && draft.baseUpdatedAt === server.updatedAt ? "recover" : "conflict";
 }

@@ -10,8 +10,10 @@ import { useWhiteboard } from "@/hooks/useWhiteboards";
 import { clearDraft, fetchUpdatedAt, loadDraft, saveDraft, saveScene, saveTitle, type WhiteboardRow } from "@/lib/whiteboard/api";
 import { createAutosaver, type Autosaver, type SaveStatus } from "@/lib/whiteboard/autosave";
 import { decideDraft } from "@/lib/whiteboard/draftPolicy";
-import { parseScene } from "@/lib/whiteboard/scene";
-import type { WbElement } from "@/lib/whiteboard/types";
+import { parseDoc } from "@/lib/whiteboard/scene";
+import { renderThumbnail, shouldRegenerateThumbnail } from "@/lib/whiteboard/thumbnail";
+import { readThemeColors } from "@/lib/whiteboard/theme";
+import type { SceneDoc } from "@/lib/whiteboard/types";
 
 // O quadro ocupa toda a área da página, por cima do preenchimento do layout do CRM.
 const FRAME = "-m-3 h-[calc(100vh-3rem)] sm:-m-4 md:-m-6 md:h-[calc(100vh-3.5rem)]";
@@ -44,24 +46,25 @@ export default function QuadroEditor() {
 
   // Formato desconhecido ou corrompido: mostra o motivo e NÃO abre o editor,
   // para o autosave nunca gravar por cima do que está no banco.
-  const parsed = parseScene(data.scene);
-  if (!("elements" in parsed)) return <Message title="Não consegui abrir este quadro" detail={parsed.error} />;
+  const parsed = parseDoc(data.scene);
+  if (!("doc" in parsed)) return <Message title="Não consegui abrir este quadro" detail={parsed.error} />;
 
-  return <LoadedEditor key={data.id} row={data} elements={parsed.elements} />;
+  return <LoadedEditor key={data.id} row={data} doc={parsed.doc} />;
 }
 
-function LoadedEditor({ row, elements }: { row: WhiteboardRow; elements: WbElement[] }) {
+function LoadedEditor({ row, doc }: { row: WhiteboardRow; doc: SceneDoc }) {
   const queryClient = useQueryClient();
 
   // Rascunho local = alterações que podem não ter chegado ao banco. Decide pela VERSÃO em que ele se baseia,
   // nunca pelo relógio: se o banco mudou depois, abre em conflito e a pessoa escolhe.
   const [draft] = useState(() => loadDraft(row.id));
-  const [decision] = useState(() => decideDraft(draft, { updatedAt: row.updated_at, elements }));
-  const [initial] = useState<WbElement[]>(() => (decision !== "none" && draft ? draft.elements : elements));
+  const [decision] = useState(() => decideDraft(draft, { updatedAt: row.updated_at, doc }));
+  const [initial] = useState<SceneDoc>(() => (decision !== "none" && draft ? draft.doc : doc));
 
   const expectedRef = useRef(row.updated_at);
-  const latestRef = useRef<WbElement[]>(initial);
-  const saverRef = useRef<Autosaver<WbElement[]> | null>(null);
+  const latestRef = useRef<SceneDoc>(initial);
+  const saverRef = useRef<Autosaver<SceneDoc> | null>(null);
+  const thumbAtRef = useRef(0); // quando a última miniatura foi gerada (a imagem não é refeita a cada autosave)
   const statusRef = useRef<SaveStatus>(decision === "conflict" ? "conflict" : "saved");
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
   const savedTitleRef = useRef(row.title);
@@ -82,15 +85,28 @@ function LoadedEditor({ row, elements }: { row: WhiteboardRow; elements: WbEleme
   }, []);
 
   useEffect(() => {
-    const saver = createAutosaver<WbElement[]>({
+    // miniatura da primeira página, no máximo a cada ~20 s; se falhar, o quadro salva do mesmo jeito (sem mexer na miniatura)
+    const thumbnailFor = async (d: SceneDoc): Promise<string | null | undefined> => {
+      if (!shouldRegenerateThumbnail(thumbAtRef.current, Date.now())) return undefined;
+      try {
+        const url = await renderThumbnail(d.pages[0].elements, readThemeColors());
+        thumbAtRef.current = Date.now();
+        return url;
+      } catch {
+        return undefined;
+      }
+    };
+
+    const saver = createAutosaver<SceneDoc>({
       delay: 1500,
       onStatus: setStatus,
-      save: (els) =>
+      save: (d) =>
         enqueue(async () => {
-          const result = await saveScene(row.id, els, expectedRef.current);
+          const thumbnail = await thumbnailFor(d);
+          const result = await saveScene(row.id, d, expectedRef.current, thumbnail);
           if ("updatedAt" in result) {
             expectedRef.current = result.updatedAt;
-            if (latestRef.current === els) clearDraft(row.id);
+            if (latestRef.current === d) clearDraft(row.id);
           }
           return result;
         }),
@@ -120,10 +136,10 @@ function LoadedEditor({ row, elements }: { row: WhiteboardRow; elements: WbEleme
   }, [row.id, decision, draft, enqueue, setStatus]);
 
   const handleChange = useCallback(
-    (els: WbElement[]) => {
-      latestRef.current = els;
-      saveDraft(row.id, els, expectedRef.current);
-      saverRef.current?.schedule(els);
+    (d: SceneDoc) => {
+      latestRef.current = d;
+      saveDraft(row.id, d, expectedRef.current);
+      saverRef.current?.schedule(d);
     },
     [row.id],
   );
@@ -180,7 +196,7 @@ function LoadedEditor({ row, elements }: { row: WhiteboardRow; elements: WbEleme
   return (
     <div className={FRAME}>
       <Whiteboard
-        initialElements={initial}
+        initialDoc={initial}
         onChange={handleChange}
         exportName={title}
         banner={banner}

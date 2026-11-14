@@ -1,4 +1,4 @@
-import type { ElementType, Scene, WbElement } from "./types";
+import type { ElementType, Page, Scene, SceneDoc, WbElement } from "./types";
 
 const ELEMENT_TYPES: ElementType[] = ["rectangle", "diamond", "ellipse", "line", "arrow", "freedraw", "text", "note"];
 
@@ -93,6 +93,15 @@ function elementError(raw: unknown, index: number): string | null {
   return null;
 }
 
+/** Valida uma lista de elementos. Devolve a mensagem do primeiro problema, ou null se está tudo certo. */
+export function validateElements(elements: unknown[]): string | null {
+  for (let i = 0; i < elements.length; i++) {
+    const err = elementError(elements[i], i);
+    if (err) return err;
+  }
+  return null;
+}
+
 /** Valida o formato sem "consertar" nada: dado estranho vira erro, nunca perda silenciosa. */
 export function parseScene(raw: unknown): ParseResult {
   if (!raw || typeof raw !== "object") return { ok: false, error: "A cena não é um objeto válido." };
@@ -106,4 +115,52 @@ export function parseScene(raw: unknown): ParseResult {
     if (err) return { ok: false, error: err };
   }
   return { ok: true, elements: s.elements as WbElement[] };
+}
+
+// ---- documento com páginas (versão 2) --------------------------------------
+
+/** Um quadro novo ou vindo do formato antigo: uma página só. */
+export function docFromElements(elements: WbElement[], pageId: string = newId()): SceneDoc {
+  return { version: 2, pages: [{ id: pageId, name: "Página 1", elements }], activePageId: pageId };
+}
+
+export function serializeDoc(doc: SceneDoc): SceneDoc {
+  return { version: 2, pages: doc.pages.map((p) => ({ id: p.id, name: p.name, elements: p.elements })), activePageId: doc.activePageId };
+}
+
+type ParseDocResult = { ok: true; doc: SceneDoc } | { ok: false; error: string };
+
+/**
+ * Lê um documento guardado. Aceita o formato novo (páginas) e o antigo (uma lista de elementos, que vira
+ * uma página só, sempre com o mesmo id para que ler duas vezes dê o mesmo resultado). Não "conserta" nada.
+ */
+export function parseDoc(raw: unknown): ParseDocResult {
+  if (!raw || typeof raw !== "object") return { ok: false, error: "O quadro não é um objeto válido." };
+  const s = raw as Record<string, unknown>;
+
+  if (s.version === 1) {
+    const legacy = parseScene(raw);
+    return "elements" in legacy ? { ok: true, doc: docFromElements(legacy.elements, "p1") } : { ok: false, error: legacy.error };
+  }
+  if (s.version !== 2) {
+    return { ok: false, error: `Este quadro usa uma versão de formato desconhecida (versão ${String(s.version)}).` };
+  }
+  if (!Array.isArray(s.pages) || s.pages.length === 0) return { ok: false, error: "O quadro está sem páginas." };
+
+  const pages: Page[] = [];
+  const ids = new Set<string>();
+  for (const p of s.pages as unknown[]) {
+    const o = p as Record<string, unknown> | null;
+    if (!o || typeof o !== "object" || typeof o.id !== "string" || o.id === "" || typeof o.name !== "string") {
+      return { ok: false, error: "Uma das páginas está com formato inválido." };
+    }
+    if (ids.has(o.id)) return { ok: false, error: "Duas páginas têm o mesmo identificador." };
+    ids.add(o.id);
+    if (!Array.isArray(o.elements)) return { ok: false, error: `Página "${o.name}": a lista de elementos está inválida.` };
+    const err = validateElements(o.elements);
+    if (err) return { ok: false, error: `Página "${o.name}": ${err}` };
+    pages.push({ id: o.id, name: o.name, elements: o.elements as WbElement[] });
+  }
+  const activePageId = typeof s.activePageId === "string" && ids.has(s.activePageId) ? s.activePageId : pages[0].id;
+  return { ok: true, doc: { version: 2, pages, activePageId } };
 }

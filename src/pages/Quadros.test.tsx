@@ -20,6 +20,8 @@ vi.mock("@/hooks/useWhiteboards", () => ({
   }),
 }));
 
+vi.mock("@/components/quadro/BackupMenu", () => ({ BackupMenu: () => null }));
+
 import Quadros from "./Quadros";
 
 const boards = [

@@ -133,14 +133,14 @@ export function exportToSvg(elements: WbElement[], opts: ExportOptions): string 
   return new XMLSerializer().serializeToString(svg);
 }
 
-/** PNG a partir do SVG (escala 2 = nítido em telas de alta densidade). */
-export async function exportToPng(elements: WbElement[], opts: ExportOptions & { scale?: number }): Promise<Blob> {
-  const svgText = exportToSvg(elements, opts);
-  const scale = opts.scale ?? 2;
+/** Largura e altura (do cabeçalho) de um SVG gerado por exportToSvg. */
+export function svgSize(svgText: string): { width: number; height: number } {
   const doc = new DOMParser().parseFromString(svgText, "image/svg+xml").documentElement;
-  const width = Math.round(Number(doc.getAttribute("width")) * scale);
-  const height = Math.round(Number(doc.getAttribute("height")) * scale);
+  return { width: Math.max(1, Number(doc.getAttribute("width")) || 1), height: Math.max(1, Number(doc.getAttribute("height")) || 1) };
+}
 
+/** Desenha um SVG (texto) num canvas do tamanho dado. */
+export async function svgToCanvas(svgText: string, width: number, height: number): Promise<HTMLCanvasElement> {
   const url = URL.createObjectURL(new Blob([svgText], { type: "image/svg+xml;charset=utf-8" }));
   try {
     const img = new Image();
@@ -157,12 +157,21 @@ export async function exportToPng(elements: WbElement[], opts: ExportOptions & {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Não consegui gerar a imagem");
     ctx.drawImage(img, 0, 0, width, height);
-    return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Não consegui gerar a imagem"))), "image/png");
-    });
+    return canvas;
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** PNG a partir do SVG (escala 2 = nítido em telas de alta densidade). */
+export async function exportToPng(elements: WbElement[], opts: ExportOptions & { scale?: number }): Promise<Blob> {
+  const svgText = exportToSvg(elements, opts);
+  const scale = opts.scale ?? 2;
+  const size = svgSize(svgText);
+  const canvas = await svgToCanvas(svgText, Math.round(size.width * scale), Math.round(size.height * scale));
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Não consegui gerar a imagem"))), "image/png");
+  });
 }
 
 /** Copia o PNG para a área de transferência. Devolve false se o navegador não permitir. */
