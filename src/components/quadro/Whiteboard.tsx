@@ -4,8 +4,11 @@ import { bindCanvas, type CanvasBinding } from "@/lib/whiteboard/bindCanvas";
 import { readThemeColors } from "@/lib/whiteboard/theme";
 import { fitCamera, zoomAt } from "@/lib/whiteboard/camera";
 import { getSelectionBounds } from "@/lib/whiteboard/geometry";
-import type { Tool, WbElement } from "@/lib/whiteboard/types";
+import type { StylePatch, Tool, WbElement } from "@/lib/whiteboard/types";
 import { BottomBar, ToolPalette } from "./Toolbar";
+import { StylePanel } from "./StylePanel";
+
+const DRAWING_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "arrow", "line", "pencil"];
 
 export interface WhiteboardProps {
   /** Elementos com que o quadro abre. Lido só uma vez, na montagem. */
@@ -35,6 +38,8 @@ export function Whiteboard({ initialElements, onChange, header, banner }: Whiteb
   const [zoom, setZoom] = useState(1);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const [style, setStyle] = useState<StylePatch>({});
+  const [selectedCount, setSelectedCount] = useState(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -45,10 +50,20 @@ export function Whiteboard({ initialElements, onChange, header, banner }: Whiteb
     let fitted = false;
     let binding: CanvasBinding | null = null;
 
+    const syncStyle = () => setStyle(engine.getActiveStyle());
     const engine = new WhiteboardEngine({
-      onChange: (els) => onChangeRef.current(els),
-      onToolChange: setTool,
-      onSelectionChange: () => {},
+      onChange: (els) => {
+        onChangeRef.current(els);
+        syncStyle();
+      },
+      onToolChange: (t) => {
+        setTool(t);
+        syncStyle();
+      },
+      onSelectionChange: (ids) => {
+        setSelectedCount(ids.length);
+        syncStyle();
+      },
       onRequestRender: () => binding?.render(),
     });
     engine.load(initialRef.current);
@@ -107,6 +122,16 @@ export function Whiteboard({ initialElements, onChange, header, banner }: Whiteb
 
   const focusBoard = () => rootRef.current?.focus({ preventScroll: true });
 
+  const applyStyle = (patch: StylePatch) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.applyStyle(patch);
+    setStyle(engine.getActiveStyle());
+    focusBoard();
+  };
+
+  const showStylePanel = selectedCount > 0 || DRAWING_TOOLS.includes(tool);
+
   return (
     <div ref={rootRef} data-whiteboard-root tabIndex={0} className="relative h-full w-full select-none overflow-hidden bg-background outline-none">
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />
@@ -122,6 +147,12 @@ export function Whiteboard({ initialElements, onChange, header, banner }: Whiteb
           }}
         />
       </div>
+
+      {showStylePanel ? (
+        <div className="absolute left-3 top-20 z-10">
+          <StylePanel style={style} onChange={applyStyle} />
+        </div>
+      ) : null}
 
       {banner ? <div className="absolute left-1/2 top-16 z-20 -translate-x-1/2">{banner}</div> : null}
 

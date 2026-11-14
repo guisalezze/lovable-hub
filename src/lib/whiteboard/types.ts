@@ -63,3 +63,6 @@ export interface LaserTrail {
   points: LaserPoint[];
   ended: number | null;
 }
+
+/** Propriedades de aparência que o painel de estilo edita. */
+export type StylePatch = Partial<Pick<WbElement, "strokeColor" | "backgroundColor" | "strokeWidth" | "roundness">>;

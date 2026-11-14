@@ -1,4 +1,5 @@
-import type { Camera, ElementType, LaserTrail, Tool, WbElement } from "./types";
+import type { Camera, ElementType, LaserTrail, StylePatch, Tool, WbElement } from "./types";
+import { DEFAULT_STYLE } from "./palette";
 import { createElement } from "./scene";
 import { History } from "./history";
 import { panBy, screenToWorld } from "./camera";
@@ -91,6 +92,8 @@ export class WhiteboardEngine {
   selectedIds = new Set<string>();
   marquee: Bounds | null = null;
   trails: LaserTrail[] = [];
+  /** Estilo das próximas formas (o que o painel mostra quando nada está selecionado). */
+  defaultStyle: StylePatch = {};
   /** Espaço segurado: qualquer arrasto vira mover a câmera. */
   spaceHeld = false;
 
@@ -125,6 +128,44 @@ export class WhiteboardEngine {
   selectAll(): void {
     this.setSelection(new Set(this.elements.map((el) => el.id)));
     this.invalidate();
+  }
+
+  /** Aplica aparência à seleção (um passo de histórico) e vira o padrão das próximas formas. */
+  applyStyle(patch: StylePatch): void {
+    this.defaultStyle = { ...this.defaultStyle, ...patch };
+    const targets = new Set(this.getSelected().filter((el) => !el.locked).map((el) => el.id));
+    if (targets.size === 0) {
+      this.invalidate();
+      return;
+    }
+    const keys = (Object.keys(patch) as (keyof StylePatch)[]).filter((k) => patch[k] !== undefined);
+    let changed = false;
+    this.elements = this.elements.map((el) => {
+      if (!targets.has(el.id) || !keys.some((k) => el[k] !== patch[k])) return el;
+      changed = true;
+      return { ...el, ...patch };
+    });
+    if (changed) this.commit();
+    else this.invalidate();
+  }
+
+  /** Valor comum da seleção em cada propriedade (undefined = valores misturados); null sem seleção. */
+  getStyleOfSelection(): StylePatch | null {
+    const selected = this.getSelected();
+    if (selected.length === 0) return null;
+    const common = <K extends keyof StylePatch>(key: K): StylePatch[K] =>
+      selected.every((el) => el[key] === selected[0][key]) ? selected[0][key] : undefined;
+    return {
+      strokeColor: common("strokeColor"),
+      backgroundColor: common("backgroundColor"),
+      strokeWidth: common("strokeWidth"),
+      roundness: common("roundness"),
+    };
+  }
+
+  /** O que o painel de estilo deve mostrar agora. */
+  getActiveStyle(): StylePatch {
+    return this.getStyleOfSelection() ?? { ...DEFAULT_STYLE, ...this.defaultStyle };
   }
 
   clearSelection(): void {
@@ -321,14 +362,14 @@ export class WhiteboardEngine {
 
   private downCreate(w: Pt): void {
     const type = this.tool as ElementType;
-    const el = createElement(type, w.x, w.y, type === "line" || type === "arrow" ? { points: [[0, 0], [0, 0]] } : {});
+    const el = createElement(type, w.x, w.y, { ...this.defaultStyle, ...(type === "line" || type === "arrow" ? { points: [[0, 0], [0, 0]] } : {}) });
     this.gesture = { kind: "creating", id: el.id, start: w, before: this.elements };
     this.elements = [...this.elements, el];
     this.invalidate();
   }
 
   private downPencil(w: Pt): void {
-    const el = createElement("freedraw", w.x, w.y, { points: [[0, 0]] });
+    const el = createElement("freedraw", w.x, w.y, { ...this.defaultStyle, points: [[0, 0]] });
     this.gesture = { kind: "drawing", id: el.id, before: this.elements };
     this.elements = [...this.elements, el];
     this.invalidate();
