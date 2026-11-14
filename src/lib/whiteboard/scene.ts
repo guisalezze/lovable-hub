@@ -1,6 +1,6 @@
 import type { ElementType, Page, Scene, SceneDoc, WbElement } from "./types";
 
-const ELEMENT_TYPES: ElementType[] = ["rectangle", "diamond", "ellipse", "line", "arrow", "freedraw", "text", "note"];
+const ELEMENT_TYPES: ElementType[] = ["rectangle", "diamond", "ellipse", "line", "arrow", "freedraw", "text", "note", "image", "media"];
 
 export function newId(): string {
   const c = globalThis.crypto;
@@ -89,6 +89,11 @@ function elementError(raw: unknown, index: number): string | null {
     if (!ok) return `${at}: campo "bindings" inválido`;
   }
   if (e.bend !== undefined && !(Array.isArray(e.bend) && e.bend.length === 2 && isNum(e.bend[0]) && isNum(e.bend[1]))) return `${at}: campo "bend" inválido`;
+  for (const k of ["fileId", "mime", "fileName"]) if (e[k] !== undefined && typeof e[k] !== "string") return `${at}: campo "${k}" inválido`;
+  const isBox = (v: unknown, keys: string[]) => !!v && typeof v === "object" && !Array.isArray(v) && keys.every((k) => isNum((v as Record<string, unknown>)[k]));
+  if (e.natural !== undefined && !isBox(e.natural, ["width", "height"])) return `${at}: campo "natural" inválido`;
+  if (e.crop !== undefined && !isBox(e.crop, ["x", "y", "width", "height"])) return `${at}: campo "crop" inválido`;
+  for (const k of ["flipX", "flipY"]) if (e[k] !== undefined && typeof e[k] !== "boolean") return `${at}: campo "${k}" inválido`;
   if (e.points !== undefined && !isPoints(e.points)) return `${at}: campo "points" inválido`;
   return null;
 }

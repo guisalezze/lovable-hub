@@ -5,6 +5,7 @@ import { rotatedAabb } from "./geometry";
 import { absPoints, buildDrawables, freedrawPath } from "./render";
 import { FONT_FAMILIES } from "./layout";
 import { hasText, textBlockFor } from "./textblock";
+import { sourceRect } from "./imageops";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -13,6 +14,8 @@ export interface ExportOptions {
   /** Desenha o fundo do tema. Com "auto" o traço usa a cor de texto do tema, então sem fundo pode ficar invisível. */
   background: boolean;
   padding?: number;
+  /** Imagens como data URL, por id de arquivo (veja collectImageData). Sem a imagem, aparece um quadro vazio no lugar. */
+  images?: Record<string, string>;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -58,6 +61,51 @@ function appendSvgText(group: SVGGElement, el: WbElement, theme: ThemeColors) {
       }
       addText(seg.text, x, y, seg.style);
     }
+  }
+}
+
+function appendSvgMedia(group: SVGElement, el: WbElement, opts: ExportOptions): void {
+  const href = el.type === "image" && el.fileId ? opts.images?.[el.fileId] : undefined;
+  if (href) {
+    const s = sourceRect(el);
+    const holder = document.createElementNS(SVG_NS, "svg");
+    holder.setAttribute("x", String(round2(el.x)));
+    holder.setAttribute("y", String(round2(el.y)));
+    holder.setAttribute("width", String(round2(el.width)));
+    holder.setAttribute("height", String(round2(el.height)));
+    holder.setAttribute("viewBox", `${s.sx} ${s.sy} ${s.sw} ${s.sh}`);
+    holder.setAttribute("preserveAspectRatio", "none");
+    holder.setAttribute("overflow", "hidden");
+    const img = document.createElementNS(SVG_NS, "image");
+    const nat = el.natural ?? { width: s.sw, height: s.sh };
+    img.setAttribute("width", String(nat.width));
+    img.setAttribute("height", String(nat.height));
+    img.setAttribute("href", href);
+    if (el.flipX || el.flipY) {
+      const mx = s.sx * 2 + s.sw;
+      const my = s.sy * 2 + s.sh;
+      img.setAttribute("transform", `translate(${el.flipX ? mx : 0} ${el.flipY ? my : 0}) scale(${el.flipX ? -1 : 1} ${el.flipY ? -1 : 1})`);
+    }
+    holder.appendChild(img);
+    group.appendChild(holder);
+    return;
+  }
+  const box = document.createElementNS(SVG_NS, "rect");
+  box.setAttribute("x", String(round2(el.x)));
+  box.setAttribute("y", String(round2(el.y)));
+  box.setAttribute("width", String(round2(el.width)));
+  box.setAttribute("height", String(round2(el.height)));
+  box.setAttribute("fill", opts.theme.grid);
+  box.setAttribute("stroke", resolveColor("auto", opts.theme));
+  group.appendChild(box);
+  if (el.type === "media") {
+    const label = document.createElementNS(SVG_NS, "text");
+    label.setAttribute("x", String(round2(el.x + 12)));
+    label.setAttribute("y", String(round2(el.y + el.height / 2 + 5)));
+    label.setAttribute("fill", resolveColor("auto", opts.theme));
+    label.setAttribute("font-size", "14");
+    label.textContent = `${el.mime?.startsWith("video/") ? "Vídeo" : "Áudio"}: ${el.fileName ?? ""}`;
+    group.appendChild(label);
   }
 }
 
@@ -110,6 +158,8 @@ export function exportToSvg(elements: WbElement[], opts: ExportOptions): string 
       path.setAttribute("d", freedrawPath(absPoints(el), el.strokeWidth * 3));
       path.setAttribute("fill", resolveColor(el.strokeColor, opts.theme));
       group.appendChild(path);
+    } else if (el.type === "image" || el.type === "media") {
+      appendSvgMedia(group, el, opts);
     } else if (el.type === "text") {
       appendSvgText(group, el, opts.theme);
     } else {

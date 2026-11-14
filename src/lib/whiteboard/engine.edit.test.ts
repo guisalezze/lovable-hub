@@ -195,9 +195,9 @@ describe("camadas, bloqueio e alinhamento", () => {
   it("getSelectionInfo resume a seleção para o menu", () => {
     const { engine } = setup();
     engine.load([filled(0), filled(300, 0, { locked: true })]);
-    expect(engine.getSelectionInfo()).toEqual({ count: 0, hasGroup: false, allLocked: false });
+    expect(engine.getSelectionInfo()).toEqual({ count: 0, hasGroup: false, allLocked: false, hasImage: false, hasCrop: false });
     engine.selectAll();
-    expect(engine.getSelectionInfo()).toEqual({ count: 2, hasGroup: false, allLocked: false });
+    expect(engine.getSelectionInfo()).toEqual({ count: 2, hasGroup: false, allLocked: false, hasImage: false, hasCrop: false });
     engine.group();
     expect(engine.getSelectionInfo().hasGroup).toBe(true);
   });

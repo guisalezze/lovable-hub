@@ -23,6 +23,7 @@ import {
   type AlignMode,
 } from "./ops";
 import { createElement } from "./scene";
+import { cropResize, defaultSizeFor, resetCrop, toggleFlip, type MediaKind } from "./imageops";
 import { History } from "./history";
 import { panBy, screenToWorld } from "./camera";
 import {
@@ -76,6 +77,7 @@ type Gesture =
   | { kind: "laser" }
   | { kind: "bending"; id: string; before: WbElement[]; changed: boolean }
   | { kind: "endpoint"; id: string; which: "start" | "end"; before: WbElement[]; changed: boolean }
+  | { kind: "cropping"; id: string; handle: HandleId; start: Pt; before: WbElement[]; changed: boolean }
   | { kind: "rotating"; id: string; center: Pt; startAngle: number; origAngle: number; before: WbElement[]; changed: boolean };
 
 const SHAPE_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "line", "arrow", "note"];
@@ -154,6 +156,8 @@ export class WhiteboardEngine {
   private newTextId: string | null = null;
   /** Como o elemento estava ao começar a edição (para saber se algo mudou ao confirmar). */
   private editBase: WbElement | null = null;
+  /** Imagem em modo de corte (as alças cortam em vez de redimensionar). */
+  cropId: string | null = null;
   /** Espaço segurado: qualquer arrasto vira mover a câmera. */
   spaceHeld = false;
 
@@ -303,6 +307,11 @@ export class WhiteboardEngine {
     const w = this.toWorld(screen);
     const hit = this.hitElement(w);
     if (hit) {
+      if (hit.type === "image" && !hit.locked) {
+        this.setSelection(new Set([hit.id]));
+        this.startCrop();
+        return;
+      }
       if (TEXT_TYPES.includes(hit.type) && !hit.locked) this.editText(hit.id);
       return;
     }
@@ -366,6 +375,74 @@ export class WhiteboardEngine {
       this.cb.onToolChange("select");
     }
     this.setSelection(new Set([id]));
+    if (changed) this.commit();
+    else this.invalidate();
+  }
+
+  // ---- mídia: inserir, espelhar, girar, cortar -------------------------------
+
+  /** Põe um arquivo já guardado no quadro, centralizado em `center` (mundo), e o seleciona. */
+  addMedia(info: { fileId: string; mime: string; fileName: string; kind: MediaKind; natural: { width: number; height: number } | null }, center: Pt): WbElement {
+    const size = defaultSizeFor(info.kind, info.natural);
+    const el = createElement(info.kind === "image" ? "image" : "media", center.x - size.width / 2, center.y - size.height / 2, {
+      width: size.width,
+      height: size.height,
+      fileId: info.fileId,
+      mime: info.mime,
+      fileName: info.fileName,
+      ...(info.natural ? { natural: info.natural } : {}),
+    });
+    this.elements = [...this.elements, el];
+    this.tool = "select";
+    this.cb.onToolChange("select");
+    this.setSelection(new Set([el.id]));
+    this.commit();
+    return el;
+  }
+
+  private mediaTargets(only?: "image"): WbElement[] {
+    return this.getSelected().filter((el) => !el.locked && (el.type === "image" || (!only && el.type === "media")));
+  }
+
+  flipSelected(axis: "x" | "y"): void {
+    const ids = new Set(this.mediaTargets("image").map((e) => e.id));
+    if (ids.size === 0) return;
+    this.elements = this.elements.map((e) => (ids.has(e.id) ? toggleFlip(e, axis) : e));
+    this.commit();
+  }
+
+  /** Gira a imagem 90° no sentido horário (o ângulo do elemento, então a caixa gira junto). */
+  rotateSelected90(): void {
+    const ids = new Set(this.mediaTargets().map((e) => e.id));
+    if (ids.size === 0) return;
+    this.elements = this.elements.map((e) => (ids.has(e.id) ? { ...e, angle: (e.angle + Math.PI / 2) % (Math.PI * 2) } : e));
+    this.commit();
+  }
+
+  startCrop(): void {
+    const sel = this.getSelected();
+    if (sel.length !== 1 || sel[0].type !== "image" || sel[0].locked) return;
+    this.cropId = sel[0].id;
+    this.invalidate();
+  }
+
+  endCrop(): void {
+    if (!this.cropId) return;
+    this.cropId = null;
+    this.invalidate();
+  }
+
+  /** Volta a imagem selecionada para inteira. */
+  resetSelectedCrop(): void {
+    const ids = new Set(this.mediaTargets("image").map((e) => e.id));
+    let changed = false;
+    this.elements = this.elements.map((e) => {
+      if (!ids.has(e.id)) return e;
+      const r = resetCrop(e);
+      if (r !== e) changed = true;
+      return r;
+    });
+    this.cropId = null;
     if (changed) this.commit();
     else this.invalidate();
   }
@@ -489,13 +566,20 @@ export class WhiteboardEngine {
     this.invalidate();
   }
 
+  /** Ponto da tela (relativo ao canvas) no mundo. */
+  screenToWorldPoint(p: Pt): Pt {
+    return this.toWorld(p);
+  }
+
   /** Resumo da seleção para o menu de contexto saber o que habilitar. */
-  getSelectionInfo(): { count: number; hasGroup: boolean; allLocked: boolean } {
+  getSelectionInfo(): { count: number; hasGroup: boolean; allLocked: boolean; hasImage: boolean; hasCrop: boolean } {
     const selected = this.getSelected();
     return {
       count: selected.length,
       hasGroup: selected.some((el) => el.groupId !== null),
       allLocked: selected.length > 0 && selected.every((el) => el.locked),
+      hasImage: selected.some((el) => el.type === "image"),
+      hasCrop: selected.some((el) => el.type === "image" && !!el.crop),
     };
   }
 
@@ -509,6 +593,7 @@ export class WhiteboardEngine {
   }
 
   clearSelection(): void {
+    this.cropId = null;
     this.setSelection(new Set());
     this.invalidate();
   }
@@ -654,6 +739,11 @@ export class WhiteboardEngine {
       case "laser":
         this.trails = addLaserPoint(this.trails, w, this.clock());
         break;
+      case "cropping": {
+        g.changed = true;
+        this.elements = g.before.map((el) => (el.id === g.id ? cropResize(el, g.handle, w.x - g.start.x, w.y - g.start.y) : el));
+        break;
+      }
       case "rotating": {
         const cur = Math.atan2(w.y - g.center.y, w.x - g.center.x);
         let angle = g.origAngle + (cur - g.startAngle);
@@ -722,6 +812,7 @@ export class WhiteboardEngine {
           this.commit();
         }
         break;
+      case "cropping":
       case "rotating":
         if (g.changed) this.commit();
         break;
@@ -779,6 +870,16 @@ export class WhiteboardEngine {
           return;
         }
       }
+    }
+    if (this.cropId) {
+      const target = selected.length === 1 && selected[0].id === this.cropId ? selected[0] : null;
+      const cf = target ? selectionFrame([target], this.camera.zoom) : null;
+      const ch = cf ? handleAtPoint(cf, w, this.camera.zoom) : null;
+      if (target && ch && ch !== "rotate") {
+        this.gesture = { kind: "cropping", id: target.id, handle: ch, start: w, before: this.elements, changed: false };
+        return;
+      }
+      this.cropId = null; // clicar fora termina o corte
     }
     const frame = selectionFrame(selected, this.camera.zoom);
     if (frame) {

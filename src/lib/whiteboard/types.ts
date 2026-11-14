@@ -6,7 +6,9 @@ export type ElementType =
   | "arrow"
   | "freedraw"
   | "text"
-  | "note";
+  | "note"
+  | "image"
+  | "media";
 
 export type Tool =
   | "select"
@@ -59,6 +61,14 @@ export interface WbElement {
   runs?: TextRun[];
   textAlign?: TextAlign;
   fontFamily?: FontFamily;
+  /** image/media: arquivo guardado (caminho no armazenamento), tipo, nome, tamanho original, corte e espelho */
+  fileId?: string;
+  mime?: string;
+  fileName?: string;
+  natural?: { width: number; height: number };
+  crop?: { x: number; y: number; width: number; height: number };
+  flipX?: boolean;
+  flipY?: boolean;
   /** "auto" = cor de texto do tema */
   strokeColor: string;
   /** "transparent" = sem preenchimento */

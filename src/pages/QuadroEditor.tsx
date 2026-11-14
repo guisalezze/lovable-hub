@@ -13,6 +13,7 @@ import { decideDraft } from "@/lib/whiteboard/draftPolicy";
 import { parseDoc } from "@/lib/whiteboard/scene";
 import { renderThumbnail, shouldRegenerateThumbnail } from "@/lib/whiteboard/thumbnail";
 import { readThemeColors } from "@/lib/whiteboard/theme";
+import { createSupabaseMediaStore } from "@/lib/whiteboard/supabaseMedia";
 import type { SceneDoc } from "@/lib/whiteboard/types";
 
 // O quadro ocupa toda a área da página, por cima do preenchimento do layout do CRM.
@@ -30,6 +31,9 @@ function Message({ title, detail }: { title: string; detail?: string }) {
     </div>
   );
 }
+
+// um só para a página toda: guarda os endereços já pedidos
+const mediaStore = createSupabaseMediaStore();
 
 export default function QuadroEditor() {
   const { id } = useParams();
@@ -197,6 +201,7 @@ function LoadedEditor({ row, doc }: { row: WhiteboardRow; doc: SceneDoc }) {
     <div className={FRAME}>
       <Whiteboard
         initialDoc={initial}
+        mediaStore={mediaStore}
         onChange={handleChange}
         exportName={title}
         banner={banner}

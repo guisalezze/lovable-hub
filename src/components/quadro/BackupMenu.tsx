@@ -1,7 +1,18 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Download, FolderDown, HardDriveDownload, Upload } from "lucide-react";
+import { Download, Eraser, FolderDown, HardDriveDownload, Upload } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { deleteFiles, scanUnusedFiles } from "@/lib/whiteboard/supabaseMedia";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +24,32 @@ export function BackupMenu() {
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const canPickFolder = !!folderPicker();
+  const [cleanup, setCleanup] = useState<string[] | null>(null);
+
+  const startCleanup = async () => {
+    const scan = await scanUnusedFiles();
+    if (!("unused" in scan)) {
+      toast.error(
+        scan.reason === "unreadable"
+          ? "Algum quadro não pôde ser lido, então não limpei nada para não apagar arquivo em uso."
+          : "Não consegui conferir os arquivos. Tente de novo em instantes.",
+      );
+      return;
+    }
+    if (scan.unused.length === 0) {
+      toast.info("Nenhum arquivo sem uso. Está tudo limpo.");
+      return;
+    }
+    setCleanup(scan.unused);
+  };
+
+  const confirmCleanup = async () => {
+    const names = cleanup;
+    setCleanup(null);
+    if (!names) return;
+    if (await deleteFiles(names)) toast.success(`${names.length} ${names.length === 1 ? "arquivo apagado" : "arquivos apagados"}.`);
+    else toast.error("Não consegui apagar os arquivos.");
+  };
 
   /** Lê todos os quadros; avisa dos que não deu para ler. Devolve null se não há o que guardar. */
   const loadBoards = async () => {
@@ -87,6 +124,10 @@ export function BackupMenu() {
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => void startCleanup()}>
+            <Eraser className="mr-2 h-4 w-4" />
+            Limpar arquivos não usados…
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => fileRef.current?.click()}>
             <Upload className="mr-2 h-4 w-4" />
             Importar backup…
@@ -107,6 +148,20 @@ export function BackupMenu() {
           input.value = ""; // permite escolher o mesmo arquivo de novo
         }}
       />
+      <AlertDialog open={!!cleanup} onOpenChange={(open) => !open && setCleanup(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar arquivos sem uso?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {cleanup ? `${cleanup.length} ${cleanup.length === 1 ? "arquivo não aparece" : "arquivos não aparecem"} em nenhum quadro. Apagar libera espaço e não dá para desfazer.` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmCleanup()}>Apagar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

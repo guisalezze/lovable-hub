@@ -15,6 +15,10 @@ export interface BindOptions {
   onPresentation?(): void;
   /** false = esconde a moldura de seleção (modo apresentação). Padrão: true. */
   getShowSelection?(): boolean;
+  /** Ctrl+V com arquivos na área de transferência. Devolve true se tratou (senão cola os elementos copiados). */
+  onPasteFiles?(files: File[]): boolean;
+  /** Arquivos soltos no quadro, no ponto da tela (relativo ao canvas). */
+  onDropFiles?(files: File[], at: { x: number; y: number }): void;
 }
 
 export interface CanvasBinding {
@@ -54,6 +58,7 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
       now,
       showSelection: opts.getShowSelection ? opts.getShowSelection() : true,
       hiddenId: engine.editingId,
+      cropId: engine.cropId,
       guides: engine.guides,
       highlightId: engine.bindHighlightId,
       ruler: engine.rulerOn ? engine.cursor : null,
@@ -127,7 +132,7 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
     }
     const action = resolveShortcut(e);
     if (!action) return;
-    e.preventDefault();
+    if (action.kind !== "paste") e.preventDefault(); // colar: o navegador precisa disparar o evento "paste" para podermos ler arquivos
     switch (action.kind) {
       case "tool":
         engine.setTool(action.tool);
@@ -156,7 +161,9 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
         engine.copy();
         break;
       case "paste":
-        engine.paste();
+        break;
+      case "flip":
+        engine.flipSelected(action.axis);
         break;
       case "cut":
         engine.cut();
@@ -204,6 +211,26 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
     render();
   };
 
+  const onPaste = (e: ClipboardEvent) => {
+    if (isEditableTarget(e.target)) return;
+    e.preventDefault();
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (files.length > 0 && opts.onPasteFiles?.(files)) return;
+    engine.paste();
+  };
+  const onDragOver = (e: DragEvent) => {
+    if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+  };
+  const onDrop = (e: DragEvent) => {
+    const files = Array.from(e.dataTransfer?.files ?? []);
+    if (files.length === 0 || !opts.onDropFiles) return;
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    opts.onDropFiles(files, { x: e.clientX - r.left, y: e.clientY - r.top });
+  };
+  root.addEventListener("paste", onPaste);
+  canvas.addEventListener("dragover", onDragOver);
+  canvas.addEventListener("drop", onDrop);
   canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("pointermove", onPointerMove);
   canvas.addEventListener("pointerup", onPointerUp);
@@ -226,6 +253,9 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
       canvas.removeEventListener("pointerleave", onPointerLeave);
       canvas.removeEventListener("wheel", onWheel);
       root.removeEventListener("keydown", onKeyDown);
+      root.removeEventListener("paste", onPaste);
+      canvas.removeEventListener("dragover", onDragOver);
+      canvas.removeEventListener("drop", onDrop);
       root.removeEventListener("keyup", onKeyUp);
       root.removeEventListener("blur", onBlur);
       observer.disconnect();

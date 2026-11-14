@@ -17,6 +17,10 @@ import { clipboard } from "@/lib/whiteboard/ops";
 import { toast } from "sonner";
 import { ExportMenu, type ExportKind } from "./ExportMenu";
 import { addFavorite, parseFavorites, removeFavorite } from "@/lib/whiteboard/colors";
+import { MediaOverlay, type OverlayTarget } from "./MediaOverlay";
+import { ImagePlus } from "lucide-react";
+import { collectImageData, measureFile, primeMedia, setMediaStore, setMediaUpdateListener, type MediaStore } from "@/lib/whiteboard/mediaCache";
+import { validateFile } from "@/lib/whiteboard/imageops";
 import { copyPngToClipboard, downloadBlob, exportFileName, exportToPng, exportToSvg } from "@/lib/whiteboard/export";
 
 const DRAWING_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "arrow", "line", "pencil", "text", "note"];
@@ -32,13 +36,15 @@ export interface WhiteboardProps {
   banner?: ReactNode;
   /** Nome base dos arquivos exportados (o título do quadro). */
   exportName?: string;
+  /** Onde guardar imagens, áudios e vídeos. Sem isto, o quadro não aceita arquivos. */
+  mediaStore?: MediaStore;
 }
 
 /**
  * Quadro: canvas + barras. Só recebe e entrega elementos; não sabe nada de banco de dados,
  * então funciona igual dentro do CRM e numa página de teste.
  */
-export function Whiteboard({ initialDoc, onChange, header, banner, exportName = "quadro" }: WhiteboardProps) {
+export function Whiteboard({ initialDoc, onChange, header, banner, exportName = "quadro", mediaStore }: WhiteboardProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<WhiteboardEngine | null>(null);
@@ -89,7 +95,13 @@ export function Whiteboard({ initialDoc, onChange, header, banner, exportName = 
   const [selectedCount, setSelectedCount] = useState(0);
   const [textMode, setTextMode] = useState({ only: false, has: false });
   const [editing, setEditing] = useState<{ el: WbElement; camera: Camera; theme: ThemeColors } | null>(null);
-  const [menuInfo, setMenuInfo] = useState({ count: 0, hasGroup: false, allLocked: false, canPaste: false });
+  const [menuInfo, setMenuInfo] = useState({ count: 0, hasGroup: false, allLocked: false, canPaste: false, hasImage: false, hasCrop: false });
+  const [overlay, setOverlay] = useState<OverlayTarget | null>(null);
+  const overlayKey = useRef("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const storeRef = useRef(mediaStore);
+  storeRef.current = mediaStore;
+  const insertFilesRef = useRef<(files: File[], at?: { x: number; y: number }) => void>(() => {});
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -137,6 +149,12 @@ export function Whiteboard({ initialDoc, onChange, header, banner, exportName = 
       getTheme: () => theme,
       getShowGrid: () => gridRef.current && !presentationRef.current, // sem grade na apresentação: vídeo mais limpo
       onPresentation: () => togglePresentationRef.current(),
+      onPasteFiles: (files) => {
+        if (!storeRef.current) return false;
+        insertFilesRef.current(files);
+        return true;
+      },
+      onDropFiles: (files, at) => insertFilesRef.current(files, at),
       getShowSelection: () => !presentationRef.current,
       onFrame: () => {
         if (!fitted) {
@@ -147,6 +165,28 @@ export function Whiteboard({ initialDoc, onChange, header, banner, exportName = 
           binding?.render();
         }
         setZoom(engine.camera.zoom);
+        // player sobre o áudio/vídeo selecionado
+        const sel = engine.getSelected();
+        const m = sel.length === 1 && sel[0].type === "media" && sel[0].fileId ? sel[0] : null;
+        let next: OverlayTarget | null = null;
+        if (m && !presentationRef.current) {
+          const cam = engine.camera;
+          next = {
+            id: m.id,
+            fileId: m.fileId!,
+            kind: m.mime?.startsWith("video/") ? "video" : "audio",
+            left: Math.round((m.x - cam.x) * cam.zoom),
+            top: Math.round((m.y - cam.y) * cam.zoom),
+            width: Math.round(m.width * cam.zoom),
+            height: Math.round(m.height * cam.zoom),
+            angle: m.angle,
+          };
+        }
+        const key = next ? JSON.stringify(next) : "";
+        if (key !== overlayKey.current) {
+          overlayKey.current = key;
+          setOverlay(next);
+        }
         setCanUndo(engine.canUndo);
         setCanRedo(engine.canRedo);
       },
@@ -162,9 +202,11 @@ export function Whiteboard({ initialDoc, onChange, header, banner, exportName = 
 
     engineRef.current = engine;
     bindingRef.current = binding;
+    const offMedia = setMediaUpdateListener(() => binding?.render());
     root.focus({ preventScroll: true }); // atalhos do quadro valem desde o primeiro instante, sem precisar clicar antes
     return () => {
       themeObserver.disconnect();
+      offMedia();
       binding?.destroy();
       engineRef.current = null;
       bindingRef.current = null;
@@ -182,6 +224,11 @@ export function Whiteboard({ initialDoc, onChange, header, banner, exportName = 
     const timer = setTimeout(() => setHint(false), 3500);
     return () => clearTimeout(timer);
   }, [presentation.active]);
+
+  useEffect(() => {
+    setMediaStore(mediaStore ?? null);
+    bindingRef.current?.render();
+  }, [mediaStore]);
 
   useEffect(() => {
     engineRef.current?.setRuler(rulerOn);
@@ -214,6 +261,39 @@ export function Whiteboard({ initialDoc, onChange, header, banner, exportName = 
   );
 
   const focusBoard = () => rootRef.current?.focus({ preventScroll: true });
+
+  /** Sobe os arquivos e põe cada um no quadro (no ponto `at` da tela, ou no meio da tela). */
+  insertFilesRef.current = (files, at) => {
+    void (async () => {
+      const engine = engineRef.current;
+      const store = storeRef.current;
+      if (!engine || !store) {
+        toast.error("Este quadro não guarda arquivos.");
+        return;
+      }
+      const v = viewport();
+      let i = 0;
+      for (const file of files) {
+        const check = validateFile(file);
+        if ("error" in check) {
+          toast.error(check.error);
+          continue;
+        }
+        const toastId = toast.loading(`Enviando ${file.name}…`);
+        try {
+          const [fileId, natural] = await Promise.all([store.upload(file), measureFile(file)]);
+          primeMedia(fileId, URL.createObjectURL(file));
+          const screen = at ? { x: at.x + i * 24, y: at.y + i * 24 } : { x: v.width / 2 + i * 24, y: v.height / 2 + i * 24 };
+          engine.addMedia({ fileId, mime: file.type, fileName: file.name, kind: check.kind, natural }, engine.screenToWorldPoint(screen));
+          toast.success(`${file.name} adicionado.`, { id: toastId });
+          i += 1;
+        } catch {
+          toast.error(`Não consegui enviar ${file.name}. Tente de novo.`, { id: toastId });
+        }
+      }
+      focusBoard();
+    })();
+  };
 
   /** Aplica uma mudança de páginas. `reload` = a página aberta mudou: carrega os elementos dela no quadro. */
   const applyDoc = (next: SceneDoc, reload: boolean) => {
@@ -292,6 +372,11 @@ export function Whiteboard({ initialDoc, onChange, header, banner, exportName = 
       case "back": engine.sendToBack(); break;
       case "lock": engine.toggleLock(); break;
       case "delete": engine.deleteSelection(); break;
+      case "flip-x": engine.flipSelected("x"); break;
+      case "flip-y": engine.flipSelected("y"); break;
+      case "rotate-90": engine.rotateSelected90(); break;
+      case "crop": engine.startCrop(); break;
+      case "reset-crop": engine.resetSelectedCrop(); break;
       case "align-left": engine.align("left"); break;
       case "align-center": engine.align("center"); break;
       case "align-right": engine.align("right"); break;
@@ -312,7 +397,7 @@ export function Whiteboard({ initialDoc, onChange, header, banner, exportName = 
       toast.error("Nada para exportar: o quadro está vazio.");
       return;
     }
-    const opts = { theme: readThemeColors(), background: true };
+    const opts = { theme: readThemeColors(), background: true, images: await collectImageData(elements) };
     try {
       if (kind === "copy-svg") {
         try {
@@ -394,7 +479,21 @@ export function Whiteboard({ initialDoc, onChange, header, banner, exportName = 
 
       {!presentation.active ? (
         <div className="absolute right-3 top-3 z-10">
-          <ExportMenu hasSelection={selectedCount > 0} onExport={runExport} />
+          <div className="flex items-center gap-2">
+            {mediaStore ? (
+              <button
+                type="button"
+                aria-label="Inserir imagem, áudio ou vídeo"
+                title="Inserir imagem, áudio ou vídeo (ou cole / arraste um arquivo)"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex h-10 items-center gap-1.5 rounded-lg border border-border bg-card/95 px-2.5 text-sm shadow-sm backdrop-blur hover:bg-accent"
+              >
+                <ImagePlus className="h-4 w-4" />
+                Mídia
+              </button>
+            ) : null}
+            <ExportMenu hasSelection={selectedCount > 0} onExport={runExport} />
+          </div>
         </div>
       ) : null}
 
@@ -411,6 +510,23 @@ export function Whiteboard({ initialDoc, onChange, header, banner, exportName = 
           />
         </div>
       ) : null}
+
+      {overlay ? <MediaOverlay key={overlay.id} target={overlay} /> : null}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/*,audio/*,video/*"
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={(e) => {
+          const input = e.currentTarget;
+          const files = Array.from(input.files ?? []);
+          input.value = "";
+          if (files.length > 0) insertFilesRef.current(files);
+        }}
+      />
 
       {banner ? <div className="absolute left-1/2 top-16 z-20 -translate-x-1/2">{banner}</div> : null}
 

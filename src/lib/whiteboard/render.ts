@@ -9,6 +9,8 @@ import type { Guide } from "./snap";
 import { laserAlpha } from "./laser";
 import { fontString } from "./layout";
 import { hasText, textBlockFor, type TextBlock } from "./textblock";
+import { getImage, isMediaFailed } from "./mediaCache";
+import { fullBounds, sourceRect } from "./imageops";
 
 const GRID_STEP = 24; // unidades do mundo
 const generator = rough.generator();
@@ -206,6 +208,7 @@ export interface DrawArgs {
   showSelection?: boolean;
   /** Elemento que não deve ser desenhado (o texto que está sendo editado: o campo de texto o mostra). */
   hiddenId?: string | null;
+  cropId?: string | null;
   /** Linhas-guia do alinhamento automático (aparecem enquanto se arrasta). */
   guides?: Guide[];
   /** Forma que vai receber a ponta de uma seta (destaque). */
@@ -300,6 +303,65 @@ function drawLaser(ctx: CanvasRenderingContext2D, trails: LaserTrail[], zoom: nu
   ctx.restore();
 }
 
+/** Imagem (com corte e espelho) ou um espaço reservado enquanto carrega. */
+function drawImageElement(ctx: CanvasRenderingContext2D, el: WbElement, theme: ThemeColors, cropping: boolean): void {
+  const img = el.fileId ? getImage(el.fileId) : null;
+  const cx = el.x + el.width / 2;
+  const cy = el.y + el.height / 2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(el.flipX ? -1 : 1, el.flipY ? -1 : 1);
+  if (img) {
+    if (cropping) {
+      // no modo de corte a imagem inteira aparece esmaecida atrás da parte que fica
+      const fb = fullBounds(el);
+      ctx.globalAlpha = 0.35;
+      ctx.drawImage(img, fb.x - cx, fb.y - cy, fb.width, fb.height);
+      ctx.globalAlpha = 1;
+    }
+    const s = sourceRect(el);
+    ctx.drawImage(img, s.sx, s.sy, s.sw, s.sh, -el.width / 2, -el.height / 2, el.width, el.height);
+  } else {
+    ctx.fillStyle = theme.grid;
+    ctx.fillRect(-el.width / 2, -el.height / 2, el.width, el.height);
+    ctx.fillStyle = resolveColor("auto", theme);
+    ctx.font = "14px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(el.fileId && isMediaFailed(el.fileId) ? "Imagem indisponível" : "Carregando…", 0, 0);
+  }
+  ctx.restore();
+}
+
+/** Cartão de áudio/vídeo: o player de verdade aparece quando o elemento é selecionado. */
+function drawMediaCard(ctx: CanvasRenderingContext2D, el: WbElement, theme: ThemeColors): void {
+  ctx.save();
+  ctx.fillStyle = theme.grid;
+  ctx.strokeStyle = resolveColor("auto", theme);
+  ctx.lineWidth = 1.5;
+  ctx.fillRect(el.x, el.y, el.width, el.height);
+  ctx.strokeRect(el.x, el.y, el.width, el.height);
+  const cy = el.y + el.height / 2;
+  ctx.fillStyle = resolveColor("auto", theme);
+  ctx.beginPath(); // triângulo de "tocar"
+  ctx.moveTo(el.x + 16, cy - 10);
+  ctx.lineTo(el.x + 16, cy + 10);
+  ctx.lineTo(el.x + 32, cy);
+  ctx.closePath();
+  ctx.fill();
+  ctx.font = "14px sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  const label = `${el.mime?.startsWith("video/") ? "Vídeo" : "Áudio"}: ${el.fileName ?? ""}`;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(el.x + 40, el.y, Math.max(0, el.width - 48), el.height);
+  ctx.clip();
+  ctx.fillText(label, el.x + 40, cy);
+  ctx.restore();
+  ctx.restore();
+}
+
 export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
   const { elements, camera, theme, selectedIds, showGrid, width, height, dpr, marquee } = args;
 
@@ -333,6 +395,10 @@ export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
           ctx.fill(path);
           ctx.restore();
         }
+      } else if (el.type === "image") {
+        drawImageElement(ctx, el, theme, args.cropId === el.id);
+      } else if (el.type === "media") {
+        drawMediaCard(ctx, el, theme);
       } else if (el.type === "text") {
         drawTextBlock(ctx, el, theme);
       } else {

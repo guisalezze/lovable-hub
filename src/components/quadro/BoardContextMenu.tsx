@@ -25,6 +25,11 @@ export type MenuAction =
   | "back"
   | "lock"
   | "delete"
+  | "flip-x"
+  | "flip-y"
+  | "rotate-90"
+  | "crop"
+  | "reset-crop"
   | "align-left"
   | "align-center"
   | "align-right"
@@ -37,13 +42,15 @@ interface Props {
   hasGroup: boolean;
   allLocked: boolean;
   canPaste: boolean;
+  hasImage?: boolean;
+  hasCrop?: boolean;
   onAction: (action: MenuAction) => void;
   /** Roda antes de o menu abrir (para selecionar o que está sob o cursor). */
   onContextMenu: (e: React.MouseEvent) => void;
   children: ReactNode;
 }
 
-export function BoardContextMenu({ count, hasGroup, allLocked, canPaste, onAction, onContextMenu, children }: Props) {
+export function BoardContextMenu({ count, hasGroup, allLocked, canPaste, hasImage = false, hasCrop = false, onAction, onContextMenu, children }: Props) {
   const none = count === 0;
   const item = (label: string, action: MenuAction, opts: { disabled?: boolean; shortcut?: string; destructive?: boolean } = {}) => (
     <ContextMenuItem
@@ -67,6 +74,16 @@ export function BoardContextMenu({ count, hasGroup, allLocked, canPaste, onActio
         {item("Duplicar", "duplicate", { disabled: none, shortcut: "Ctrl+D" })}
         {item("Copiar formatação", "copy-style", { disabled: none, shortcut: "Ctrl+Alt+C" })}
         {item("Colar formatação", "paste-style", { disabled: none, shortcut: "Ctrl+Alt+V" })}
+        {hasImage ? (
+          <>
+            <ContextMenuSeparator />
+            {item("Espelhar na horizontal", "flip-x", { shortcut: "Shift+H" })}
+            {item("Espelhar na vertical", "flip-y", { shortcut: "Shift+V" })}
+            {item("Girar 90°", "rotate-90")}
+            {item("Cortar", "crop")}
+            {item("Remover corte", "reset-crop", { disabled: !hasCrop })}
+          </>
+        ) : null}
         <ContextMenuSeparator />
         {item("Agrupar", "group", { disabled: count < 2, shortcut: "Ctrl+G" })}
         {item("Desagrupar", "ungroup", { disabled: !hasGroup, shortcut: "Ctrl+Shift+G" })}

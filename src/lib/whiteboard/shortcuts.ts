@@ -20,7 +20,8 @@ export type ShortcutAction =
   | { kind: "back" }
   | { kind: "presentation" }
   | { kind: "copyStyle" }
-  | { kind: "pasteStyle" };
+  | { kind: "pasteStyle" }
+  | { kind: "flip"; axis: "x" | "y" };
 
 const TOOL_KEYS: Record<string, Tool> = {
   v: "select", "1": "select",
@@ -60,6 +61,7 @@ export function isEditableTarget(target: EventTarget | null): boolean {
 export function resolveShortcut(e: ShortcutEvent): ShortcutAction | null {
   if (isEditableTarget(e.target)) return null;
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && (key === "h" || key === "v")) return { kind: "flip", axis: key === "h" ? "x" : "y" };
 
   if (e.altKey) {
     // Ctrl+Alt+C / Ctrl+Alt+V: copiar e colar formatação. Alt com qualquer outra coisa não é nosso (o navegador usa).
