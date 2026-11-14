@@ -18,15 +18,15 @@ export interface WhiteboardRow {
 }
 
 /**
- * Grava a cena só se ninguém mexeu desde `expectedUpdatedAt`.
+ * Atualiza a linha só se ninguém mexeu desde `expectedUpdatedAt`.
  * Zero linhas afetadas tem duas causas e o Supabase não diferencia (a RLS só filtra):
  * por isso relê a linha — `updated_at` diferente = conflito; igual = sem permissão.
  */
-export async function saveScene(id: string, elements: WbElement[], expectedUpdatedAt: string): Promise<SaveResult> {
+async function guardedUpdate(id: string, patch: { scene: Json } | { title: string }, expectedUpdatedAt: string): Promise<SaveResult> {
   try {
     const { data, error } = await supabase
       .from("whiteboards")
-      .update({ scene: serializeScene(elements) as unknown as Json })
+      .update(patch)
       .eq("id", id)
       .eq("updated_at", expectedUpdatedAt)
       .select("updated_at");
@@ -42,6 +42,25 @@ export async function saveScene(id: string, elements: WbElement[], expectedUpdat
     return { ok: false, reason: row.updated_at !== expectedUpdatedAt ? "conflict" : "denied" };
   } catch {
     return { ok: false, reason: "error" };
+  }
+}
+
+export function saveScene(id: string, elements: WbElement[], expectedUpdatedAt: string): Promise<SaveResult> {
+  return guardedUpdate(id, { scene: serializeScene(elements) as unknown as Json }, expectedUpdatedAt);
+}
+
+export function saveTitle(id: string, title: string, expectedUpdatedAt: string): Promise<SaveResult> {
+  return guardedUpdate(id, { title: title.trim() || "Sem título" }, expectedUpdatedAt);
+}
+
+/** updated_at atual do quadro (usado para "manter minha versão" depois de um conflito). */
+export async function fetchUpdatedAt(id: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.from("whiteboards").select("updated_at").eq("id", id).maybeSingle();
+    if (error || !data) return null;
+    return data.updated_at;
+  } catch {
+    return null;
   }
 }
 

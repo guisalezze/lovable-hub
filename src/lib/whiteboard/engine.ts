@@ -140,6 +140,14 @@ export class WhiteboardEngine {
     this.commit();
   }
 
+  get canUndo(): boolean {
+    return this.history.canUndo;
+  }
+
+  get canRedo(): boolean {
+    return this.history.canRedo;
+  }
+
   undo(): void {
     const prev = this.history.undo();
     if (prev) this.applyHistory(prev);
