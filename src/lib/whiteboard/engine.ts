@@ -1,5 +1,6 @@
 import type { Camera, ElementType, LaserTrail, StylePatch, Tool, WbElement } from "./types";
 import { DEFAULT_STYLE } from "./palette";
+import { addLaserPoint, endLaserTrail, pruneLaser } from "./laser";
 import {
   alignElements,
   bringForward,
@@ -59,6 +60,7 @@ type Gesture =
   | { kind: "marquee"; start: Pt; base: Set<string> }
   | { kind: "panning"; last: Pt }
   | { kind: "erasing"; before: WbElement[]; removed: Set<string> }
+  | { kind: "laser" }
   | { kind: "rotating"; id: string; center: Pt; startAngle: number; origAngle: number; before: WbElement[]; changed: boolean };
 
 const SHAPE_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "line", "arrow"];
@@ -111,6 +113,8 @@ export class WhiteboardEngine {
   trails: LaserTrail[] = [];
   /** Estilo das próximas formas (o que o painel mostra quando nada está selecionado). */
   defaultStyle: StylePatch = {};
+  /** Relógio do laser (ms). Os testes trocam por um relógio falso. */
+  clock: () => number = () => performance.now();
   /** Espaço segurado: qualquer arrasto vira mover a câmera. */
   spaceHeld = false;
 
@@ -183,6 +187,12 @@ export class WhiteboardEngine {
   /** O que o painel de estilo deve mostrar agora. */
   getActiveStyle(): StylePatch {
     return this.getStyleOfSelection() ?? { ...DEFAULT_STYLE, ...this.defaultStyle };
+  }
+
+  /** Apaga do rastro o que já venceu. Devolve true enquanto ainda há o que animar. */
+  tickLaser(now: number): boolean {
+    this.trails = pruneLaser(this.trails, now);
+    return this.trails.length > 0;
   }
 
   // ---- edição: copiar, colar, grupos, camadas, bloqueio, alinhar -------------
@@ -340,7 +350,12 @@ export class WhiteboardEngine {
     if (SHAPE_TOOLS.includes(this.tool)) return this.downCreate(w);
     if (this.tool === "pencil") return this.downPencil(w);
     if (this.tool === "eraser") return this.downErase(w);
-    // laser: tratado na Task 13
+    if (this.tool === "laser") {
+      // o laser só deixa rastro: não mexe na cena nem no histórico
+      this.trails = addLaserPoint(this.trails, w, this.clock());
+      this.gesture = { kind: "laser" };
+      this.invalidate();
+    }
   }
 
   pointerMove(p: PointerInput): void {
@@ -385,6 +400,9 @@ export class WhiteboardEngine {
         break;
       case "erasing":
         this.eraseAt(g, w);
+        break;
+      case "laser":
+        this.trails = addLaserPoint(this.trails, w, this.clock());
         break;
       case "rotating": {
         const cur = Math.atan2(w.y - g.center.y, w.x - g.center.x);
@@ -443,6 +461,9 @@ export class WhiteboardEngine {
       case "rotating":
         if (g.changed) this.commit();
         break;
+      case "laser":
+        this.trails = endLaserTrail(this.trails, this.clock());
+        break;
       case "panning":
         break;
     }
@@ -457,6 +478,8 @@ export class WhiteboardEngine {
     if (g.kind === "marquee") {
       this.marquee = null;
       this.setSelection(g.base);
+    } else if (g.kind === "laser") {
+      this.trails = endLaserTrail(this.trails, this.clock());
     } else if (g.kind !== "panning") {
       this.elements = g.before;
     }

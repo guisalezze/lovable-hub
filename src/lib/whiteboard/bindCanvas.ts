@@ -34,6 +34,8 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
     if (!ctx || size.w === 0) return;
     canvas.style.cursor =
       engine.spaceHeld || engine.tool === "hand" ? "grab" : engine.tool === "select" ? "default" : "crosshair";
+    const now = performance.now();
+    const animating = engine.tickLaser(now); // o laser some sozinho: enquanto houver rastro, continua animando
     drawScene(ctx, {
       elements: engine.elements,
       camera: engine.camera,
@@ -45,8 +47,10 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
       dpr: size.dpr,
       marquee: engine.marquee,
       trails: engine.trails,
+      now,
     });
     opts.onFrame?.();
+    if (animating) render();
   };
   const render = () => {
     if (!raf) raf = requestAnimationFrame(draw);

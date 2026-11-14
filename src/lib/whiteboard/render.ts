@@ -5,6 +5,7 @@ import getStroke from "perfect-freehand";
 import type { Camera, LaserTrail, WbElement } from "./types";
 import { resolveColor, type ThemeColors } from "./theme";
 import { getBounds, selectionFrame, type Bounds } from "./geometry";
+import { laserAlpha } from "./laser";
 
 const GRID_STEP = 24; // unidades do mundo
 const generator = rough.generator();
@@ -164,6 +165,37 @@ export interface DrawArgs {
   dpr: number;
   marquee?: Bounds | null;
   trails?: LaserTrail[];
+  /** Instante (ms, performance.now) usado para o brilho do laser; padrão: agora. */
+  now?: number;
+}
+
+function drawLaser(ctx: CanvasRenderingContext2D, trails: LaserTrail[], zoom: number, now: number) {
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = "#ff2d2d";
+  ctx.shadowBlur = 12;
+  for (const trail of trails) {
+    const pts = trail.points;
+    for (let i = 1; i < pts.length; i++) {
+      const alpha = laserAlpha(pts[i], now);
+      if (alpha <= 0) continue;
+      ctx.strokeStyle = `rgba(255, 45, 45, ${alpha})`;
+      ctx.lineWidth = (2 + 5 * alpha) / zoom;
+      ctx.beginPath();
+      ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
+      ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+    }
+    if (trail.ended === null && pts.length > 0) {
+      const head = pts[pts.length - 1];
+      ctx.fillStyle = "#ff2d2d";
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, 5 / zoom, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
 }
 
 export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
@@ -220,6 +252,8 @@ export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
       }
     });
   }
+
+  if (args.trails && args.trails.length > 0) drawLaser(ctx, args.trails, camera.zoom, args.now ?? performance.now());
 
   if (marquee) {
     ctx.save();
