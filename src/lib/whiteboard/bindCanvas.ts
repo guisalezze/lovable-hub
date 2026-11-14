@@ -11,6 +11,10 @@ export interface BindOptions {
   root?: HTMLElement;
   /** Chamado depois de cada quadro desenhado (para a interface acompanhar zoom e histórico). */
   onFrame?(): void;
+  /** Tecla F: liga/desliga o modo apresentação (quem decide o que isso faz é a interface). */
+  onPresentation?(): void;
+  /** false = esconde a moldura de seleção (modo apresentação). Padrão: true. */
+  getShowSelection?(): boolean;
 }
 
 export interface CanvasBinding {
@@ -48,6 +52,7 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
       marquee: engine.marquee,
       trails: engine.trails,
       now,
+      showSelection: opts.getShowSelection ? opts.getShowSelection() : true,
     });
     opts.onFrame?.();
     if (animating) render();
@@ -167,6 +172,9 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
         break;
       case "back":
         engine.sendToBack();
+        break;
+      case "presentation":
+        opts.onPresentation?.();
         break;
     }
   };

@@ -167,6 +167,8 @@ export interface DrawArgs {
   trails?: LaserTrail[];
   /** Instante (ms, performance.now) usado para o brilho do laser; padrão: agora. */
   now?: number;
+  /** false = não desenha a moldura de seleção nem as alças (modo apresentação). Padrão: true. */
+  showSelection?: boolean;
 }
 
 function drawLaser(ctx: CanvasRenderingContext2D, trails: LaserTrail[], zoom: number, now: number) {
@@ -233,7 +235,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
 
   // seleção e alças
   const selected = elements.filter((e) => selectedIds.has(e.id));
-  const frame = selectionFrame(selected, camera.zoom);
+  const frame = args.showSelection === false ? null : selectionFrame(selected, camera.zoom);
   if (frame) {
     const b = frame.bounds;
     withRotation(ctx, b, frame.angle, () => {

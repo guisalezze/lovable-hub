@@ -17,7 +17,8 @@ export type ShortcutAction =
   | { kind: "forward" }
   | { kind: "backward" }
   | { kind: "front" }
-  | { kind: "back" };
+  | { kind: "back" }
+  | { kind: "presentation" };
 
 const TOOL_KEYS: Record<string, Tool> = {
   v: "select", "1": "select",
@@ -88,6 +89,7 @@ export function resolveShortcut(e: ShortcutEvent): ShortcutAction | null {
   if (key === "Escape") return { kind: "escape" };
   if (key === "]") return { kind: "forward" };
   if (key === "[") return { kind: "backward" };
+  if (key === "f") return { kind: "presentation" };
   const tool = TOOL_KEYS[key];
   return tool ? { kind: "tool", tool } : null;
 }

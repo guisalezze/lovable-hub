@@ -7,6 +7,7 @@ import { getSelectionBounds } from "@/lib/whiteboard/geometry";
 import type { StylePatch, Tool, WbElement } from "@/lib/whiteboard/types";
 import { BottomBar, ToolPalette } from "./Toolbar";
 import { StylePanel } from "./StylePanel";
+import { usePresentationMode } from "./usePresentationMode";
 import { BoardContextMenu, type MenuAction } from "./BoardContextMenu";
 import { clipboard } from "@/lib/whiteboard/ops";
 
@@ -35,6 +36,13 @@ export function Whiteboard({ initialElements, onChange, header, banner }: Whiteb
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const initialRef = useRef(initialElements);
+
+  const presentation = usePresentationMode(rootRef);
+  const presentationRef = useRef(false);
+  presentationRef.current = presentation.active;
+  const togglePresentationRef = useRef<() => void>(() => {});
+  togglePresentationRef.current = () => void (presentation.active ? presentation.exit() : presentation.enter());
+  const [hint, setHint] = useState(false);
 
   const [tool, setTool] = useState<Tool>("select");
   const [zoom, setZoom] = useState(1);
@@ -74,7 +82,9 @@ export function Whiteboard({ initialElements, onChange, header, banner }: Whiteb
     binding = bindCanvas(canvas, engine, {
       root,
       getTheme: () => theme,
-      getShowGrid: () => true,
+      getShowGrid: () => !presentationRef.current, // sem grade na apresentação: vídeo mais limpo
+      onPresentation: () => togglePresentationRef.current(),
+      getShowSelection: () => !presentationRef.current,
       onFrame: () => {
         if (!fitted) {
           // primeiro quadro desenhado: já sabemos o tamanho da tela, então enquadra o conteúdo
@@ -106,6 +116,18 @@ export function Whiteboard({ initialElements, onChange, header, banner }: Whiteb
       bindingRef.current = null;
     };
   }, []);
+
+  // Entrar/sair da apresentação: redesenha (a grade some) e mostra a dica por alguns segundos
+  useEffect(() => {
+    bindingRef.current?.render();
+    if (!presentation.active) {
+      setHint(false);
+      return;
+    }
+    setHint(true);
+    const timer = setTimeout(() => setHint(false), 3500);
+    return () => clearTimeout(timer);
+  }, [presentation.active]);
 
   const viewport = useCallback(() => {
     const r = canvasRef.current?.getBoundingClientRect();
@@ -167,27 +189,37 @@ export function Whiteboard({ initialElements, onChange, header, banner }: Whiteb
     focusBoard();
   };
 
-  const showStylePanel = selectedCount > 0 || DRAWING_TOOLS.includes(tool);
+  const showStylePanel = !presentation.active && (selectedCount > 0 || DRAWING_TOOLS.includes(tool));
 
   return (
-    <div ref={rootRef} data-whiteboard-root tabIndex={0} className="relative h-full w-full select-none overflow-hidden bg-background outline-none">
+    <div
+      ref={rootRef}
+      data-whiteboard-root
+      tabIndex={0}
+      onKeyDown={(e) => {
+        // sem tela cheia (negada pelo navegador) o Esc chega aqui; com tela cheia o navegador cuida dele
+        if (e.key === "Escape" && presentation.active) void presentation.exit();
+      }}
+      className="relative h-full w-full select-none overflow-hidden bg-background outline-none">
       <BoardContextMenu {...menuInfo} onAction={runMenuAction} onContextMenu={refreshMenuInfo}>
         <div className="absolute inset-0">
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />
         </div>
       </BoardContextMenu>
 
-      {header ? <div className="absolute left-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm backdrop-blur">{header}</div> : null}
+      {header && !presentation.active ? <div className="absolute left-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm backdrop-blur">{header}</div> : null}
 
-      <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
-        <ToolPalette
-          tool={tool}
-          onTool={(t) => {
-            engineRef.current?.setTool(t);
-            focusBoard();
-          }}
-        />
-      </div>
+      {!presentation.active ? (
+        <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
+          <ToolPalette
+            tool={tool}
+            onTool={(t) => {
+              engineRef.current?.setTool(t);
+              focusBoard();
+            }}
+          />
+        </div>
+      ) : null}
 
       {showStylePanel ? (
         <div className="absolute left-3 top-20 z-10">
@@ -197,30 +229,51 @@ export function Whiteboard({ initialElements, onChange, header, banner }: Whiteb
 
       {banner ? <div className="absolute left-1/2 top-16 z-20 -translate-x-1/2">{banner}</div> : null}
 
-      <div className="absolute bottom-3 left-3 z-10">
-        <BottomBar
-          zoom={zoom}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          onUndo={() => {
-            engineRef.current?.undo();
-            focusBoard();
-          }}
-          onRedo={() => {
-            engineRef.current?.redo();
-            focusBoard();
-          }}
-          onZoomIn={() => zoomBy(1.25)}
-          onZoomOut={() => zoomBy(1 / 1.25)}
-          onResetZoom={() => zoomBy(1 / (engineRef.current?.camera.zoom ?? 1))}
-          onFit={() => {
-            const engine = engineRef.current;
-            if (!engine) return;
-            engine.camera = fitCamera(getSelectionBounds(engine.elements), viewport());
-            bindingRef.current?.render();
-          }}
-        />
-      </div>
+      {!presentation.active ? (
+        <div className="absolute bottom-3 left-3 z-10">
+          <BottomBar
+            zoom={zoom}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onUndo={() => {
+              engineRef.current?.undo();
+              focusBoard();
+            }}
+            onRedo={() => {
+              engineRef.current?.redo();
+              focusBoard();
+            }}
+            onZoomIn={() => zoomBy(1.25)}
+            onZoomOut={() => zoomBy(1 / 1.25)}
+            onResetZoom={() => zoomBy(1 / (engineRef.current?.camera.zoom ?? 1))}
+            onFit={() => {
+              const engine = engineRef.current;
+              if (!engine) return;
+              engine.camera = fitCamera(getSelectionBounds(engine.elements), viewport());
+              bindingRef.current?.render();
+            }}
+            onPresent={() => {
+              void presentation.enter();
+              focusBoard();
+            }}
+          />
+        </div>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => void presentation.exit()}
+            className="absolute right-3 top-3 z-20 rounded-md border border-border bg-card/90 px-3 py-1.5 text-xs opacity-0 shadow-sm transition-opacity hover:opacity-100 focus:opacity-100"
+          >
+            Sair da apresentação (Esc)
+          </button>
+          {hint ? (
+            <div role="status" className="pointer-events-none absolute bottom-6 left-1/2 z-20 -translate-x-1/2 rounded-full border border-border bg-card/90 px-4 py-2 text-xs shadow-sm">
+              Modo apresentação · Esc para sair · K laser · P lápis · V seleção
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

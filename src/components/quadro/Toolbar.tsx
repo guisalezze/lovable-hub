@@ -9,6 +9,7 @@ import {
   MousePointer2,
   MoveUpRight,
   Pencil,
+  Presentation,
   Redo2,
   Square,
   Undo2,
@@ -80,6 +81,7 @@ interface BottomBarProps {
   onZoomOut: () => void;
   onResetZoom: () => void;
   onFit: () => void;
+  onPresent: () => void;
 }
 
 export function BottomBar(p: BottomBarProps) {
@@ -114,6 +116,12 @@ export function BottomBar(p: BottomBarProps) {
       <Tip label="Ajustar ao conteúdo">
         <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label="Ajustar ao conteúdo" onClick={p.onFit}>
           <Maximize className="h-4 w-4" />
+        </Button>
+      </Tip>
+      <div className="mx-1 h-5 w-px bg-border" />
+      <Tip label="Modo apresentação (esconde as barras)" shortcut="F">
+        <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label="Modo apresentação" onClick={p.onPresent}>
+          <Presentation className="h-4 w-4" />
         </Button>
       </Tip>
     </div>
