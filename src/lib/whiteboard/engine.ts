@@ -2,6 +2,8 @@ import type { Camera, ElementType, LaserTrail, StylePatch, Tool, WbElement } fro
 import { DEFAULT_STYLE } from "./palette";
 import { addLaserPoint, endLaserTrail, pruneLaser } from "./laser";
 import { measureText } from "./text";
+import { computeSnap, type Guide } from "./snap";
+import { applyBindings, findBindTarget, isBindable, moveEndpoint, pruneBindings, reconcileMoving, syncBindings } from "./binding";
 import {
   alignElements,
   bringForward,
@@ -24,6 +26,9 @@ import {
   bendFromHandle,
   bendHandlePoint,
   elementsInRect,
+  endpointHandles,
+  getSelectionBounds,
+  rotatedAabb,
   getBounds,
   handleAtPoint,
   hitTest,
@@ -67,6 +72,7 @@ type Gesture =
   | { kind: "erasing"; before: WbElement[]; removed: Set<string> }
   | { kind: "laser" }
   | { kind: "bending"; id: string; before: WbElement[]; changed: boolean }
+  | { kind: "endpoint"; id: string; which: "start" | "end"; before: WbElement[]; changed: boolean }
   | { kind: "rotating"; id: string; center: Pt; startAngle: number; origAngle: number; before: WbElement[]; changed: boolean };
 
 const SHAPE_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "line", "arrow"];
@@ -132,6 +138,10 @@ export class WhiteboardEngine {
   defaultStyle: StylePatch = {};
   /** Relógio do laser (ms). Os testes trocam por um relógio falso. */
   clock: () => number = () => performance.now();
+  /** Forma que vai receber a ponta da seta que está sendo desenhada/arrastada (a interface a destaca). */
+  bindHighlightId: string | null = null;
+  /** Linhas-guia do alinhamento automático durante o arrasto. */
+  guides: Guide[] = [];
   /** Id do texto que está sendo escrito agora (o campo de texto da interface cuida dele). */
   editingId: string | null = null;
   private newTextId: string | null = null;
@@ -468,21 +478,38 @@ export class WhiteboardEngine {
     switch (g.kind) {
       case "creating":
         this.moveCreate(g, w, p.shift);
+        this.bindHighlightId = this.tool === "arrow" ? (findBindTarget(g.before, w, 8 / this.camera.zoom, new Set())?.id ?? null) : null;
         break;
       case "drawing":
         this.moveDraw(g, w);
         break;
       case "moving": {
-        const dx = w.x - g.start.x;
-        const dy = w.y - g.start.y;
+        let dx = w.x - g.start.x;
+        let dy = w.y - g.start.y;
         g.moved = g.moved || dx !== 0 || dy !== 0;
-        this.elements = g.before.map((el) => (g.ids.has(el.id) ? { ...el, x: el.x + dx, y: el.y + dy } : el));
+        this.guides = [];
+        if (!p.ctrl && (dx !== 0 || dy !== 0)) {
+          // alinhamento automático: encaixa bordas e centros nos das outras formas (Ctrl solta)
+          const movingBounds = getSelectionBounds(g.before.filter((el) => g.ids.has(el.id)));
+          if (movingBounds) {
+            const others = g.before.filter((el) => !g.ids.has(el.id) && isBindable(el)).map(rotatedAabb);
+            const snap = computeSnap({ ...movingBounds, x: movingBounds.x + dx, y: movingBounds.y + dy }, others, 6 / this.camera.zoom);
+            dx += snap.dx;
+            dy += snap.dy;
+            this.guides = snap.guides;
+          }
+        }
+        const moved = g.before.map((el) => (g.ids.has(el.id) ? { ...el, x: el.x + dx, y: el.y + dy } : el));
+        this.elements = reconcileMoving(moved, g.ids); // setas presas acompanham (ou soltam)
         break;
       }
       case "resizing": {
         const next = resizeBounds(g.origBounds, g.handle, w.x - g.start.x, w.y - g.start.y, p.shift);
         g.changed = true;
-        this.elements = g.before.map((el) => (g.ids.has(el.id) ? transformElement(el, g.origBounds, next) : el));
+        this.elements = applyBindings(
+          g.before.map((el) => (g.ids.has(el.id) ? transformElement(el, g.origBounds, next) : el)),
+          g.ids,
+        );
         break;
       }
       case "marquee": {
@@ -516,6 +543,16 @@ export class WhiteboardEngine {
         });
         break;
       }
+      case "endpoint": {
+        g.changed = true;
+        const arrow = g.before.find((e) => e.id === g.id)!;
+        const target = arrow.type === "arrow" ? findBindTarget(g.before, w, 8 / this.camera.zoom, new Set([g.id])) : null;
+        this.bindHighlightId = target ? target.id : null;
+        const byId = new Map(g.before.map((e) => [e.id, e]));
+        const moved = moveEndpoint(arrow, g.which, w, target, byId);
+        this.elements = g.before.map((e) => (e.id === g.id ? moved : e));
+        break;
+      }
       case "laser":
         this.trails = addLaserPoint(this.trails, w, this.clock());
         break;
@@ -527,7 +564,10 @@ export class WhiteboardEngine {
           angle = Math.round(angle / step) * step;
         }
         g.changed = true;
-        this.elements = g.before.map((el) => (el.id === g.id ? { ...el, angle } : el));
+        this.elements = applyBindings(
+          g.before.map((el) => (el.id === g.id ? { ...el, angle } : el)),
+          new Set([g.id]),
+        );
         break;
       }
     }
@@ -538,6 +578,8 @@ export class WhiteboardEngine {
     const g = this.gesture;
     if (!g) return;
     this.gesture = null;
+    this.guides = [];
+    this.bindHighlightId = null;
     if (g.kind === "drawing") this.moveDraw(g, this.toWorld(p)); // o ponto onde o mouse foi solto também faz parte do traço
 
     switch (g.kind) {
@@ -548,6 +590,7 @@ export class WhiteboardEngine {
         if (tooSmall) {
           this.elements = g.before;
         } else {
+          this.bindNewArrow(g.id, g.start, g.before);
           this.tool = "select";
           this.cb.onToolChange("select");
           this.setSelection(new Set([g.id]));
@@ -577,6 +620,7 @@ export class WhiteboardEngine {
         if (g.changed) this.commit();
         break;
       case "bending":
+      case "endpoint":
         if (g.changed) this.commit();
         break;
       case "laser":
@@ -593,6 +637,8 @@ export class WhiteboardEngine {
     const g = this.gesture;
     if (!g) return;
     this.gesture = null;
+    this.guides = [];
+    this.bindHighlightId = null;
     if (g.kind === "marquee") {
       this.marquee = null;
       this.setSelection(g.base);
@@ -614,6 +660,18 @@ export class WhiteboardEngine {
       if (hp && Math.hypot(w.x - hp.x, w.y - hp.y) <= 8 / this.camera.zoom) {
         this.gesture = { kind: "bending", id: selected[0].id, before: this.elements, changed: false };
         return;
+      }
+    }
+    // alças das pontas de uma seta/linha de 2 pontos
+    if (selected.length === 1 && !selected[0].locked) {
+      const eh = endpointHandles(selected[0]);
+      if (eh) {
+        const ds = Math.hypot(w.x - eh.start.x, w.y - eh.start.y);
+        const de = Math.hypot(w.x - eh.end.x, w.y - eh.end.y);
+        if (Math.min(ds, de) <= 8 / this.camera.zoom) {
+          this.gesture = { kind: "endpoint", id: selected[0].id, which: ds <= de ? "start" : "end", before: this.elements, changed: false };
+          return;
+        }
       }
     }
     const frame = selectionFrame(selected, this.camera.zoom);
@@ -751,7 +809,20 @@ export class WhiteboardEngine {
   }
 
   /** Fecha um gesto que mudou a cena: um passo de histórico e um aviso. */
+  /** Seta recém-criada: prende as pontas às formas sob elas (menos se as duas pontas caírem na mesma forma). */
+  private bindNewArrow(id: string, start: Pt, before: WbElement[]): void {
+    const el = this.elements.find((e) => e.id === id);
+    if (!el || el.type !== "arrow" || !el.points) return;
+    const margin = 8 / this.camera.zoom;
+    const s = findBindTarget(before, start, margin, new Set());
+    const e = findBindTarget(before, { x: el.x + el.points[1][0], y: el.y + el.points[1][1] }, margin, new Set());
+    if ((s && e && s.id === e.id) || (!s && !e)) return;
+    const bindings = { ...(s ? { start: s.id } : {}), ...(e ? { end: e.id } : {}) };
+    this.elements = this.elements.map((x) => (x.id === id ? { ...x, bindings } : x));
+  }
+
   private commit(): void {
+    this.elements = syncBindings(pruneBindings(this.elements)); // forma apagada solta a seta; mudanças nas formas reposicionam as pontas
     this.history.push(this.elements);
     this.cb.onChange(this.elements);
     this.invalidate(); // operações pelo teclado/menu não passam por pointerUp: sem isto o canvas ficaria desatualizado

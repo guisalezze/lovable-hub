@@ -33,6 +33,8 @@ export interface WbElement {
   points?: [number, number][];
   /** arrow/line de 2 pontos: ponto de controle da curva (relativo a x,y, como os pontos). Sem isto, a linha é reta. */
   bend?: [number, number];
+  /** arrow: ids das formas a que cada ponta está presa (a seta acompanha a forma quando ela se move). */
+  bindings?: { start?: string; end?: string };
   /** type "text": conteúdo (linhas separadas por 
 ) e tamanho da fonte */
   text?: string;

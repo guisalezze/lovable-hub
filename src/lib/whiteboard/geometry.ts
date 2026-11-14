@@ -38,6 +38,15 @@ export function curvePoints(el: WbElement, steps = 24): Pt[] {
   return out;
 }
 
+/** Seta/linha de 2 pontos, sem rotação: tem alças nas pontas (e não nas bordas da caixa). */
+export function endpointHandles(el: WbElement): { start: Pt; end: Pt } | null {
+  if (el.type !== "arrow" && el.type !== "line") return null;
+  if (el.angle) return null;
+  const pts = absPoints(el);
+  if (pts.length !== 2) return null;
+  return { start: pts[0], end: pts[1] };
+}
+
 /** Onde fica a bolinha de curvar (meio da curva): só em seta/linha de 2 pontos, sem rotação. */
 export function bendHandlePoint(el: WbElement): Pt | null {
   if (el.type !== "arrow" && el.type !== "line") return null;
@@ -62,6 +71,41 @@ export function bendFromHandle(el: WbElement, world: Pt, snap: number): [number,
   if (Math.hypot(world.x - mid.x, world.y - mid.y) <= snap) return undefined;
   // a curva passa por B(0.5) = 0.25a + 0.5c + 0.25b = world  =>  c = 2*world - mid
   return [2 * world.x - mid.x - el.x, 2 * world.y - mid.y - el.y];
+}
+
+/** O ponto está dentro da caixa do elemento (com folga `margin`)? Considera a rotação. */
+export function pointInElementBox(el: WbElement, p: Pt, margin: number): boolean {
+  const b = getBounds(el);
+  const local = el.angle ? rotate(p, center(b), -el.angle) : p;
+  return local.x >= b.x - margin && local.x <= b.x + b.width + margin && local.y >= b.y - margin && local.y <= b.y + b.height + margin;
+}
+
+export function elementCenter(el: WbElement): Pt {
+  return center(getBounds(el));
+}
+
+/**
+ * Ponto na borda da forma, na direção de `toward` (a partir do centro), afastado `gap`.
+ * É onde uma seta presa à forma encosta. Retângulo/texto, elipse e losango; considera a rotação.
+ */
+export function boundaryPoint(el: WbElement, toward: Pt, gap = 0): Pt {
+  const b = getBounds(el);
+  const c = center(b);
+  const t = el.angle ? rotate(toward, c, -el.angle) : toward;
+  let dx = t.x - c.x;
+  const dy = t.y - c.y;
+  if (dx === 0 && dy === 0) dx = 1;
+  const len = Math.hypot(dx, dy);
+  const ux = dx / len;
+  const uy = dy / len;
+  const hw = Math.max(b.width / 2, 0.001);
+  const hh = Math.max(b.height / 2, 0.001);
+  let s: number;
+  if (el.type === "ellipse") s = 1 / Math.sqrt((ux / hw) ** 2 + (uy / hh) ** 2);
+  else if (el.type === "diamond") s = 1 / (Math.abs(ux) / hw + Math.abs(uy) / hh);
+  else s = Math.min(ux === 0 ? Infinity : hw / Math.abs(ux), uy === 0 ? Infinity : hh / Math.abs(uy));
+  const p = { x: c.x + ux * (s + gap), y: c.y + uy * (s + gap) };
+  return el.angle ? rotate(p, c, el.angle) : p;
 }
 
 /** Caixa sem rotação. Linhas e lápis usam os pontos; formas usam x/y/width/height. */
@@ -317,6 +361,7 @@ export function selectionFrame(selected: WbElement[], zoom: number): SelectionFr
     const el = selected[0];
     const bounds = getBounds(el);
     if (el.locked) return { bounds, angle: el.angle, handles: [] };
+    if ((el.type === "arrow" || el.type === "line") && el.points?.length === 2) return { bounds, angle: el.angle, handles: [] }; // as pontas são as alças
     const all = handlePoints(bounds, zoom, true);
     return { bounds, angle: el.angle, handles: el.angle ? all.filter(([id]) => id === "rotate") : all };
   }

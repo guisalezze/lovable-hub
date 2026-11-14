@@ -49,6 +49,15 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
   const togglePresentationRef = useRef<() => void>(() => {});
   togglePresentationRef.current = () => void (presentation.active ? presentation.exit() : presentation.enter());
   const [hint, setHint] = useState(false);
+  const [gridOn, setGridOn] = useState(() => {
+    try {
+      return localStorage.getItem("quadro:grid") !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const gridRef = useRef(gridOn);
+  gridRef.current = gridOn;
 
   const [tool, setTool] = useState<Tool>("select");
   const [zoom, setZoom] = useState(1);
@@ -102,7 +111,7 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
     binding = bindCanvas(canvas, engine, {
       root,
       getTheme: () => theme,
-      getShowGrid: () => !presentationRef.current, // sem grade na apresentação: vídeo mais limpo
+      getShowGrid: () => gridRef.current && !presentationRef.current, // sem grade na apresentação: vídeo mais limpo
       onPresentation: () => togglePresentationRef.current(),
       getShowSelection: () => !presentationRef.current,
       onFrame: () => {
@@ -149,6 +158,16 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
     const timer = setTimeout(() => setHint(false), 3500);
     return () => clearTimeout(timer);
   }, [presentation.active]);
+
+  // a grade liga/desliga e a escolha fica guardada neste navegador
+  useEffect(() => {
+    bindingRef.current?.render();
+    try {
+      localStorage.setItem("quadro:grid", gridOn ? "on" : "off");
+    } catch {
+      /* sem armazenamento: vale só nesta sessão */
+    }
+  }, [gridOn]);
 
   const viewport = useCallback(() => {
     const r = canvasRef.current?.getBoundingClientRect();
@@ -320,6 +339,11 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
               if (!engine) return;
               engine.camera = fitCamera(getSelectionBounds(engine.elements), viewport());
               bindingRef.current?.render();
+            }}
+            gridOn={gridOn}
+            onToggleGrid={() => {
+              setGridOn((v) => !v);
+              focusBoard();
             }}
             onPresent={() => {
               void presentation.enter();

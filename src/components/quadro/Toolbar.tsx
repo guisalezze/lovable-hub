@@ -3,6 +3,7 @@ import {
   Circle,
   Diamond,
   Eraser,
+  Grid3x3,
   Hand,
   Maximize,
   Minus,
@@ -85,6 +86,8 @@ interface BottomBarProps {
   onResetZoom: () => void;
   onFit: () => void;
   onPresent: () => void;
+  gridOn: boolean;
+  onToggleGrid: () => void;
 }
 
 export function BottomBar(p: BottomBarProps) {
@@ -119,6 +122,19 @@ export function BottomBar(p: BottomBarProps) {
       <Tip label="Ajustar ao conteúdo">
         <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label="Ajustar ao conteúdo" onClick={p.onFit}>
           <Maximize className="h-4 w-4" />
+        </Button>
+      </Tip>
+      <Tip label={p.gridOn ? "Esconder a grade" : "Mostrar a grade"}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn("h-8 w-8", p.gridOn && "bg-primary/15 text-primary hover:bg-primary/20")}
+          aria-label="Grade"
+          aria-pressed={p.gridOn}
+          onClick={p.onToggleGrid}
+        >
+          <Grid3x3 className="h-4 w-4" />
         </Button>
       </Tip>
       <div className="mx-1 h-5 w-px bg-border" />

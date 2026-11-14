@@ -54,6 +54,8 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
       now,
       showSelection: opts.getShowSelection ? opts.getShowSelection() : true,
       hiddenId: engine.editingId,
+      guides: engine.guides,
+      highlightId: engine.bindHighlightId,
     });
     opts.onFrame?.();
     if (animating) render();

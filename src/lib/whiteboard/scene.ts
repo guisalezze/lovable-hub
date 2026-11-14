@@ -66,6 +66,11 @@ function elementError(raw: unknown, index: number): string | null {
   if (e.groupId !== null && typeof e.groupId !== "string") return `${at}: campo "groupId" inválido`;
   if (e.text !== undefined && typeof e.text !== "string") return `${at}: campo "text" inválido`;
   if (e.fontSize !== undefined && !isNum(e.fontSize)) return `${at}: campo "fontSize" inválido`;
+  if (e.bindings !== undefined) {
+    const b = e.bindings as Record<string, unknown> | null;
+    const ok = !!b && typeof b === "object" && !Array.isArray(b) && ["start", "end"].every((k) => b[k] === undefined || typeof b[k] === "string");
+    if (!ok) return `${at}: campo "bindings" inválido`;
+  }
   if (e.bend !== undefined && !(Array.isArray(e.bend) && e.bend.length === 2 && isNum(e.bend[0]) && isNum(e.bend[1]))) return `${at}: campo "bend" inválido`;
   if (e.points !== undefined && !isPoints(e.points)) return `${at}: campo "points" inválido`;
   return null;

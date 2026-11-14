@@ -13,15 +13,25 @@ export const clipboard: { items: WbElement[]; pasteCount: number } = { items: []
 /** Cópias com id e seed novos, deslocadas em `offset`; cada grupo copiado ganha um groupId novo. */
 export function cloneElements(source: WbElement[], offset: number): WbElement[] {
   const groups = new Map<string, string>();
+  const newIds = new Map(source.map((el) => [el.id, newId()]));
   return source.map((el) => {
     let groupId = el.groupId;
     if (groupId) {
       if (!groups.has(groupId)) groups.set(groupId, newId());
       groupId = groups.get(groupId)!;
     }
+    // setas presas: a cópia prende na CÓPIA da forma; se a forma não foi copiada, a ponta fica solta
+    let bindings: WbElement["bindings"];
+    if (el.bindings) {
+      const start = el.bindings.start ? newIds.get(el.bindings.start) : undefined;
+      const end = el.bindings.end ? newIds.get(el.bindings.end) : undefined;
+      if (start || end) bindings = { ...(start ? { start } : {}), ...(end ? { end } : {}) };
+    }
+    const { bindings: _old, ...rest } = el;  
     return {
-      ...el,
-      id: newId(),
+      ...rest,
+      ...(bindings ? { bindings } : {}),
+      id: newIds.get(el.id)!,
       seed: newSeed(),
       x: el.x + offset,
       y: el.y + offset,

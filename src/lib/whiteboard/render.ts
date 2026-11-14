@@ -4,7 +4,8 @@ import type { Drawable, Options } from "roughjs/bin/core";
 import getStroke from "perfect-freehand";
 import type { Camera, LaserTrail, WbElement } from "./types";
 import { resolveColor, type ThemeColors } from "./theme";
-import { bendHandlePoint, getBounds, rotatedAabb, selectionFrame, type Bounds } from "./geometry";
+import { bendHandlePoint, endpointHandles, getBounds, rotatedAabb, selectionFrame, type Bounds } from "./geometry";
+import type { Guide } from "./snap";
 import { laserAlpha } from "./laser";
 import { FONT_FAMILY, TEXT_LINE_HEIGHT, textLines } from "./text";
 
@@ -204,6 +205,10 @@ export interface DrawArgs {
   showSelection?: boolean;
   /** Elemento que não deve ser desenhado (o texto que está sendo editado: o campo de texto o mostra). */
   hiddenId?: string | null;
+  /** Linhas-guia do alinhamento automático (aparecem enquanto se arrasta). */
+  guides?: Guide[];
+  /** Forma que vai receber a ponta de uma seta (destaque). */
+  highlightId?: string | null;
 }
 
 function drawText(ctx: CanvasRenderingContext2D, el: WbElement, theme: ThemeColors) {
@@ -283,6 +288,22 @@ export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
     });
   }
 
+  // destaque da forma que vai receber a ponta da seta
+  if (args.highlightId) {
+    const target = elements.find((e) => e.id === args.highlightId);
+    if (target) {
+      const b = getBounds(target);
+      const pad = 5 / camera.zoom;
+      withRotation(ctx, b, target.angle, () => {
+        ctx.save();
+        ctx.strokeStyle = theme.selection;
+        ctx.lineWidth = 2.5 / camera.zoom;
+        ctx.strokeRect(b.x - pad, b.y - pad, b.width + pad * 2, b.height + pad * 2);
+        ctx.restore();
+      });
+    }
+  }
+
   // seleção e alças
   const selected = elements.filter((e) => selectedIds.has(e.id));
   const frame = args.showSelection === false ? null : selectionFrame(selected, camera.zoom);
@@ -306,6 +327,21 @@ export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
   }
 
   if (args.showSelection !== false && selected.length === 1 && !selected[0].locked) {
+    // alças das pontas da seta/linha: cheia quando a ponta está presa a uma forma
+    const eh = endpointHandles(selected[0]);
+    if (eh) {
+      ctx.save();
+      ctx.strokeStyle = theme.selection;
+      ctx.lineWidth = 1.5 / camera.zoom;
+      for (const [pt, bound] of [[eh.start, !!selected[0].bindings?.start], [eh.end, !!selected[0].bindings?.end]] as const) {
+        ctx.fillStyle = bound ? theme.selection : theme.background;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 5 / camera.zoom, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
     const hp = bendHandlePoint(selected[0]); // bolinha de curvar
     if (hp) {
       ctx.save();
@@ -318,6 +354,25 @@ export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
       ctx.stroke();
       ctx.restore();
     }
+  }
+
+  if (args.guides && args.guides.length > 0) {
+    ctx.save();
+    ctx.strokeStyle = theme.selection;
+    ctx.lineWidth = 1 / camera.zoom;
+    ctx.setLineDash([5 / camera.zoom, 4 / camera.zoom]);
+    for (const g of args.guides) {
+      ctx.beginPath();
+      if (g.axis === "x") {
+        ctx.moveTo(g.pos, g.from);
+        ctx.lineTo(g.pos, g.to);
+      } else {
+        ctx.moveTo(g.from, g.pos);
+        ctx.lineTo(g.to, g.pos);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   if (args.trails && args.trails.length > 0) drawLaser(ctx, args.trails, camera.zoom, args.now ?? performance.now());
