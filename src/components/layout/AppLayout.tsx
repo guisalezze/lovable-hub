@@ -21,6 +21,7 @@ import { useSaleRealtime } from "@/hooks/useSaleRealtime";
 import { useTaskRealtime } from "@/hooks/useTaskRealtime";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { isInsideWhiteboard } from "@/lib/whiteboard/shortcuts";
 
 export function AppLayout() {
   // Escuta Realtime e dispara toast + som a cada venda aprovada
@@ -59,6 +60,8 @@ export function AppLayout() {
     // Don't trigger shortcuts when typing in inputs
     const tag = (e.target as HTMLElement)?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (e.target as HTMLElement)?.isContentEditable) return;
+    // O quadro tem os próprios atalhos (N = nota, L = linha...): não navegar para outra página de dentro dele
+    if (isInsideWhiteboard(e.target)) return;
 
     if (e.key === "n" && !e.metaKey && !e.ctrlKey) {
       navigate("/tarefas");

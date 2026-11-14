@@ -26,6 +26,7 @@ import {
   Zap,
   Instagram,
   Plus,
+  PenTool,
 } from "lucide-react";
 import { useProject, type Project } from "@/contexts/ProjectContext";
 import { useState, useEffect, useRef } from "react";
@@ -77,6 +78,7 @@ const connectItems: NavItem[] = [
 ];
 
 const sharedItems: NavItem[] = [
+  { label: "Quadro", icon: PenTool, to: "/quadro" },
   { label: "Equipe", icon: Users2, to: "/equipe" },
   { label: "Configurações", icon: Settings, to: "/configuracoes" },
 ];

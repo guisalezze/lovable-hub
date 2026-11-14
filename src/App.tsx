@@ -30,6 +30,8 @@ const OnboardingAdmin = lazyPage(() => import("./pages/OnboardingAdmin"));
 const Onboarding = lazyPage(() => import("./pages/Onboarding"));
 const Implementacoes = lazyPage(() => import("./pages/Implementacoes"));
 const Clientes = lazyPage(() => import("./pages/Clientes"));
+const Quadros = lazyPage(() => import("./pages/Quadros"));
+const QuadroEditor = lazyPage(() => import("./pages/QuadroEditor"));
 const MetaAds = lazyPage(() => import("./pages/nutra/MetaAds"));
 const MetaCallback = lazyPage(() => import("./pages/nutra/MetaCallback"));
 const Copies = lazyPage(() => import("./pages/Copies"));
@@ -272,6 +274,8 @@ const App = () => (
             <Route path="/perfectpay" element={<PerfectPay />} />
             <Route path="/instagram-automacoes" element={<InstagramAutomacoes />} />
             <Route path="/instagram-automacoes/:id" element={<InstagramCampanhaEditor />} />
+            <Route path="/quadro" element={<Quadros />} />
+            <Route path="/quadro/:id" element={<QuadroEditor />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

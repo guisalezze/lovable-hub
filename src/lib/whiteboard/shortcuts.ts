@@ -65,3 +65,10 @@ export function resolveShortcut(e: ShortcutEvent): ShortcutAction | null {
   const tool = TOOL_KEYS[key];
   return tool ? { kind: "tool", tool } : null;
 }
+
+/** O alvo está dentro do editor do quadro? (o CRM usa isso para não disparar seus próprios atalhos lá) */
+export function isInsideWhiteboard(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el || typeof el.closest !== "function") return false;
+  return el.closest("[data-whiteboard-root]") !== null;
+}

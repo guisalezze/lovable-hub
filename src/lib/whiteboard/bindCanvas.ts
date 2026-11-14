@@ -9,6 +9,8 @@ export interface BindOptions {
   getShowGrid(): boolean;
   /** Elemento que recebe o teclado (precisa de tabIndex). Padrão: o ancestral [data-whiteboard-root]. */
   root?: HTMLElement;
+  /** Chamado depois de cada quadro desenhado (para a interface acompanhar zoom e histórico). */
+  onFrame?(): void;
 }
 
 export interface CanvasBinding {
@@ -44,6 +46,7 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
       marquee: engine.marquee,
       trails: engine.trails,
     });
+    opts.onFrame?.();
   };
   const render = () => {
     if (!raf) raf = requestAnimationFrame(draw);
