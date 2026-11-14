@@ -278,4 +278,16 @@ describe("estado geral", () => {
     expect(engine.selectedIds.size).toBe(2);
     expect(engine.trails).toEqual([]);
   });
+
+  it("clearSelection limpa a seleção e avisa uma vez", () => {
+    const { engine, cb } = setup();
+    engine.load([filled(0, 0)]);
+    click(engine, 50, 25);
+    cb.onSelectionChange.mockClear();
+    engine.clearSelection();
+    expect(engine.selectedIds.size).toBe(0);
+    expect(cb.onSelectionChange).toHaveBeenCalledTimes(1);
+    engine.clearSelection();
+    expect(cb.onSelectionChange).toHaveBeenCalledTimes(1);
+  });
 });

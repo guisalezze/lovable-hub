@@ -127,6 +127,11 @@ export class WhiteboardEngine {
     this.invalidate();
   }
 
+  clearSelection(): void {
+    this.setSelection(new Set());
+    this.invalidate();
+  }
+
   deleteSelection(): void {
     const ids = new Set(this.getSelected().filter((el) => !el.locked).map((el) => el.id));
     if (ids.size === 0) return;
