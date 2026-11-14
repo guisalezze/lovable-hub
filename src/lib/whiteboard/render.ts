@@ -210,6 +210,8 @@ export interface DrawArgs {
   guides?: Guide[];
   /** Forma que vai receber a ponta de uma seta (destaque). */
   highlightId?: string | null;
+  /** Régua: posição do mouse no mundo; desenha retas que o cruzam e as coordenadas. */
+  ruler?: { x: number; y: number } | null;
 }
 
 const blockCache = new WeakMap<WbElement, { sig: string; block: TextBlock }>();
@@ -425,6 +427,41 @@ export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
       }
       ctx.stroke();
     }
+    ctx.restore();
+  }
+
+  if (args.ruler) {
+    const c = args.ruler;
+    ctx.save();
+    ctx.strokeStyle = theme.selection;
+    ctx.globalAlpha = 0.7;
+    ctx.lineWidth = 1 / camera.zoom;
+    ctx.setLineDash([6 / camera.zoom, 5 / camera.zoom]);
+    ctx.beginPath();
+    ctx.moveTo(c.x, camera.y);
+    ctx.lineTo(c.x, camera.y + height / camera.zoom);
+    ctx.moveTo(camera.x, c.y);
+    ctx.lineTo(camera.x + width / camera.zoom, c.y);
+    ctx.stroke();
+    ctx.restore();
+
+    // coordenadas ao lado do cursor, em pixels de tela (sempre legíveis, em qualquer zoom)
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const sx = (c.x - camera.x) * camera.zoom;
+    const sy = (c.y - camera.y) * camera.zoom;
+    const label = `${Math.round(c.x)}, ${Math.round(c.y)}`;
+    ctx.font = "11px Inter, system-ui, sans-serif";
+    const tw = ctx.measureText(label).width;
+    const lx = Math.min(sx + 12, width - tw - 14);
+    const ly = Math.max(sy - 24, 4);
+    ctx.fillStyle = theme.background;
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(lx - 4, ly - 2, tw + 8, 18);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = theme.selection;
+    ctx.textBaseline = "top";
+    ctx.fillText(label, lx, ly + 1);
     ctx.restore();
   }
 

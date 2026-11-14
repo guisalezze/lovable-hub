@@ -14,6 +14,7 @@ import { BoardContextMenu, type MenuAction } from "./BoardContextMenu";
 import { clipboard } from "@/lib/whiteboard/ops";
 import { toast } from "sonner";
 import { ExportMenu, type ExportKind } from "./ExportMenu";
+import { addFavorite, parseFavorites, removeFavorite } from "@/lib/whiteboard/colors";
 import { copyPngToClipboard, downloadBlob, exportFileName, exportToPng, exportToSvg } from "@/lib/whiteboard/export";
 
 const DRAWING_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "arrow", "line", "pencil", "text", "note"];
@@ -59,6 +60,22 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
   });
   const gridRef = useRef(gridOn);
   gridRef.current = gridOn;
+  const [rulerOn, setRulerOn] = useState(false);
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+      return parseFavorites(localStorage.getItem("quadro:favColors"));
+    } catch {
+      return [];
+    }
+  });
+  const saveFavorites = (next: string[]) => {
+    setFavorites(next);
+    try {
+      localStorage.setItem("quadro:favColors", JSON.stringify(next));
+    } catch {
+      /* sem armazenamento: vale só nesta sessão */
+    }
+  };
 
   const [tool, setTool] = useState<Tool>("select");
   const [zoom, setZoom] = useState(1);
@@ -160,6 +177,10 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
     return () => clearTimeout(timer);
   }, [presentation.active]);
 
+  useEffect(() => {
+    engineRef.current?.setRuler(rulerOn);
+  }, [rulerOn]);
+
   // a grade liga/desliga e a escolha fica guardada neste navegador
   useEffect(() => {
     bindingRef.current?.render();
@@ -212,6 +233,8 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
       case "copy": engine.copy(); break;
       case "paste": engine.paste(); break;
       case "duplicate": engine.duplicate(); break;
+      case "copy-style": engine.copyStyle(); break;
+      case "paste-style": engine.pasteStyle(); break;
       case "group": engine.group(); break;
       case "ungroup": engine.ungroup(); break;
       case "front": engine.bringToFront(); break;
@@ -242,6 +265,15 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
     }
     const opts = { theme: readThemeColors(), background: true };
     try {
+      if (kind === "copy-svg") {
+        try {
+          await navigator.clipboard.writeText(exportToSvg(elements, opts));
+          toast.success("Código SVG copiado.");
+        } catch {
+          toast.error("O navegador não deixou copiar. Use Baixar SVG.");
+        }
+        return;
+      }
       if (kind === "svg") {
         downloadBlob(new Blob([exportToSvg(elements, opts)], { type: "image/svg+xml" }), exportFileName(exportName, "svg"));
         return;
@@ -319,7 +351,15 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
 
       {showStylePanel ? (
         <div className="absolute left-3 top-20 z-10">
-          <StylePanel style={style} onChange={applyStyle} textOnly={textMode.only} showFontSize={textMode.has} />
+          <StylePanel
+            style={style}
+            onChange={applyStyle}
+            textOnly={textMode.only}
+            showFontSize={textMode.has}
+            favorites={favorites}
+            onAddFavorite={(c) => saveFavorites(addFavorite(favorites, c))}
+            onRemoveFavorite={(c) => saveFavorites(removeFavorite(favorites, c))}
+          />
         </div>
       ) : null}
 
@@ -347,6 +387,11 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
               if (!engine) return;
               engine.camera = fitCamera(getSelectionBounds(engine.elements), viewport());
               bindingRef.current?.render();
+            }}
+            rulerOn={rulerOn}
+            onToggleRuler={() => {
+              setRulerOn((v) => !v);
+              focusBoard();
             }}
             gridOn={gridOn}
             onToggleGrid={() => {

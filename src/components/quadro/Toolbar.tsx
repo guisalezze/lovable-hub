@@ -12,6 +12,7 @@ import {
   Pencil,
   Presentation,
   Redo2,
+  Ruler,
   Square,
   StickyNote,
   Type,
@@ -90,6 +91,8 @@ interface BottomBarProps {
   onPresent: () => void;
   gridOn: boolean;
   onToggleGrid: () => void;
+  rulerOn: boolean;
+  onToggleRuler: () => void;
 }
 
 export function BottomBar(p: BottomBarProps) {
@@ -137,6 +140,19 @@ export function BottomBar(p: BottomBarProps) {
           onClick={p.onToggleGrid}
         >
           <Grid3x3 className="h-4 w-4" />
+        </Button>
+      </Tip>
+      <Tip label={p.rulerOn ? "Desligar a régua" : "Régua: retas e coordenadas no cursor"}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn("h-8 w-8", p.rulerOn && "bg-primary/15 text-primary hover:bg-primary/20")}
+          aria-label="Régua"
+          aria-pressed={p.rulerOn}
+          onClick={p.onToggleRuler}
+        >
+          <Ruler className="h-4 w-4" />
         </Button>
       </Tip>
       <div className="mx-1 h-5 w-px bg-border" />

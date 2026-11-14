@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export type ExportKind = "png" | "svg" | "copy";
+export type ExportKind = "png" | "svg" | "copy" | "copy-svg";
 
 interface Props {
   /** Há algo selecionado? (muda o texto: exporta a seleção ou o quadro todo) */
@@ -43,6 +43,10 @@ export function ExportMenu({ hasSelection, onExport }: Props) {
           <DropdownMenuItem onSelect={() => onExport("copy")}>
             <ClipboardCopy className="mr-2 h-4 w-4" />
             Copiar como PNG
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onExport("copy-svg")}>
+            <ClipboardCopy className="mr-2 h-4 w-4" />
+            Copiar como SVG (código)
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

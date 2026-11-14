@@ -11,6 +11,7 @@ import {
   bringForward,
   bringToFront,
   clipboard,
+  styleClipboard,
   cloneElements,
   duplicateElements,
   expandToGroups,
@@ -145,6 +146,9 @@ export class WhiteboardEngine {
   bindHighlightId: string | null = null;
   /** Linhas-guia do alinhamento automático durante o arrasto. */
   guides: Guide[] = [];
+  /** Posição do mouse no mundo (para a régua). */
+  cursor: Pt | null = null;
+  rulerOn = false;
   /** Id do texto que está sendo escrito agora (o campo de texto da interface cuida dele). */
   editingId: string | null = null;
   private newTextId: string | null = null;
@@ -187,8 +191,8 @@ export class WhiteboardEngine {
   }
 
   /** Aplica aparência à seleção (um passo de histórico) e vira o padrão das próximas formas. */
-  applyStyle(patch: StylePatch): void {
-    this.defaultStyle = { ...this.defaultStyle, ...patch };
+  applyStyle(patch: StylePatch, opts: { setDefault?: boolean } = {}): void {
+    if (opts.setDefault !== false) this.defaultStyle = { ...this.defaultStyle, ...patch };
     const targets = new Set(this.getSelected().filter((el) => !el.locked).map((el) => el.id));
     if (targets.size === 0) {
       this.invalidate();
@@ -366,6 +370,35 @@ export class WhiteboardEngine {
     else this.invalidate();
   }
 
+  // ---- formatação e régua ---------------------------------------------------
+
+  /** Copia a formatação do primeiro selecionado (cor, fundo, espessura, cantos, letra). */
+  copyStyle(): void {
+    const first = this.getSelected()[0];
+    if (!first) return;
+    const style: Record<string, unknown> = {};
+    for (const k of ["strokeColor", "backgroundColor", "strokeWidth", "roundness", "fontSize", "fontFamily", "textAlign"] as const) {
+      if (first[k] !== undefined) style[k] = first[k];
+    }
+    styleClipboard.style = style as StylePatch;
+  }
+
+  /** Cola a formatação copiada na seleção (um passo de histórico; não muda o padrão das próximas formas). */
+  pasteStyle(): void {
+    if (styleClipboard.style) this.applyStyle(styleClipboard.style, { setDefault: false });
+  }
+
+  setRuler(on: boolean): void {
+    this.rulerOn = on;
+    this.invalidate();
+  }
+
+  /** O mouse saiu do quadro: some a régua da tela. */
+  pointerLeave(): void {
+    this.cursor = null;
+    if (this.rulerOn) this.invalidate();
+  }
+
   // ---- edição: copiar, colar, grupos, camadas, bloqueio, alinhar -------------
 
   copy(): void {
@@ -533,8 +566,12 @@ export class WhiteboardEngine {
 
   pointerMove(p: PointerInput): void {
     const g = this.gesture;
-    if (!g) return;
     const w = this.toWorld(p);
+    this.cursor = w;
+    if (!g) {
+      if (this.rulerOn) this.invalidate(); // a régua acompanha o mouse
+      return;
+    }
 
     switch (g.kind) {
       case "creating":

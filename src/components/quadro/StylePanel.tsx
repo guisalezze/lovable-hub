@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { Pipette, Plus } from "lucide-react";
+import { normalizeHex } from "@/lib/whiteboard/colors";
 import { cn } from "@/lib/utils";
 import { COLOR_NAMES, FILL_COLORS, FONT_SIZES, STROKE_COLORS, STROKE_WIDTHS } from "@/lib/whiteboard/palette";
 import { FONT_FAMILIES } from "@/lib/whiteboard/layout";
@@ -25,6 +27,10 @@ interface StylePanelProps {
   textOnly?: boolean;
   /** Há texto na seleção (ou ferramenta de texto): mostra o tamanho da letra. */
   showFontSize?: boolean;
+  /** Cores favoritas (clique aplica; clique direito remove). */
+  favorites?: string[];
+  onAddFavorite?: (color: string) => void;
+  onRemoveFavorite?: (color: string) => void;
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -72,13 +78,70 @@ function Choice({ label, selected, onPick, children }: { label: string; selected
   );
 }
 
-export function StylePanel({ style, onChange, textOnly = false, showFontSize = false }: StylePanelProps) {
+interface ColorExtrasProps {
+  kind: "traço" | "fundo";
+  favorites: string[];
+  onApply: (color: string) => void;
+  onAdd?: (color: string) => void;
+  onRemove?: (color: string) => void;
+}
+
+/** Favoritas, "+" para escolher qualquer cor e conta-gotas (só nos navegadores que têm). */
+function ColorExtras({ kind, favorites, onApply, onAdd, onRemove }: ColorExtrasProps) {
+  const hasEyeDropper = typeof window !== "undefined" && "EyeDropper" in window;
+  const pick = (value: string) => {
+    const hex = normalizeHex(value);
+    if (!hex) return;
+    onApply(hex);
+    onAdd?.(hex);
+  };
+  const eyedrop = async () => {
+    try {
+      const EyeDropperCtor = (window as unknown as { EyeDropper: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper;
+      const result = await new EyeDropperCtor().open();
+      pick(result.sRGBHex);
+    } catch {
+      /* Esc ou cancelado: nada a fazer */
+    }
+  };
+  return (
+    <>
+      {favorites.map((c) => (
+        <button
+          key={c}
+          type="button"
+          title={`${c} (clique direito remove)`}
+          aria-label={`Cor favorita ${c}`}
+          onClick={() => onApply(c)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onRemove?.(c);
+          }}
+          style={{ background: c }}
+          className="h-6 w-6 rounded-md border border-border transition-transform hover:scale-110"
+        />
+      ))}
+      <label className="relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border border-dashed border-border text-muted-foreground hover:bg-accent" title="Outra cor">
+        <Plus className="h-3.5 w-3.5" />
+        <input type="color" aria-label={`Escolher outra cor do ${kind}`} className="absolute inset-0 cursor-pointer opacity-0" onChange={(e) => pick(e.target.value)} />
+      </label>
+      {hasEyeDropper ? (
+        <button type="button" title="Conta-gotas: pegar uma cor da tela" aria-label={`Conta-gotas do ${kind}`} onClick={eyedrop} className="flex h-6 w-6 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-accent">
+          <Pipette className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+    </>
+  );
+}
+
+export function StylePanel({ style, onChange, textOnly = false, showFontSize = false, favorites = [], onAddFavorite, onRemoveFavorite }: StylePanelProps) {
   return (
     <div className="w-44 space-y-3 rounded-lg border border-border bg-card/95 p-3 shadow-sm backdrop-blur" aria-label="Estilo">
       <Section title="Traço">
         {STROKE_COLORS.map((c) => (
           <Swatch key={c} color={c} selected={style.strokeColor === c} onPick={() => onChange({ strokeColor: c })} />
         ))}
+        <ColorExtras kind="traço" favorites={favorites} onApply={(c) => onChange({ strokeColor: c })} onAdd={onAddFavorite} onRemove={onRemoveFavorite} />
       </Section>
       {showFontSize ? (
         <Section title="Tamanho da letra">
@@ -115,6 +178,7 @@ export function StylePanel({ style, onChange, textOnly = false, showFontSize = f
         {FILL_COLORS.map((c) => (
           <Swatch key={c} color={c} selected={style.backgroundColor === c} onPick={() => onChange({ backgroundColor: c })} />
         ))}
+        <ColorExtras kind="fundo" favorites={favorites} onApply={(c) => onChange({ backgroundColor: c })} onAdd={onAddFavorite} onRemove={onRemoveFavorite} />
       </Section>
       <Section title="Espessura">
         {STROKE_WIDTHS.map((w) => (

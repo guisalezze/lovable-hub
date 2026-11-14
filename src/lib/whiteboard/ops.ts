@@ -8,6 +8,11 @@ export type AlignMode = "left" | "center" | "right" | "top" | "middle" | "bottom
  * Área de transferência do quadro. Fica no módulo (e não no motor) para valer também
  * quando a pessoa troca de quadro: copia num, abre outro e cola.
  */
+import type { StylePatch } from "./types";
+
+/** Formatação copiada (copiar/colar formatação). Também vale ao trocar de quadro. */
+export const styleClipboard: { style: StylePatch | null } = { style: null };
+
 export const clipboard: { items: WbElement[]; pasteCount: number } = { items: [], pasteCount: 0 };
 
 /** Cópias com id e seed novos, deslocadas em `offset`; cada grupo copiado ganha um groupId novo. */

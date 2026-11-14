@@ -56,6 +56,7 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
       hiddenId: engine.editingId,
       guides: engine.guides,
       highlightId: engine.bindHighlightId,
+      ruler: engine.rulerOn ? engine.cursor : null,
     });
     opts.onFrame?.();
     if (animating) render();
@@ -100,6 +101,7 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
     }
   };
   const onPointerCancel = () => engine.pointerCancel();
+  const onPointerLeave = () => engine.pointerLeave();
   const onDoubleClick = (e: MouseEvent) => {
     const r = canvas.getBoundingClientRect();
     engine.doubleClick({ x: e.clientX - r.left, y: e.clientY - r.top });
@@ -183,6 +185,12 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
       case "presentation":
         opts.onPresentation?.();
         break;
+      case "copyStyle":
+        engine.copyStyle();
+        break;
+      case "pasteStyle":
+        engine.pasteStyle();
+        break;
     }
   };
   const onKeyUp = (e: KeyboardEvent) => {
@@ -201,6 +209,7 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
   canvas.addEventListener("pointerup", onPointerUp);
   canvas.addEventListener("pointercancel", onPointerCancel);
   canvas.addEventListener("dblclick", onDoubleClick);
+  canvas.addEventListener("pointerleave", onPointerLeave);
   canvas.addEventListener("wheel", onWheel, { passive: false });
   root.addEventListener("keydown", onKeyDown);
   root.addEventListener("keyup", onKeyUp);
@@ -214,6 +223,7 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointercancel", onPointerCancel);
       canvas.removeEventListener("dblclick", onDoubleClick);
+      canvas.removeEventListener("pointerleave", onPointerLeave);
       canvas.removeEventListener("wheel", onWheel);
       root.removeEventListener("keydown", onKeyDown);
       root.removeEventListener("keyup", onKeyUp);

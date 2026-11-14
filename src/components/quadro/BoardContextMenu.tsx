@@ -15,6 +15,8 @@ export type MenuAction =
   | "copy"
   | "paste"
   | "duplicate"
+  | "copy-style"
+  | "paste-style"
   | "group"
   | "ungroup"
   | "front"
@@ -63,6 +65,8 @@ export function BoardContextMenu({ count, hasGroup, allLocked, canPaste, onActio
         {item("Copiar", "copy", { disabled: none, shortcut: "Ctrl+C" })}
         {item("Colar", "paste", { disabled: !canPaste, shortcut: "Ctrl+V" })}
         {item("Duplicar", "duplicate", { disabled: none, shortcut: "Ctrl+D" })}
+        {item("Copiar formatação", "copy-style", { disabled: none, shortcut: "Ctrl+Alt+C" })}
+        {item("Colar formatação", "paste-style", { disabled: none, shortcut: "Ctrl+Alt+V" })}
         <ContextMenuSeparator />
         {item("Agrupar", "group", { disabled: count < 2, shortcut: "Ctrl+G" })}
         {item("Desagrupar", "ungroup", { disabled: !hasGroup, shortcut: "Ctrl+Shift+G" })}
