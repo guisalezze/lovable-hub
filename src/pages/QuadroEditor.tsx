@@ -179,6 +179,7 @@ function LoadedEditor({ row, elements }: { row: WhiteboardRow; elements: WbEleme
       <Whiteboard
         initialElements={initial}
         onChange={handleChange}
+        exportName={title}
         banner={banner}
         header={
           <>

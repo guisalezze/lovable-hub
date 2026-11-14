@@ -52,11 +52,11 @@ function arrowHead(from: [number, number], tip: [number, number], size: number):
   ];
 }
 
-function absPoints(el: WbElement): [number, number][] {
+export function absPoints(el: WbElement): [number, number][] {
   return (el.points ?? []).map(([px, py]) => [el.x + px, el.y + py]);
 }
 
-function buildDrawables(el: WbElement, theme: ThemeColors): Drawable[] {
+export function buildDrawables(el: WbElement, theme: ThemeColors): Drawable[] {
   const stroke = resolveColor(el.strokeColor, theme);
   const filled = el.backgroundColor !== "transparent";
   const opts: Options = {

@@ -10,6 +10,9 @@ import { StylePanel } from "./StylePanel";
 import { usePresentationMode } from "./usePresentationMode";
 import { BoardContextMenu, type MenuAction } from "./BoardContextMenu";
 import { clipboard } from "@/lib/whiteboard/ops";
+import { toast } from "sonner";
+import { ExportMenu, type ExportKind } from "./ExportMenu";
+import { copyPngToClipboard, downloadBlob, exportFileName, exportToPng, exportToSvg } from "@/lib/whiteboard/export";
 
 const DRAWING_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "arrow", "line", "pencil"];
 
@@ -22,13 +25,15 @@ export interface WhiteboardProps {
   header?: ReactNode;
   /** Faixa no topo, no centro (avisos como conflito de edição). */
   banner?: ReactNode;
+  /** Nome base dos arquivos exportados (o título do quadro). */
+  exportName?: string;
 }
 
 /**
  * Quadro: canvas + barras. Só recebe e entrega elementos; não sabe nada de banco de dados,
  * então funciona igual dentro do CRM e numa página de teste.
  */
-export function Whiteboard({ initialElements, onChange, header, banner }: WhiteboardProps) {
+export function Whiteboard({ initialElements, onChange, header, banner, exportName = "quadro" }: WhiteboardProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<WhiteboardEngine | null>(null);
@@ -189,6 +194,35 @@ export function Whiteboard({ initialElements, onChange, header, banner }: Whiteb
     focusBoard();
   };
 
+  // Exporta a seleção se houver; senão o quadro todo. O fundo do tema vai junto: o traço "auto" é claro no tema escuro.
+  const runExport = async (kind: ExportKind) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const selected = engine.getSelected();
+    const elements = selected.length > 0 ? selected : engine.elements;
+    if (elements.length === 0) {
+      toast.error("Nada para exportar: o quadro está vazio.");
+      return;
+    }
+    const opts = { theme: readThemeColors(), background: true };
+    try {
+      if (kind === "svg") {
+        downloadBlob(new Blob([exportToSvg(elements, opts)], { type: "image/svg+xml" }), exportFileName(exportName, "svg"));
+        return;
+      }
+      const png = await exportToPng(elements, opts);
+      if (kind === "png") {
+        downloadBlob(png, exportFileName(exportName, "png"));
+      } else if (await copyPngToClipboard(png)) {
+        toast.success("Imagem copiada.");
+      } else {
+        toast.error("O navegador não deixou copiar. Use Baixar PNG.");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não consegui exportar.");
+    }
+  };
+
   const showStylePanel = !presentation.active && (selectedCount > 0 || DRAWING_TOOLS.includes(tool));
 
   return (
@@ -218,6 +252,12 @@ export function Whiteboard({ initialElements, onChange, header, banner }: Whiteb
               focusBoard();
             }}
           />
+        </div>
+      ) : null}
+
+      {!presentation.active ? (
+        <div className="absolute right-3 top-3 z-10">
+          <ExportMenu hasSelection={selectedCount > 0} onExport={runExport} />
         </div>
       ) : null}
 

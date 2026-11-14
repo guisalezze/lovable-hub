@@ -137,7 +137,8 @@ export function hitTest(el: WbElement, p: Pt, tolerance: number): boolean {
   return filled ? sdf <= tol : Math.abs(sdf) <= tol;
 }
 
-function rotatedAabb(el: WbElement): Bounds {
+/** Caixa alinhada aos eixos que contém o elemento já girado. */
+export function rotatedAabb(el: WbElement): Bounds {
   const b = getBounds(el);
   if (!el.angle) return b;
   const c = center(b);
