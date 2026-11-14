@@ -12,7 +12,8 @@ const generator = rough.generator();
 /** Caminho SVG do contorno de um traço de lápis (perfect-freehand). */
 export function freedrawPath(points: [number, number][], size: number): string {
   if (points.length === 0) return "";
-  const outline = getStroke(points, { size, thinning: 0.5, smoothing: 0.5, streamline: 0.5 });
+  // last: true = traço completo; sem isso o suavizador deixa a ponta "atrasada" em relação ao mouse
+  const outline = getStroke(points, { size, thinning: 0.5, smoothing: 0.5, streamline: 0.5, last: true });
   if (outline.length === 0) return "";
   const f = (n: number) => n.toFixed(2);
   let d = `M ${f(outline[0][0])} ${f(outline[0][1])} Q`;

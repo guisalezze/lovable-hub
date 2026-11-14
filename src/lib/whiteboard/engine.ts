@@ -223,10 +223,11 @@ export class WhiteboardEngine {
     this.invalidate();
   }
 
-  pointerUp(_p: PointerInput): void {
+  pointerUp(p: PointerInput): void {
     const g = this.gesture;
     if (!g) return;
     this.gesture = null;
+    if (g.kind === "drawing") this.moveDraw(g, this.toWorld(p)); // o ponto onde o mouse foi solto também faz parte do traço
 
     switch (g.kind) {
       case "creating": {
