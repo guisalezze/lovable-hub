@@ -1,6 +1,7 @@
 import type { Camera, ElementType, LaserTrail, StylePatch, Tool, WbElement } from "./types";
 import { DEFAULT_STYLE } from "./palette";
 import { addLaserPoint, endLaserTrail, pruneLaser } from "./laser";
+import { measureText } from "./text";
 import {
   alignElements,
   bringForward,
@@ -45,6 +46,8 @@ export interface EngineCallbacks {
   onToolChange(tool: Tool): void;
   onSelectionChange(ids: string[]): void;
   onRequestRender(): void;
+  /** Abre (id) ou fecha (null) o campo de texto sobre o quadro. */
+  onEditText?(id: string | null): void;
 }
 
 interface Pt {
@@ -95,6 +98,11 @@ function transformElement(el: WbElement, from: Bounds, to: Bounds): WbElement {
   }
   const sx = from.width === 0 ? 1 : to.width / from.width;
   const sy = from.height === 0 ? 1 : to.height / from.height;
+  if (el.type === "text") {
+    // redimensionar texto escala a fonte (e a caixa é remedida), nunca abaixo de 8
+    const fontSize = Math.max(8, Math.round((el.fontSize ?? DEFAULT_STYLE.fontSize) * Math.max(sx, sy)));
+    return { ...el, x: to.x + (el.x - from.x) * sx, y: to.y + (el.y - from.y) * sy, fontSize, ...measureText(el.text ?? "", fontSize) };
+  }
   return {
     ...el,
     x: to.x + (el.x - from.x) * sx,
@@ -115,6 +123,9 @@ export class WhiteboardEngine {
   defaultStyle: StylePatch = {};
   /** Relógio do laser (ms). Os testes trocam por um relógio falso. */
   clock: () => number = () => performance.now();
+  /** Id do texto que está sendo escrito agora (o campo de texto da interface cuida dele). */
+  editingId: string | null = null;
+  private newTextId: string | null = null;
   /** Espaço segurado: qualquer arrasto vira mover a câmera. */
   spaceHeld = false;
 
@@ -162,9 +173,17 @@ export class WhiteboardEngine {
     const keys = (Object.keys(patch) as (keyof StylePatch)[]).filter((k) => patch[k] !== undefined);
     let changed = false;
     this.elements = this.elements.map((el) => {
-      if (!targets.has(el.id) || !keys.some((k) => el[k] !== patch[k])) return el;
+      if (!targets.has(el.id)) return el;
+      // o tamanho da fonte só vale para texto
+      const applicable = keys.filter((k) => k !== "fontSize" || el.type === "text");
+      if (!applicable.some((k) => el[k] !== patch[k])) return el;
       changed = true;
-      return { ...el, ...patch };
+      const next: WbElement = { ...el };
+      for (const k of applicable) (next as unknown as Record<string, unknown>)[k] = patch[k];
+      if (el.type === "text" && applicable.includes("fontSize")) {
+        Object.assign(next, measureText(next.text ?? "", next.fontSize ?? DEFAULT_STYLE.fontSize));
+      }
+      return next;
     });
     if (changed) this.commit();
     else this.invalidate();
@@ -181,6 +200,10 @@ export class WhiteboardEngine {
       backgroundColor: common("backgroundColor"),
       strokeWidth: common("strokeWidth"),
       roundness: common("roundness"),
+      fontSize: (() => {
+        const texts = selected.filter((el) => el.type === "text");
+        return texts.length > 0 && texts.every((t) => t.fontSize === texts[0].fontSize) ? texts[0].fontSize : undefined;
+      })(),
     };
   }
 
@@ -193,6 +216,74 @@ export class WhiteboardEngine {
   tickLaser(now: number): boolean {
     this.trails = pruneLaser(this.trails, now);
     return this.trails.length > 0;
+  }
+
+  // ---- texto -----------------------------------------------------------
+
+  /** Começa um texto novo em w (coordenadas do mundo). Só entra no histórico quando for confirmado com conteúdo. */
+  beginText(w: Pt): void {
+    const fontSize = this.defaultStyle.fontSize ?? DEFAULT_STYLE.fontSize;
+    const el = createElement("text", w.x, w.y, { ...this.defaultStyle, text: "", fontSize, ...measureText("", fontSize) });
+    this.elements = [...this.elements, el];
+    this.newTextId = el.id;
+    this.editingId = el.id;
+    this.setSelection(new Set());
+    this.cb.onEditText?.(el.id);
+    this.invalidate();
+  }
+
+  /** Abre a edição de um texto que já existe. */
+  editText(id: string): void {
+    const el = this.elements.find((e) => e.id === id && e.type === "text");
+    if (!el) return;
+    this.newTextId = null;
+    this.editingId = id;
+    this.setSelection(new Set([id]));
+    this.cb.onEditText?.(id);
+    this.invalidate();
+  }
+
+  /** Duplo clique: edita o texto sob o cursor, ou cria um texto novo no vazio. */
+  doubleClick(screen: Pt): void {
+    if (this.editingId) return;
+    const w = this.toWorld(screen);
+    const hit = this.hitElement(w);
+    if (hit) {
+      if (hit.type === "text" && !hit.locked) this.editText(hit.id);
+      return;
+    }
+    if (this.tool === "select" || this.tool === "text") this.beginText(w);
+  }
+
+  /** Termina a edição. Texto novo vazio some sem rastro; texto antigo esvaziado é apagado (com desfazer). */
+  commitText(id: string, text: string): void {
+    const el = this.elements.find((e) => e.id === id);
+    if (!el || this.editingId !== id) return;
+    const wasNew = this.newTextId === id;
+    this.editingId = null;
+    this.newTextId = null;
+    this.cb.onEditText?.(null);
+
+    const clean = text.replace(/\s+$/, ""); // sem espaços nem linhas em branco no fim
+    if (clean.trim() === "") {
+      this.elements = this.elements.filter((e) => e.id !== id);
+      this.setSelection(new Set([...this.selectedIds].filter((s) => s !== id)));
+      if (wasNew) this.invalidate();
+      else this.commit();
+      return;
+    }
+
+    const changed = wasNew || clean !== el.text;
+    this.elements = this.elements.map((e) =>
+      e.id === id ? { ...e, text: clean, ...measureText(clean, e.fontSize ?? DEFAULT_STYLE.fontSize) } : e,
+    );
+    if (this.tool === "text") {
+      this.tool = "select";
+      this.cb.onToolChange("select");
+    }
+    this.setSelection(new Set([id]));
+    if (changed) this.commit();
+    else this.invalidate();
   }
 
   // ---- edição: copiar, colar, grupos, camadas, bloqueio, alinhar -------------
@@ -339,6 +430,7 @@ export class WhiteboardEngine {
 
   pointerDown(p: PointerInput): void {
     if (this.gesture) this.pointerCancel();
+    if (this.editingId) return; // o campo de texto termina a edição ao perder o foco
     if (p.button === 1 || this.tool === "hand" || this.spaceHeld) {
       this.gesture = { kind: "panning", last: { x: p.x, y: p.y } };
       return;
@@ -347,6 +439,7 @@ export class WhiteboardEngine {
     const w = this.toWorld(p);
 
     if (this.tool === "select") return this.downSelect(p, w);
+    if (this.tool === "text") return this.beginText(w);
     if (SHAPE_TOOLS.includes(this.tool)) return this.downCreate(w);
     if (this.tool === "pencil") return this.downPencil(w);
     if (this.tool === "eraser") return this.downErase(w);

@@ -6,6 +6,7 @@ import type { Camera, LaserTrail, WbElement } from "./types";
 import { resolveColor, type ThemeColors } from "./theme";
 import { getBounds, rotatedAabb, selectionFrame, type Bounds } from "./geometry";
 import { laserAlpha } from "./laser";
+import { FONT_FAMILY, TEXT_LINE_HEIGHT, textLines } from "./text";
 
 const GRID_STEP = 24; // unidades do mundo
 const generator = rough.generator();
@@ -194,6 +195,16 @@ export interface DrawArgs {
   now?: number;
   /** false = não desenha a moldura de seleção nem as alças (modo apresentação). Padrão: true. */
   showSelection?: boolean;
+  /** Elemento que não deve ser desenhado (o texto que está sendo editado: o campo de texto o mostra). */
+  hiddenId?: string | null;
+}
+
+function drawText(ctx: CanvasRenderingContext2D, el: WbElement, theme: ThemeColors) {
+  const size = el.fontSize ?? 24;
+  ctx.font = `${size}px ${FONT_FAMILY}`;
+  ctx.textBaseline = "top";
+  ctx.fillStyle = resolveColor(el.strokeColor, theme);
+  textLines(el.text ?? "").forEach((line, i) => ctx.fillText(line, el.x, el.y + i * size * TEXT_LINE_HEIGHT));
 }
 
 function drawLaser(ctx: CanvasRenderingContext2D, trails: LaserTrail[], zoom: number, now: number) {
@@ -245,6 +256,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
   }
 
   for (const el of elements) {
+    if (el.id === args.hiddenId) continue;
     if (!isElementVisible(el, camera, width, height)) continue;
     withRotation(ctx, getBounds(el), el.angle, () => {
       if (el.type === "freedraw") {
@@ -256,6 +268,8 @@ export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
           ctx.fill(path);
           ctx.restore();
         }
+      } else if (el.type === "text") {
+        drawText(ctx, el, theme);
       } else {
         for (const drawable of drawablesFor(el, theme)) rc!.draw(drawable);
       }

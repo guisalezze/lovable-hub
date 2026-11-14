@@ -4,7 +4,8 @@ export type ElementType =
   | "ellipse"
   | "line"
   | "arrow"
-  | "freedraw";
+  | "freedraw"
+  | "text";
 
 export type Tool =
   | "select"
@@ -14,6 +15,7 @@ export type Tool =
   | "arrow"
   | "line"
   | "pencil"
+  | "text"
   | "eraser"
   | "laser"
   | "hand";
@@ -29,6 +31,10 @@ export interface WbElement {
   angle: number;
   /** line/arrow/freedraw: pontos relativos a (x, y) */
   points?: [number, number][];
+  /** type "text": conteúdo (linhas separadas por 
+) e tamanho da fonte */
+  text?: string;
+  fontSize?: number;
   /** "auto" = cor de texto do tema */
   strokeColor: string;
   /** "transparent" = sem preenchimento */
@@ -65,4 +71,4 @@ export interface LaserTrail {
 }
 
 /** Propriedades de aparência que o painel de estilo edita. */
-export type StylePatch = Partial<Pick<WbElement, "strokeColor" | "backgroundColor" | "strokeWidth" | "roundness">>;
+export type StylePatch = Partial<Pick<WbElement, "strokeColor" | "backgroundColor" | "strokeWidth" | "roundness" | "fontSize">>;

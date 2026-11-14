@@ -12,6 +12,7 @@ import {
   Presentation,
   Redo2,
   Square,
+  Type,
   Undo2,
   Zap,
   ZoomIn,
@@ -31,6 +32,7 @@ const TOOLS: { tool: Tool; label: string; shortcut: string; icon: ReactNode }[] 
   { tool: "arrow", label: "Seta", shortcut: "A", icon: <MoveUpRight className="h-4 w-4" /> },
   { tool: "line", label: "Linha", shortcut: "L", icon: <Minus className="h-4 w-4" /> },
   { tool: "pencil", label: "Lápis", shortcut: "P", icon: <Pencil className="h-4 w-4" /> },
+  { tool: "text", label: "Texto", shortcut: "T", icon: <Type className="h-4 w-4" /> },
   { tool: "eraser", label: "Borracha", shortcut: "E", icon: <Eraser className="h-4 w-4" /> },
   { tool: "laser", label: "Laser", shortcut: "K", icon: <Zap className="h-4 w-4" /> },
 ];

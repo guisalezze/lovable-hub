@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { WhiteboardEngine } from "@/lib/whiteboard/engine";
 import { bindCanvas, type CanvasBinding } from "@/lib/whiteboard/bindCanvas";
-import { readThemeColors } from "@/lib/whiteboard/theme";
+import { readThemeColors, type ThemeColors } from "@/lib/whiteboard/theme";
 import { fitCamera, zoomAt } from "@/lib/whiteboard/camera";
 import { getSelectionBounds } from "@/lib/whiteboard/geometry";
-import type { StylePatch, Tool, WbElement } from "@/lib/whiteboard/types";
+import type { Camera, StylePatch, Tool, WbElement } from "@/lib/whiteboard/types";
 import { BottomBar, ToolPalette } from "./Toolbar";
 import { StylePanel } from "./StylePanel";
+import { TextEditor } from "./TextEditor";
 import { usePresentationMode } from "./usePresentationMode";
 import { BoardContextMenu, type MenuAction } from "./BoardContextMenu";
 import { clipboard } from "@/lib/whiteboard/ops";
@@ -14,7 +15,7 @@ import { toast } from "sonner";
 import { ExportMenu, type ExportKind } from "./ExportMenu";
 import { copyPngToClipboard, downloadBlob, exportFileName, exportToPng, exportToSvg } from "@/lib/whiteboard/export";
 
-const DRAWING_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "arrow", "line", "pencil"];
+const DRAWING_TOOLS: Tool[] = ["rectangle", "diamond", "ellipse", "arrow", "line", "pencil", "text"];
 
 export interface WhiteboardProps {
   /** Elementos com que o quadro abre. Lido só uma vez, na montagem. */
@@ -55,6 +56,8 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
   const [canRedo, setCanRedo] = useState(false);
   const [style, setStyle] = useState<StylePatch>({});
   const [selectedCount, setSelectedCount] = useState(0);
+  const [textMode, setTextMode] = useState({ only: false, has: false });
+  const [editing, setEditing] = useState<{ el: WbElement; camera: Camera; theme: ThemeColors } | null>(null);
   const [menuInfo, setMenuInfo] = useState({ count: 0, hasGroup: false, allLocked: false, canPaste: false });
 
   useEffect(() => {
@@ -66,7 +69,15 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
     let fitted = false;
     let binding: CanvasBinding | null = null;
 
-    const syncStyle = () => setStyle(engine.getActiveStyle());
+    const syncStyle = () => {
+      setStyle(engine.getActiveStyle());
+      const selected = engine.getSelected();
+      const textTool = engine.tool === "text";
+      setTextMode({
+        only: selected.length > 0 ? selected.every((e) => e.type === "text") : textTool,
+        has: textTool || selected.some((e) => e.type === "text"),
+      });
+    };
     const engine = new WhiteboardEngine({
       onChange: (els) => {
         onChangeRef.current(els);
@@ -81,6 +92,10 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
         syncStyle();
       },
       onRequestRender: () => binding?.render(),
+      onEditText: (id) => {
+        const el = id ? engine.elements.find((e) => e.id === id) : null;
+        setEditing(el ? { el, camera: { ...engine.camera }, theme } : null); // o campo de texto fica onde o texto vai aparecer
+      },
     });
     engine.load(initialRef.current);
 
@@ -256,6 +271,19 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
         </div>
       ) : null}
 
+      {editing ? (
+        <TextEditor
+          key={editing.el.id}
+          element={editing.el}
+          camera={editing.camera}
+          theme={editing.theme}
+          onCommit={(text) => {
+            engineRef.current?.commitText(editing.el.id, text);
+            focusBoard();
+          }}
+        />
+      ) : null}
+
       {!presentation.active ? (
         <div className="absolute right-3 top-3 z-10">
           <ExportMenu hasSelection={selectedCount > 0} onExport={runExport} />
@@ -264,7 +292,7 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
 
       {showStylePanel ? (
         <div className="absolute left-3 top-20 z-10">
-          <StylePanel style={style} onChange={applyStyle} />
+          <StylePanel style={style} onChange={applyStyle} textOnly={textMode.only} showFontSize={textMode.has} />
         </div>
       ) : null}
 

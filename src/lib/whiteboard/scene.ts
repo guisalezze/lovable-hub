@@ -1,6 +1,6 @@
 import type { ElementType, Scene, WbElement } from "./types";
 
-const ELEMENT_TYPES: ElementType[] = ["rectangle", "diamond", "ellipse", "line", "arrow", "freedraw"];
+const ELEMENT_TYPES: ElementType[] = ["rectangle", "diamond", "ellipse", "line", "arrow", "freedraw", "text"];
 
 export function newId(): string {
   const c = globalThis.crypto;
@@ -64,6 +64,8 @@ function elementError(raw: unknown, index: number): string | null {
   if (e.roundness !== "sharp" && e.roundness !== "round") return `${at}: campo "roundness" inválido`;
   if (typeof e.locked !== "boolean") return `${at}: campo "locked" inválido`;
   if (e.groupId !== null && typeof e.groupId !== "string") return `${at}: campo "groupId" inválido`;
+  if (e.text !== undefined && typeof e.text !== "string") return `${at}: campo "text" inválido`;
+  if (e.fontSize !== undefined && !isNum(e.fontSize)) return `${at}: campo "fontSize" inválido`;
   if (e.points !== undefined && !isPoints(e.points)) return `${at}: campo "points" inválido`;
   return null;
 }

@@ -1,12 +1,16 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { COLOR_NAMES, FILL_COLORS, STROKE_COLORS, STROKE_WIDTHS } from "@/lib/whiteboard/palette";
+import { COLOR_NAMES, FILL_COLORS, FONT_SIZES, STROKE_COLORS, STROKE_WIDTHS } from "@/lib/whiteboard/palette";
 import type { StylePatch } from "@/lib/whiteboard/types";
 
 interface StylePanelProps {
   /** Valor atual de cada propriedade; undefined = a seleção tem valores diferentes. */
   style: StylePatch;
   onChange: (patch: StylePatch) => void;
+  /** Só texto na seleção (ou ferramenta de texto): mostra só cor e tamanho da letra. */
+  textOnly?: boolean;
+  /** Há texto na seleção (ou ferramenta de texto): mostra o tamanho da letra. */
+  showFontSize?: boolean;
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -54,7 +58,7 @@ function Choice({ label, selected, onPick, children }: { label: string; selected
   );
 }
 
-export function StylePanel({ style, onChange }: StylePanelProps) {
+export function StylePanel({ style, onChange, textOnly = false, showFontSize = false }: StylePanelProps) {
   return (
     <div className="w-44 space-y-3 rounded-lg border border-border bg-card/95 p-3 shadow-sm backdrop-blur" aria-label="Estilo">
       <Section title="Traço">
@@ -62,6 +66,17 @@ export function StylePanel({ style, onChange }: StylePanelProps) {
           <Swatch key={c} color={c} selected={style.strokeColor === c} onPick={() => onChange({ strokeColor: c })} />
         ))}
       </Section>
+      {showFontSize ? (
+        <Section title="Tamanho da letra">
+          {FONT_SIZES.map((size, i) => (
+            <Choice key={size} label={`Letra ${["pequena", "média", "grande", "muito grande"][i]}`} selected={style.fontSize === size} onPick={() => onChange({ fontSize: size })}>
+              <span className="font-semibold leading-none" style={{ fontSize: 9 + i * 3 }}>A</span>
+            </Choice>
+          ))}
+        </Section>
+      ) : null}
+      {textOnly ? null : (
+      <>
       <Section title="Fundo">
         {FILL_COLORS.map((c) => (
           <Swatch key={c} color={c} selected={style.backgroundColor === c} onPick={() => onChange({ backgroundColor: c })} />
@@ -82,6 +97,8 @@ export function StylePanel({ style, onChange }: StylePanelProps) {
           <span className="h-3.5 w-3.5 rounded-[5px] border-2 border-foreground" />
         </Choice>
       </Section>
+      </>
+      )}
     </div>
   );
 }

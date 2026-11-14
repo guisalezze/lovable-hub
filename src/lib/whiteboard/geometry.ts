@@ -132,6 +132,8 @@ export function hitTest(el: WbElement, p: Pt, tolerance: number): boolean {
     return false;
   }
 
+  if (el.type === "text") return rectSdf(local, b) <= tol; // o texto todo é área clicável, não só as letras
+
   const sdf = el.type === "ellipse" ? ellipseSdf(local, b) : el.type === "diamond" ? diamondSdf(local, b) : rectSdf(local, b);
   const filled = el.backgroundColor !== "transparent";
   return filled ? sdf <= tol : Math.abs(sdf) <= tol;

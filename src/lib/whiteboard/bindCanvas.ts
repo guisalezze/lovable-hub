@@ -53,6 +53,7 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
       trails: engine.trails,
       now,
       showSelection: opts.getShowSelection ? opts.getShowSelection() : true,
+      hiddenId: engine.editingId,
     });
     opts.onFrame?.();
     if (animating) render();
@@ -97,6 +98,10 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
     }
   };
   const onPointerCancel = () => engine.pointerCancel();
+  const onDoubleClick = (e: MouseEvent) => {
+    const r = canvas.getBoundingClientRect();
+    engine.doubleClick({ x: e.clientX - r.left, y: e.clientY - r.top });
+  };
 
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
@@ -193,6 +198,7 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
   canvas.addEventListener("pointermove", onPointerMove);
   canvas.addEventListener("pointerup", onPointerUp);
   canvas.addEventListener("pointercancel", onPointerCancel);
+  canvas.addEventListener("dblclick", onDoubleClick);
   canvas.addEventListener("wheel", onWheel, { passive: false });
   root.addEventListener("keydown", onKeyDown);
   root.addEventListener("keyup", onKeyUp);
@@ -205,6 +211,7 @@ export function bindCanvas(canvas: HTMLCanvasElement, engine: WhiteboardEngine, 
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointercancel", onPointerCancel);
+      canvas.removeEventListener("dblclick", onDoubleClick);
       canvas.removeEventListener("wheel", onWheel);
       root.removeEventListener("keydown", onKeyDown);
       root.removeEventListener("keyup", onKeyUp);

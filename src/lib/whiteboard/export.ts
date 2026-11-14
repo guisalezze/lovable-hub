@@ -3,6 +3,7 @@ import type { WbElement } from "./types";
 import { resolveColor, type ThemeColors } from "./theme";
 import { rotatedAabb } from "./geometry";
 import { absPoints, buildDrawables, freedrawPath } from "./render";
+import { FONT_FAMILY, TEXT_LINE_HEIGHT, textLines } from "./text";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -64,6 +65,19 @@ export function exportToSvg(elements: WbElement[], opts: ExportOptions): string 
       path.setAttribute("d", freedrawPath(absPoints(el), el.strokeWidth * 3));
       path.setAttribute("fill", resolveColor(el.strokeColor, opts.theme));
       group.appendChild(path);
+    } else if (el.type === "text") {
+      const size = el.fontSize ?? 24;
+      textLines(el.text ?? "").forEach((line, i) => {
+        const t = document.createElementNS(SVG_NS, "text");
+        t.setAttribute("x", String(round2(el.x)));
+        t.setAttribute("y", String(round2(el.y + i * size * TEXT_LINE_HEIGHT)));
+        t.setAttribute("font-size", String(size));
+        t.setAttribute("font-family", FONT_FAMILY);
+        t.setAttribute("dominant-baseline", "text-before-edge");
+        t.setAttribute("fill", resolveColor(el.strokeColor, opts.theme));
+        t.textContent = line;
+        group.appendChild(t);
+      });
     } else {
       for (const drawable of buildDrawables(el, opts.theme)) group.appendChild(rc.draw(drawable));
     }

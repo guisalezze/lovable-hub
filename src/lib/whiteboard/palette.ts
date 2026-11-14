@@ -5,6 +5,8 @@ export const STROKE_COLORS = ["auto", "#e03131", "#f08c00", "#2f9e44", "#1971c2"
 /** "transparent" = sem preenchimento. */
 export const FILL_COLORS = ["transparent", "#ffa8a8", "#ffd43b", "#8ce99a", "#74c0fc", "#da77f2"];
 export const STROKE_WIDTHS = [2, 4, 7];
+/** Tamanhos de texto (P, M, G, GG). */
+export const FONT_SIZES = [16, 24, 36, 56];
 
 export const COLOR_NAMES: Record<string, string> = {
   auto: "Automático (cor do tema)",
@@ -26,4 +28,5 @@ export const DEFAULT_STYLE: Required<StylePatch> = {
   backgroundColor: "transparent",
   strokeWidth: 2,
   roundness: "round",
+  fontSize: 24,
 };
