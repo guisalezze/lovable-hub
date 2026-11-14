@@ -83,14 +83,15 @@ describe("rascunho local", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("faz ida e volta", () => {
-    saveDraft("q1", els);
+    saveDraft("q1", els, "T1");
     const d = loadDraft("q1");
     expect(d?.elements).toEqual(els);
     expect(typeof d?.savedAt).toBe("number");
+    expect(d?.baseUpdatedAt).toBe("T1"); // versão do servidor em que o rascunho se baseia
   });
 
   it("clearDraft apaga", () => {
-    saveDraft("q1", els);
+    saveDraft("q1", els, "T1");
     clearDraft("q1");
     expect(loadDraft("q1")).toBeNull();
   });
@@ -108,13 +109,13 @@ describe("rascunho local", () => {
     };
     vi.stubGlobal("localStorage", { getItem: boom, setItem: boom, removeItem: boom });
     expect(loadDraft("q1")).toBeNull();
-    expect(() => saveDraft("q1", els)).not.toThrow();
+    expect(() => saveDraft("q1", els, "T1")).not.toThrow();
     expect(() => clearDraft("q1")).not.toThrow();
   });
 
   it("sem localStorage nenhum (undefined) também não quebra", () => {
     vi.stubGlobal("localStorage", undefined);
     expect(loadDraft("q1")).toBeNull();
-    expect(() => saveDraft("q1", els)).not.toThrow();
+    expect(() => saveDraft("q1", els, "T1")).not.toThrow();
   });
 });

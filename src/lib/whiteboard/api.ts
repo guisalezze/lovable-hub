@@ -68,22 +68,27 @@ export async function fetchUpdatedAt(id: string): Promise<string | null> {
 
 const draftKey = (id: string) => `quadro-draft:${id}`;
 
-export function saveDraft(id: string, elements: WbElement[]): void {
+/** `baseUpdatedAt` = updated_at do servidor de que este rascunho parte (decide, ao reabrir, se há conflito). */
+export function saveDraft(id: string, elements: WbElement[], baseUpdatedAt: string): void {
   try {
-    localStorage.setItem(draftKey(id), JSON.stringify({ ...serializeScene(elements), savedAt: Date.now() }));
+    localStorage.setItem(draftKey(id), JSON.stringify({ ...serializeScene(elements), savedAt: Date.now(), baseUpdatedAt }));
   } catch {
     /* armazenamento cheio ou bloqueado: segue sem rascunho */
   }
 }
 
-export function loadDraft(id: string): { elements: WbElement[]; savedAt: number } | null {
+export function loadDraft(id: string): { elements: WbElement[]; savedAt: number; baseUpdatedAt: string | null } | null {
   try {
     const raw = localStorage.getItem(draftKey(id));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     const scene = parseScene(parsed);
     if (!("elements" in scene)) return null;
-    return { elements: scene.elements, savedAt: Number(parsed.savedAt) || 0 };
+    return {
+      elements: scene.elements,
+      savedAt: Number(parsed.savedAt) || 0,
+      baseUpdatedAt: typeof parsed.baseUpdatedAt === "string" ? parsed.baseUpdatedAt : null,
+    };
   } catch {
     return null;
   }

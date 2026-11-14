@@ -4,7 +4,7 @@ import type { Drawable, Options } from "roughjs/bin/core";
 import getStroke from "perfect-freehand";
 import type { Camera, LaserTrail, WbElement } from "./types";
 import { resolveColor, type ThemeColors } from "./theme";
-import { getBounds, selectionFrame, type Bounds } from "./geometry";
+import { getBounds, rotatedAabb, selectionFrame, type Bounds } from "./geometry";
 import { laserAlpha } from "./laser";
 
 const GRID_STEP = 24; // unidades do mundo
@@ -116,6 +116,31 @@ function signature(el: WbElement, theme: ThemeColors): string {
   ].join("|");
 }
 
+/** Desenhar fora da tela é trabalho jogado fora: pula o que está longe (com folga para a espessura do traço). */
+export function isElementVisible(el: WbElement, camera: Camera, width: number, height: number): boolean {
+  const b = rotatedAabb(el);
+  const margin = el.strokeWidth * 3 + 8;
+  const right = camera.x + width / camera.zoom;
+  const bottom = camera.y + height / camera.zoom;
+  return b.x + b.width + margin >= camera.x && b.x - margin <= right && b.y + b.height + margin >= camera.y && b.y - margin <= bottom;
+}
+
+// O contorno do lápis (perfect-freehand) é caro. Fica guardado por lista de pontos (em coordenadas do elemento,
+// então mover o elemento não recalcula nada): só o traço que está sendo desenhado muda a cada quadro.
+const NO_POINTS: [number, number][] = [];
+const freedrawCache = new WeakMap<object, { size: number; path: Path2D | null }>();
+
+function freedrawPath2D(el: WbElement): Path2D | null {
+  const points = el.points ?? NO_POINTS;
+  const size = el.strokeWidth * 3;
+  const hit = freedrawCache.get(points);
+  if (hit && hit.size === size) return hit.path;
+  const d = freedrawPath(points, size);
+  const path = d ? new Path2D(d) : null;
+  freedrawCache.set(points, { size, path });
+  return path;
+}
+
 const drawableCache = new WeakMap<WbElement, { sig: string; drawables: Drawable[] }>();
 const roughCanvases = new WeakMap<HTMLCanvasElement, RoughCanvas>();
 
@@ -220,12 +245,16 @@ export function drawScene(ctx: CanvasRenderingContext2D, args: DrawArgs): void {
   }
 
   for (const el of elements) {
+    if (!isElementVisible(el, camera, width, height)) continue;
     withRotation(ctx, getBounds(el), el.angle, () => {
       if (el.type === "freedraw") {
-        const d = freedrawPath(absPoints(el), el.strokeWidth * 3);
-        if (d) {
+        const path = freedrawPath2D(el);
+        if (path) {
           ctx.fillStyle = resolveColor(el.strokeColor, theme);
-          ctx.fill(new Path2D(d));
+          ctx.save();
+          ctx.translate(el.x, el.y);
+          ctx.fill(path);
+          ctx.restore();
         }
       } else {
         for (const drawable of drawablesFor(el, theme)) rc!.draw(drawable);

@@ -9,6 +9,7 @@ import { SaveIndicator } from "@/components/quadro/SaveIndicator";
 import { useWhiteboard } from "@/hooks/useWhiteboards";
 import { clearDraft, fetchUpdatedAt, loadDraft, saveDraft, saveScene, saveTitle, type WhiteboardRow } from "@/lib/whiteboard/api";
 import { createAutosaver, type Autosaver, type SaveStatus } from "@/lib/whiteboard/autosave";
+import { decideDraft } from "@/lib/whiteboard/draftPolicy";
 import { parseScene } from "@/lib/whiteboard/scene";
 import type { WbElement } from "@/lib/whiteboard/types";
 
@@ -52,19 +53,20 @@ export default function QuadroEditor() {
 function LoadedEditor({ row, elements }: { row: WhiteboardRow; elements: WbElement[] }) {
   const queryClient = useQueryClient();
 
-  // rascunho local mais novo que o banco = alterações que não chegaram a ser salvas
+  // Rascunho local = alterações que podem não ter chegado ao banco. Decide pela VERSÃO em que ele se baseia,
+  // nunca pelo relógio: se o banco mudou depois, abre em conflito e a pessoa escolhe.
   const [draft] = useState(() => loadDraft(row.id));
-  const usingDraft = !!draft && draft.savedAt > new Date(row.updated_at).getTime();
-  const [initial] = useState<WbElement[]>(() => (usingDraft && draft ? draft.elements : elements));
+  const [decision] = useState(() => decideDraft(draft, { updatedAt: row.updated_at, elements }));
+  const [initial] = useState<WbElement[]>(() => (decision !== "none" && draft ? draft.elements : elements));
 
   const expectedRef = useRef(row.updated_at);
   const latestRef = useRef<WbElement[]>(initial);
   const saverRef = useRef<Autosaver<WbElement[]> | null>(null);
-  const statusRef = useRef<SaveStatus>("saved");
+  const statusRef = useRef<SaveStatus>(decision === "conflict" ? "conflict" : "saved");
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
   const savedTitleRef = useRef(row.title);
 
-  const [status, setStatusState] = useState<SaveStatus>("saved");
+  const [status, setStatusState] = useState<SaveStatus>(decision === "conflict" ? "conflict" : "saved");
   const [title, setTitle] = useState(row.title);
 
   const setStatus = useCallback((s: SaveStatus) => {
@@ -95,7 +97,8 @@ function LoadedEditor({ row, elements }: { row: WhiteboardRow; elements: WbEleme
     });
     saverRef.current = saver;
 
-    if (usingDraft) {
+    if (decision === "none" && draft) clearDraft(row.id); // rascunho igual ao que já está salvo: não serve para nada
+    if (decision === "recover") {
       toast.info("Recuperei alterações deste quadro que não tinham sido salvas.");
       saver.schedule(latestRef.current);
     }
@@ -114,12 +117,12 @@ function LoadedEditor({ row, elements }: { row: WhiteboardRow; elements: WbEleme
       void saver.flush().finally(() => saver.dispose());
       saverRef.current = null;
     };
-  }, [row.id, usingDraft, enqueue, setStatus]);
+  }, [row.id, decision, draft, enqueue, setStatus]);
 
   const handleChange = useCallback(
     (els: WbElement[]) => {
       latestRef.current = els;
-      saveDraft(row.id, els);
+      saveDraft(row.id, els, expectedRef.current);
       saverRef.current?.schedule(els);
     },
     [row.id],

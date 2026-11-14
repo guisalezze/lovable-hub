@@ -94,6 +94,15 @@ export function resolveShortcut(e: ShortcutEvent): ShortcutAction | null {
   return tool ? { kind: "tool", tool } : null;
 }
 
+/**
+ * Os atalhos do CRM (N = tarefas, L = leads) devem ficar quietos? Sim quando o alvo está no quadro OU quando há um
+ * quadro aberto (/quadro/:id): com o foco no corpo da página, ou num menu que o Radix leva para fora do quadro,
+ * o alvo do evento não está dentro do elemento do quadro.
+ */
+export function isWhiteboardContext(target: EventTarget | null, pathname: string): boolean {
+  return pathname.startsWith("/quadro/") || isInsideWhiteboard(target);
+}
+
 /** O alvo está dentro do editor do quadro? (o CRM usa isso para não disparar seus próprios atalhos lá) */
 export function isInsideWhiteboard(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;

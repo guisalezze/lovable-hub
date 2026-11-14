@@ -114,6 +114,7 @@ export function Whiteboard({ initialElements, onChange, header, banner, exportNa
 
     engineRef.current = engine;
     bindingRef.current = binding;
+    root.focus({ preventScroll: true }); // atalhos do quadro valem desde o primeiro instante, sem precisar clicar antes
     return () => {
       themeObserver.disconnect();
       binding?.destroy();
